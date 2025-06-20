@@ -1,0 +1,6 @@
+---
+description: where ever sending a response add status 1 for true and 0 for false field
+globs: 
+alwaysApply: false
+---
+where ever sending a response add status 1 for true and 0 for false field

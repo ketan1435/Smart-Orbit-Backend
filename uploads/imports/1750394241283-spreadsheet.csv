@@ -1,0 +1,3 @@
+leadSource,customerName,mobileNumber,whatsappNumber,email,preferredLanguage,state,city,googleLocationLink,requirementType,otherRequirement,requirementDescription,urgency,budget,hasDrawing (Yes/No),needsArchitect (Yes/No),requestSiteVisit (Yes/No)
+Social Media,Jack Doe,1234567890,1234567890,john.doe@example.com,English,California,Los Angeles,https://maps.google.com/...,Renovation,,Need to renovate my kitchen,High,5000,Yes,No,Yes
+Website,Harry Smith,0987654321,0987654321,jane.smith@example.com,Spanish,Texas,Houston,https://maps.google.com/...,New Construction,,Building a new house,Medium,100000,No,Yes,No 
