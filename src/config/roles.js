@@ -1,6 +1,6 @@
 const allRoles = {
   user: ['getProjects'], // A customer who can see their project status
-  admin: ['getUsers', 'manageUsers', 'exportLeads', 'manageProjects', 'manageArchitects'],
+  admin: ['getUsers', 'manageUsers', 'exportLeads', 'manageProjects', 'manageArchitects','manageLeads'],
   'sales-admin': ['manageLeads', 'getProjects'],
   architect: ['manageDrawings', 'getProjects'],
   'fabrication-planner': ['manageBOM', 'getProjects'],

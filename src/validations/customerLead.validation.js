@@ -1,6 +1,73 @@
 import Joi from 'joi';
 import { objectId } from './custom.validation.js';
 
+const scpDataSchema = Joi.object({
+  siteAddress: Joi.string().allow(''),
+  googleLocationLink: Joi.string().uri({ allowRelative: false }).allow(''),
+  siteType: Joi.string().allow(''),
+  plotSize: Joi.string().allow(''),
+  totalArea: Joi.string().allow(''),
+  plinthStatus: Joi.string().allow(''),
+  structureType: Joi.string().allow(''),
+  numUnits: Joi.string().allow(''),
+  usageType: Joi.string().allow(''),
+  avgStayDuration: Joi.string().allow(''),
+  additionalFeatures: Joi.string().allow(''),
+  designIdeas: Joi.string().allow(''),
+  drawingStatus: Joi.string().allow(''),
+  architectStatus: Joi.string().allow(''),
+  roomRequirements: Joi.string().allow(''),
+  tokenAdvance: Joi.string().allow(''),
+  financing: Joi.string().allow(''),
+  roadWidth: Joi.string().allow(''),
+  targetCompletionDate: Joi.string().allow(''),
+  siteVisitDate: Joi.date().allow(null, ''),
+  scpRemarks: Joi.string().allow(''),
+});
+
+const requirementSchema = Joi.object({
+  requirementType: Joi.string().allow(''),
+  otherRequirement: Joi.string().allow(''),
+  requirementDescription: Joi.string().allow(''),
+  urgency: Joi.string().allow(''),
+  budget: Joi.string().allow(''),
+  scpData: scpDataSchema,
+  imageUrlKeys: Joi.array().items(Joi.string()),
+  videoUrlKeys: Joi.array().items(Joi.string()),
+  voiceMessageUrlKeys: Joi.array().items(Joi.string()),
+  sketchUrlKeys: Joi.array().items(Joi.string()),
+});
+
+export const createCustomerLead = {
+  body: Joi.object().keys({
+    leadSource: Joi.string().required(),
+    customerName: Joi.string().required(),
+    mobileNumber: Joi.string().required(),
+    alternateContactNumber: Joi.string().allow(''),
+    email: Joi.string().email().allow(''),
+    state: Joi.string().allow(''),
+    city: Joi.string().allow(''),
+    requirements: Joi.array().items(requirementSchema).min(1).required(),
+  }),
+};
+
+export const getCustomerLeads = {
+  query: Joi.object().keys({
+    customerName: Joi.string(),
+    leadSource: Joi.string(),
+    sortBy: Joi.string(),
+    limit: Joi.number().integer(),
+    page: Joi.number().integer(),
+    isActive: Joi.boolean(),
+  }),
+};
+
+export const getCustomerLead = {
+  params: Joi.object().keys({
+    id: Joi.string().custom(objectId).required(),
+  }),
+};
+
 export const updateCustomerLead = {
   params: Joi.object().keys({
     id: Joi.string().custom(objectId).required(),
@@ -10,21 +77,22 @@ export const updateCustomerLead = {
       leadSource: Joi.string(),
       customerName: Joi.string(),
       mobileNumber: Joi.string(),
-      whatsappNumber: Joi.string(),
-      email: Joi.string().email(),
-      preferredLanguage: Joi.string(),
-      state: Joi.string(),
-      city: Joi.string(),
-      googleLocationLink: Joi.string().uri(),
-      requirementType: Joi.string(),
-      otherRequirement: Joi.string(),
-      requirementDescription: Joi.string(),
-      urgency: Joi.string(),
-      budget: Joi.string(),
-      hasDrawing: Joi.boolean(),
-      needsArchitect: Joi.boolean(),
-      requestSiteVisit: Joi.boolean(),
+      alternateContactNumber: Joi.string().allow(''),
+      email: Joi.string().email().allow(''),
+      state: Joi.string().allow(''),
+      city: Joi.string().allow(''),
+      requirements: Joi.array().items(requirementSchema),
       isActive: Joi.boolean(),
     })
-    .min(1), // Ensure at least one field is being updated
+    .min(1),
+};
+
+export const shareRequirement = {
+  params: Joi.object().keys({
+    leadId: Joi.string().custom(objectId).required(),
+    requirementId: Joi.string().custom(objectId).required(),
+  }),
+  body: Joi.object().keys({
+    userId: Joi.string().custom(objectId).required(),
+  }),
 }; 

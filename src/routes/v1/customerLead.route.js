@@ -10,6 +10,9 @@ import {
   importCustomerLeadsController,
   exportCustomerLeadsController,
   updateCustomerLeadController,
+  shareRequirementController,
+  getSharedRequirementsForUserController,
+  getMySharedRequirementsController,
 } from '../../controllers/customerLead.controller.js';
 import { createCustomerLeadService } from '../../services/customerLead.service.js';
 import auth from '../../middlewares/auth.js';
@@ -154,63 +157,32 @@ router.post('/import', upload.single('spreadsheet'), importCustomerLeadsControll
  *   post:
  *     summary: Submit customer lead data
  *     tags: [Customer Leads]
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
- *         multipart/form-data:
+ *         application/json:
  *           schema:
- *             type: object
- *             properties:
- *               leadSource:
- *                 type: string
- *               customerName:
- *                 type: string
- *               mobileNumber:
- *                 type: string
- *               whatsappNumber:
- *                 type: string
- *               email:
- *                 type: string
- *               preferredLanguage:
- *                 type: string
- *               state:
- *                 type: string
- *               city:
- *                 type: string
- *               googleLocationLink:
- *                 type: string
- *               requirementType:
- *                 type: string
- *               otherRequirement:
- *                 type: string
- *               requirementDescription:
- *                 type: string
- *               urgency:
- *                 type: string
- *               budget:
- *                 type: string
- *               hasDrawing:
- *                 type: string
- *               needsArchitect:
- *                 type: string
- *               requestSiteVisit:
- *                 type: string
- *               imageUrlKey:
- *                 type: string
- *                 description: "The key of the uploaded image file in S3."
- *               videoUrlKey:
- *                 type: string
- *                 description: "The key of the uploaded video file in S3."
- *               voiceMessageUrlKey:
- *                 type: string
- *                 description: "The key of the uploaded voice message file in S3."
+ *             $ref: '#/components/schemas/NewCustomerLead'
  *     responses:
  *       201:
- *         description: Lead submitted
+ *         description: Lead submitted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                 data:
+ *                   $ref: '#/components/schemas/CustomerLead'
  *       400:
  *         description: Invalid input
  */
-router.post('/', transactional(createCustomerLeadService));
+router.post('/', auth(), validate(customerLeadValidation.createCustomerLead), transactional(createCustomerLeadService));
 
 /**
  * @swagger
@@ -498,6 +470,98 @@ router.put(
   auth(),
   validate(customerLeadValidation.updateCustomerLead),
   transactional(updateCustomerLeadController)
+);
+
+/**
+ * @swagger
+ * /customer-leads/{leadId}/requirements/{requirementId}/share:
+ *   post:
+ *     summary: Share a specific requirement with a user
+ *     tags: [Customer Leads]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: leadId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the customer lead
+ *       - in: path
+ *         name: requirementId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the requirement to share
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - userId
+ *             properties:
+ *               userId:
+ *                 type: string
+ *                 description: The ID of the user to share the requirement with
+ *     responses:
+ *       200:
+ *         description: Requirement shared successfully
+ *       400:
+ *         description: Bad Request (e.g., already shared with this user)
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Customer lead or requirement not found
+ */
+router.post(
+  '/:leadId/requirements/:requirementId/share',
+  auth('manageLeads'), // Or a more specific permission like 'shareRequirements'
+  shareRequirementController
+);
+
+/**
+ * @swagger
+ * /customer-leads/shared-with/{userId}:
+ *   get:
+ *     summary: Get all requirements shared with a specific user
+ *     tags: [Customer Leads]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the user
+ *     responses:
+ *       200:
+ *         description: A list of shared requirements
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 1
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ */
+router.get(
+  '/shared-with/:userId',
+  auth('manageLeads'), // Or a more specific permission
+  getSharedRequirementsForUserController
 );
 
 export default router;

@@ -1,14 +1,23 @@
 import catchAsync from '../utils/catchAsync.js';
 import {
+  createCustomerLeadService,
   listCustomerLeadsService,
   getCustomerLeadByIdService,
+  updateCustomerLeadService,
   activateCustomerLeadService,
   deactivateCustomerLeadService,
   importCustomerLeadsService,
   exportCustomerLeadsService,
-  updateCustomerLeadService,
+  shareRequirementService,
+  getSharedRequirementsForUserService,
 } from '../services/customerLead.service.js';
 import ApiError from '../utils/ApiError.js';
+import httpStatus from 'http-status';
+
+export const createCustomerLeadController = catchAsync(async (req, res) => {
+  const lead = await createCustomerLeadService(req.body);
+  res.status(httpStatus.CREATED).json({ status: 1, message: 'Customer lead created successfully', data: lead });
+});
 
 export const listCustomerLeadsController = catchAsync(async (req, res) => {
   const filter = {};
@@ -44,12 +53,18 @@ export const listCustomerLeadsController = catchAsync(async (req, res) => {
 export const getCustomerLeadController = catchAsync(async (req, res) => {
   const { id } = req.params;
   const lead = await getCustomerLeadByIdService(id);
-  
+
   if (!lead) {
     throw new ApiError(404, 'Customer lead not found');
   }
-  
-  res.status(200).json({ success: true, status: 1, lead });
+
+  res.status(200).json({ status: 1, data: lead });
+});
+
+export const updateCustomerLeadController = catchAsync(async (req, res) => {
+    const { id } = req.params;
+    const lead = await updateCustomerLeadService(id, req.body);
+    res.status(200).json({ status: 1, message: 'Customer lead updated successfully', data: lead });
 });
 
 export const activateCustomerLeadController = catchAsync(async (req, res) => {
@@ -58,7 +73,7 @@ export const activateCustomerLeadController = catchAsync(async (req, res) => {
   if (!lead) {
     throw new ApiError(404, 'Customer lead not found');
   }
-  res.status(200).json({ success: true,  status: 1, isActive: true });
+  res.status(200).json({ success: true, status: 1, isActive: true });
 });
 
 export const deactivateCustomerLeadController = catchAsync(async (req, res) => {
@@ -67,7 +82,7 @@ export const deactivateCustomerLeadController = catchAsync(async (req, res) => {
   if (!lead) {
     throw new ApiError(404, 'Customer lead not found');
   }
-  res.status(200).json({ success: true, status: 1, isActive:false });
+  res.status(200).json({ success: true, status: 1, isActive: false });
 });
 
 export const importCustomerLeadsController = catchAsync(async (req, res) => {
@@ -119,14 +134,24 @@ export const exportCustomerLeadsController = catchAsync(async (req, res) => {
   res.send(fileBuffer);
 });
 
-export const updateCustomerLeadController = async (req, session) => {
-  const updatedLead = await updateCustomerLeadService(req, session);
-  return {
-    status: 200,
-    body: {
-      status: 1,
-      message: 'Customer lead updated successfully.',
-      data: updatedLead,
-    },
-  };
-};
+export const shareRequirementController = catchAsync(async (req, res) => {
+    const { leadId, requirementId } = req.params;
+    const { userId } = req.body;
+    const adminId = req.user.id; // Assuming admin's ID is on req.user
+
+    const lead = await shareRequirementService(leadId, requirementId, userId, adminId);
+    res.status(httpStatus.OK).json({ status: 1, message: 'Requirement shared successfully.', data: lead });
+});
+
+export const getMySharedRequirementsController = catchAsync(async (req, res) => {
+    const userId = req.user.id;
+    const requirements = await getSharedRequirementsForUserService(userId);
+    res.status(httpStatus.OK).json({ status: 1, data: requirements });
+});
+
+// This is for an admin to view any user's shared items.
+export const getSharedRequirementsForUserController = catchAsync(async (req, res) => {
+    const { userId } = req.params;
+    const requirements = await getSharedRequirementsForUserService(userId);
+    res.status(httpStatus.OK).json({ status: 1, data: requirements });
+});

@@ -3,6 +3,7 @@ import auth from '../../middlewares/auth.js';
 import validate from '../../middlewares/validate.js';
 import { userValidation } from '../../validations/index.js';
 import { userController } from '../../controllers/index.js';
+import { getMySharedRequirementsController } from '../../controllers/customerLead.controller.js';
 
 const router = express.Router();
 
@@ -126,6 +127,34 @@ router
    *         $ref: '#/components/responses/Forbidden'
    */
   .get(auth('getUsers'), validate(userValidation.getUsers), userController.getUsers);
+
+/**
+ * @swagger
+ * /users/me/shared-requirements:
+ *   get:
+ *     summary: Get all requirements shared with the currently logged-in user
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: A list of requirements shared with the user
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 1
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *       401:
+ *         description: Unauthorized
+ */
+router.get('/me/shared-requirements', auth(), getMySharedRequirementsController);
 
 router
   .route('/:userId')

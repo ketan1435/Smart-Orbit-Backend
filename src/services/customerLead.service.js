@@ -1,127 +1,100 @@
 import xlsx from 'xlsx';
 import CustomerLead from '../models/customerLead.model.js';
 import ApiError from '../utils/ApiError.js';
-import path from 'path';
+import httpStatus from 'http-status';
 import storage from '../factory/storage.factory.js';
+import mongoose from 'mongoose';
 import logger from '../config/logger.js';
 
 export const createCustomerLeadService = async (req, session) => {
-  const { body } = req;
-  const {
-    leadSource,
-    customerName,
-    mobileNumber,
-    whatsappNumber,
-    email,
-    preferredLanguage,
-    state,
-    city,
-    googleLocationLink,
-    requirementType,
-    otherRequirement,
-    requirementDescription,
-    urgency,
-    budget,
-    hasDrawing,
-    needsArchitect,
-    requestSiteVisit,
-    imageUrlKey,
-    videoUrlKey,
-    voiceMessageUrlKey,
-  } = body;
+  const { body: leadData } = req;
+  const tempFileKeysToDelete = [];
 
-  // 1. Create the lead document first to reserve an ID
+  const { requirements, ...basicLeadInfo } = leadData;
   const leadPayload = {
-    leadSource,
-    customerName,
-    mobileNumber,
-    whatsappNumber,
-    email,
-    preferredLanguage,
-    state,
-    city,
-    googleLocationLink,
-    requirementType,
-    otherRequirement,
-    requirementDescription,
-    urgency,
-    budget,
-    hasDrawing: hasDrawing === 'Yes',
-    needsArchitect: needsArchitect === 'Yes',
-    requestSiteVisit: requestSiteVisit === 'on' || requestSiteVisit === true,
+    ...basicLeadInfo,
+    createdBy: req.user.id,
+    requirements: [],
   };
+
   const lead = (await CustomerLead.create([leadPayload], { session }))[0];
 
-  const filesToProcess = [
-    { field: 'imageUrl', tempKey: imageUrlKey, category: 'images' },
-    { field: 'videoUrl', tempKey: videoUrlKey, category: 'videos' },
-    { field: 'voiceMessageUrl', tempKey: voiceMessageUrlKey, category: 'voice-messages' },
-  ].filter((f) => f.tempKey);
-
-  if (filesToProcess.length === 0) {
-    // If no files, the operation is complete
-    return { status: 201, body: { success: true, status: 1, lead } };
-  }
-
-  const permanentLocations = {};
-  const successfullyCopiedKeys = [];
-
   try {
-    // 2. Perform all S3 copy operations
-    for (const file of filesToProcess) {
-      const extension = path.extname(file.tempKey);
-      const permanentKey = `customer-leads/${lead._id}/${file.category}${extension}`;
+    for (const reqData of requirements) {
+      const requirementId = new mongoose.Types.ObjectId();
+      
+      // Manually construct the requirement object to avoid saving unwanted fields
+      const newRequirement = {
+        _id: requirementId,
+        requirementType: reqData.requirementType,
+        otherRequirement: reqData.otherRequirement,
+        requirementDescription: reqData.requirementDescription,
+        urgency: reqData.urgency,
+        budget: reqData.budget,
+        scpData: reqData.scpData || {},
+        files: [],
+        sharedWith: [],
+      };
 
-      await storage.copyFile(file.tempKey, permanentKey);
-      successfullyCopiedKeys.push(permanentKey); // Track for potential cleanup
-      permanentLocations[file.field] = permanentKey; // Using key, could be URL
+      const fileKeys = {
+        imageUrlKeys: reqData.imageUrlKeys || [],
+        videoUrlKeys: reqData.videoUrlKeys || [],
+        voiceMessageUrlKeys: reqData.voiceMessageUrlKeys || [],
+        sketchUrlKeys: reqData.sketchUrlKeys || [],
+      };
+
+      for (const [type, keys] of Object.entries(fileKeys)) {
+        for (const tempKey of keys) {
+          const fileType = type.replace('UrlKeys', '');
+          const fileName = tempKey.split('/').pop();
+          const permanentKey = `customer-leads/${lead._id}/${requirementId}/${fileType}/${fileName}`;
+          
+          await storage.copyFile(tempKey, permanentKey);
+          
+          newRequirement.files.push({ fileType, key: permanentKey });
+          tempFileKeysToDelete.push(tempKey);
+        }
+      }
+      lead.requirements.push(newRequirement);
     }
 
-    // 3. If all copies succeed, update the lead document with permanent keys/URLs
-    Object.assign(lead, permanentLocations);
     await lead.save({ session });
 
-    // 4. Clean up original temporary files from S3
-    const tempKeysToDelete = filesToProcess.map((f) => f.tempKey);
-    const deletePromises = tempKeysToDelete.map((key) => storage.deleteFile(key));
-    await Promise.allSettled(deletePromises); // Non-critical, just log errors if they fail
-  } catch (s3Error) {
-    logger.error(`S3 file processing failed for lead ${lead._id}. Cleaning up orphaned permanent files.`, s3Error);
-    // 5. COMPENSATING ACTION: If any S3 op failed, delete any files that were successfully copied
-    if (successfullyCopiedKeys.length > 0) {
-      const deletePromises = successfullyCopiedKeys.map((key) => storage.deleteFile(key));
-      await Promise.allSettled(deletePromises);
-    }
-    // Re-throw the original error to be caught by the transactional middleware,
-    // which will abort the DB transaction (rolling back the lead creation).
-    throw s3Error;
-  }
+    // This part runs after the transaction is committed.
+    // If the server crashes here, S3 lifecycle policy will clean up the temp files.
+    Promise.all(tempFileKeysToDelete.map(key => storage.deleteFile(key))).catch(err => {
+      // Log this error, but don't fail the request since the lead was already created.
+      logger.error(`Failed to delete temporary file during cleanup: ${err.message}`);
+    });
 
-  return {
-    status: 201,
-    body: {
-      success: true,
-      status: 1,
-      lead,
-    },
-  };
+    return {
+      status: httpStatus.CREATED,
+      body: { status: 1, message: 'Customer lead created successfully', data: lead },
+    };
+  } catch (error) {
+    // If an error occurred (e.g., file copy failed), the transactional middleware
+    // will abort the database transaction. We just need to re-throw the error.
+    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, `Failed to process lead files: ${error.message}`);
+  }
 };
 
 export const listCustomerLeadsService = async (filter = {}, options = {}) => {
-  const { limit, skip, sortBy } = options;
-  const customerLeads = await CustomerLead.find(filter)
-    .sort(sortBy || { createdAt: -1 })
-    .skip(skip || 0)
-    .limit(limit || 10);
+  const { limit = 10, page = 1, sortBy } = options;
+  const sort = sortBy || { createdAt: -1 };
 
-  const count = await CustomerLead.countDocuments(filter);
+  const customerLeads = await CustomerLead.find(filter)
+    .sort(sort)
+    .skip((page - 1) * limit)
+    .limit(limit);
+
+  const totalResults = await CustomerLead.countDocuments(filter);
 
   return {
     results: customerLeads,
-    totalResults: count,
-    page: (skip || 0) / (limit || 10) + 1,
-    limit: limit || 10,
-    totalPages: Math.ceil(count / (limit || 10)),
+    page,
+    limit,
+    totalPages: Math.ceil(totalResults / limit),
+    totalResults,
   };
 };
 
@@ -129,33 +102,123 @@ export const getCustomerLeadByIdService = async (id) => {
   return CustomerLead.findById(id);
 };
 
+export const updateCustomerLeadService = async (id, updateBody) => {
+    const lead = await getCustomerLeadByIdService(id);
+    if (!lead) {
+        throw new ApiError(httpStatus.NOT_FOUND, 'Customer lead not found');
+    }
+    Object.assign(lead, updateBody);
+    await lead.save();
+    return lead;
+};
+
 export const activateCustomerLeadService = async (id) => {
-  return CustomerLead.findByIdAndUpdate(id, { isActive: true }, { new: true });
+  const lead = await getCustomerLeadByIdService(id);
+  if (!lead) {
+      throw new ApiError(httpStatus.NOT_FOUND, 'Customer lead not found');
+  }
+  lead.isActive = true;
+  await lead.save();
+  return lead;
 };
 
 export const deactivateCustomerLeadService = async (id) => {
-  return CustomerLead.findByIdAndUpdate(id, { isActive: false }, { new: true });
+    const lead = await getCustomerLeadByIdService(id);
+    if (!lead) {
+        throw new ApiError(httpStatus.NOT_FOUND, 'Customer lead not found');
+    }
+    lead.isActive = false;
+    await lead.save();
+    return lead;
+};
+
+export const shareRequirementService = async (leadId, requirementId, userIdToShareWith, adminId) => {
+    const lead = await getCustomerLeadByIdService(leadId);
+    if (!lead) {
+        throw new ApiError(httpStatus.NOT_FOUND, 'Customer lead not found');
+    }
+
+    const requirement = lead.requirements.id(requirementId);
+    if (!requirement) {
+        throw new ApiError(httpStatus.NOT_FOUND, 'Requirement not found within the lead');
+    }
+
+    const isAlreadyShared = requirement.sharedWith.some(share => share.user.toString() === userIdToShareWith);
+    if (isAlreadyShared) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Requirement already shared with this user');
+    }
+
+    requirement.sharedWith.push({
+        user: userIdToShareWith,
+        sharedBy: adminId,
+    });
+
+    await lead.save();
+    return lead;
+};
+
+export const getSharedRequirementsForUserService = async (userId) => {
+    const leads = await CustomerLead.find({ 'requirements.sharedWith.user': userId }).lean();
+
+    const sharedRequirements = leads.map(lead => {
+        const relevantRequirements = lead.requirements.filter(req =>
+            req.sharedWith.some(share => share.user.toString() === userId.toString())
+        );
+
+        return {
+            leadId: lead._id,
+            customerName: lead.customerName,
+            mobileNumber: lead.mobileNumber,
+            email: lead.email,
+            state: lead.state,
+            city: lead.city,
+            requirements: relevantRequirements,
+        };
+    }).filter(l => l.requirements.length > 0);
+
+    return sharedRequirements;
 };
 
 const normalizeHeaders = (headers) => {
   const headerMap = {
+    // Basic Info
     leadSource: ['leadsource', 'lead source'],
     customerName: ['customername', 'customer name', 'name'],
     mobileNumber: ['mobilenumber', 'mobile number', 'mobile'],
-    whatsappNumber: ['whatsappnumber', 'whatsapp number', 'whatsapp'],
+    alternateContactNumber: ['alternatecontactnumber', 'alternate contact'],
     email: ['email', 'email address'],
-    preferredLanguage: ['preferredlanguage', 'preferred language'],
     state: ['state'],
     city: ['city'],
-    googleLocationLink: ['googlelocationlink', 'google location link', 'location'],
+
+    // Requirement specific
     requirementType: ['requirementtype', 'requirement type'],
     otherRequirement: ['otherrequirement', 'other requirement'],
     requirementDescription: ['requirementdescription', 'requirement description'],
     urgency: ['urgency'],
     budget: ['budget'],
-    hasDrawing: ['hasdrawing(yes/no)', 'hasdrawing', 'has drawing'],
-    needsArchitect: ['needsarchitect(yes/no)', 'needsarchitect', 'needs architect'],
-    requestSiteVisit: ['requestsitevisit(yes/no)', 'requestsitevisit', 'request site visit'],
+    
+    // SCP Data
+    siteAddress: ['siteaddress', 'site address'],
+    googleLocationLink: ['googlelocationlink', 'google maps link'],
+    siteType: ['sitetype', 'site type'],
+    plotSize: ['plotsize', 'plot size'],
+    totalArea: ['totalarea', 'total area'],
+    plinthStatus: ['plinthstatus', 'plinth status'],
+    structureType: ['structuretype', 'structure type'],
+    numUnits: ['numunits', 'number of units'],
+    usageType: ['usagetype', 'usage type'],
+    avgStayDuration: ['avgstayduration', 'average stay duration'],
+    additionalFeatures: ['additionalfeatures', 'additional features'],
+    designIdeas: ['designideas', 'design ideas'],
+    drawingStatus: ['drawingstatus', 'drawing status'],
+    architectStatus: ['architectstatus', 'architect status'],
+    roomRequirements: ['roomrequirements', 'room requirements'],
+    tokenAdvance: ['tokenadvance', 'token advance'],
+    financing: ['financing', 'financing required'],
+    roadWidth: ['roadwidth', 'road width'],
+    targetCompletionDate: ['targetcompletiondate', 'target completion'],
+    siteVisitDate: ['sitevisitdate', 'site visit date'],
+    scpRemarks: ['scpremarks', 'scp remarks'],
   };
 
   const mapping = {};
@@ -198,134 +261,167 @@ export const importCustomerLeadsService = async (filePath) => {
   }
 
   const headerMapping = normalizeHeaders(rawHeaders);
-  const leadsToInsert = [];
-  const errors = [];
+  const data = xlsx.utils.sheet_to_json(worksheet, { header: 1, range: headerRowIndex + 1 });
 
-  for (let R = headerRowIndex + 1; R <= range.e.r; ++R) {
-    const getCell = (colIndex) => worksheet[xlsx.utils.encode_cell({ c: colIndex, r: R })];
+  let importedCount = 0;
+  const errors = [];
+  const leadsToInsert = [];
+
+  for (let i = 0; i < data.length; i++) {
+    const row = data[i];
+    const rowNum = i + headerRowIndex + 2;
 
     const getVal = (fieldName) => {
-      const colIndex = headerMapping[fieldName];
-      if (colIndex === undefined) return undefined;
-
-      const cell = getCell(colIndex);
-      if (!cell || cell.v === null || cell.v === undefined) return undefined;
-
-      if (cell.l && cell.l.Target) {
-        if (fieldName === 'email') return cell.l.Target.replace(/^mailto:/i, '');
-        if (fieldName === 'googleLocationLink') return cell.l.Target;
-      }
-      return cell.w || cell.v;
-    };
-
+        const index = headerMapping[fieldName];
+        return index !== undefined && row[index] !== undefined ? String(row[index]).trim() : undefined;
+    }
+    
     const leadData = {
       leadSource: getVal('leadSource'),
       customerName: getVal('customerName'),
       mobileNumber: getVal('mobileNumber'),
-      whatsappNumber: getVal('whatsappNumber'),
+      alternateContactNumber: getVal('alternateContactNumber'),
       email: getVal('email'),
-      preferredLanguage: getVal('preferredLanguage'),
       state: getVal('state'),
       city: getVal('city'),
-      googleLocationLink: getVal('googleLocationLink'),
-      requirementType: getVal('requirementType'),
-      otherRequirement: getVal('otherRequirement'),
-      requirementDescription: getVal('requirementDescription'),
-      urgency: getVal('urgency'),
-      budget: getVal('budget'),
-      hasDrawing: parseBoolean(getVal('hasDrawing')),
-      needsArchitect: parseBoolean(getVal('needsArchitect')),
-      requestSiteVisit: parseBoolean(getVal('requestSiteVisit')),
+      requirements: [],
     };
-
-    if (Object.values(leadData).every((v) => v === undefined || v === '')) {
-      continue;
+    
+    // For simplicity, we'll assume one row in the CSV corresponds to one requirement.
+    const requirementData = {
+        requirementType: getVal('requirementType'),
+        otherRequirement: getVal('otherRequirement'),
+        requirementDescription: getVal('requirementDescription'),
+        urgency: getVal('urgency'),
+        budget: getVal('budget'),
+        scpData: {
+            siteAddress: getVal('siteAddress'),
+            googleLocationLink: getVal('googleLocationLink'),
+            siteType: getVal('siteType'),
+            plotSize: getVal('plotSize'),
+            totalArea: getVal('totalArea'),
+            plinthStatus: getVal('plinthStatus'),
+            structureType: getVal('structureType'),
+            numUnits: getVal('numUnits'),
+            usageType: getVal('usageType'),
+            avgStayDuration: getVal('avgStayDuration'),
+            additionalFeatures: getVal('additionalFeatures'),
+            designIdeas: getVal('designIdeas'),
+            drawingStatus: getVal('drawingStatus'),
+            architectStatus: getVal('architectStatus'),
+            roomRequirements: getVal('roomRequirements'),
+            tokenAdvance: getVal('tokenAdvance'),
+            financing: getVal('financing'),
+            roadWidth: getVal('roadWidth'),
+            targetCompletionDate: getVal('targetCompletionDate'),
+            siteVisitDate: getVal('siteVisitDate'),
+            scpRemarks: getVal('scpRemarks'),
+        }
+    };
+    
+    // Only add requirement if there is a requirement type specified
+    if (requirementData.requirementType) {
+        leadData.requirements.push(requirementData);
     }
 
-    if (!leadData.customerName || !leadData.mobileNumber) {
-      errors.push({ row: R + 1, error: 'Missing required fields: customerName or mobileNumber' });
+    if (!leadData.customerName || !leadData.mobileNumber || !leadData.leadSource) {
+      errors.push({ row: rowNum, error: 'Missing required fields: Customer Name, Mobile Number, and Lead Source.' });
       continue;
     }
 
     leadsToInsert.push(leadData);
   }
 
-  if (leadsToInsert.length === 0) {
-    return { importedCount: 0, errors };
-  }
-
-  let result = [];
-  try {
-    const insertResult = await CustomerLead.insertMany(leadsToInsert, { ordered: false });
-    result = insertResult;
-  } catch (e) {
-    if (e.name === 'MongoBulkWriteError') {
-      result = e.result.insertedDocs;
-      e.writeErrors.forEach((err) => {
-        const failedDoc = err.op;
-        errors.push({
-          row: `Name: ${failedDoc.customerName}`,
-          error: `DB Error: ${err.errmsg}`,
+  if (leadsToInsert.length > 0) {
+    try {
+      const result = await CustomerLead.insertMany(leadsToInsert, { ordered: false });
+      importedCount = result.length;
+    } catch (dbError) {
+      if (dbError.writeErrors) {
+        importedCount = dbError.result.nInserted;
+        dbError.writeErrors.forEach((writeError) => {
+          errors.push({
+            row: data[writeError.index].rowNum, // We need to attach rowNum to data items
+            error: `Database error: ${writeError.errmsg}`,
+          });
         });
-      });
-    } else {
-      throw e;
+      } else {
+        throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'A database error occurred during import.');
+      }
     }
   }
 
-  return { importedCount: result.length, errors };
+  return { importedCount, errors };
 };
 
 export const exportCustomerLeadsService = async (filter = {}) => {
-  // Fetch all leads matching the filter, without pagination
-  const leads = await CustomerLead.find(filter).sort({ createdAt: -1 }).lean();
-
+  const leads = await CustomerLead.find(filter).lean();
+  
   if (leads.length === 0) {
     return null;
   }
 
-  // Define headers and map data to the desired format
-  const data = leads.map((lead) => ({
-    'Lead Source': lead.leadSource,
-    'Customer Name': lead.customerName,
-    'Mobile Number': lead.mobileNumber,
-    'WhatsApp Number': lead.whatsappNumber,
-    Email: lead.email,
-    'Preferred Language': lead.preferredLanguage,
-    State: lead.state,
-    City: lead.city,
-    'Google Location Link': lead.googleLocationLink,
-    'Requirement Type': lead.requirementType,
-    'Other Requirement': lead.otherRequirement,
-    'Requirement Description': lead.requirementDescription,
-    Urgency: lead.urgency,
-    Budget: lead.budget,
-    'Has Drawing': lead.hasDrawing ? 'Yes' : 'No',
-    'Needs Architect': lead.needsArchitect ? 'Yes' : 'No',
-    'Request Site Visit': lead.requestSiteVisit ? 'Yes' : 'No',
-    Status: lead.isActive ? 'Active' : 'Inactive',
-    'Created At': lead.createdAt.toISOString(),
-  }));
+  const dataToExport = [];
+  const headers = [
+      // Basic Info
+      'leadSource', 'customerName', 'mobileNumber', 'alternateContactNumber', 'email', 'state', 'city', 'isActive', 'createdAt',
+      // Requirement specific (assuming first requirement)
+      'requirementType', 'otherRequirement', 'requirementDescription', 'urgency', 'budget',
+      // SCP Data (assuming first requirement)
+      'siteAddress', 'googleLocationLink', 'siteType', 'plotSize', 'totalArea', 'plinthStatus', 'structureType', 'numUnits', 'usageType',
+      'avgStayDuration', 'additionalFeatures', 'designIdeas', 'drawingStatus', 'architectStatus', 'roomRequirements', 'tokenAdvance',
+      'financing', 'roadWidth', 'targetCompletionDate', 'siteVisitDate', 'scpRemarks'
+  ];
 
-  const worksheet = xlsx.utils.json_to_sheet(data);
-  const workbook = xlsx.utils.book_new();
-  xlsx.utils.book_append_sheet(workbook, worksheet, 'CustomerLeads');
+  for (const lead of leads) {
+      const firstRequirement = lead.requirements?.[0] || {};
+      const scpData = firstRequirement.scpData || {};
 
-  // Write to a buffer instead of a file
-  return xlsx.write(workbook, { bookType: 'xlsx', type: 'buffer' });
-};
+      const row = {
+        leadSource: lead.leadSource,
+        customerName: lead.customerName,
+        mobileNumber: lead.mobileNumber,
+        alternateContactNumber: lead.alternateContactNumber,
+        email: lead.email,
+        state: lead.state,
+        city: lead.city,
+        isActive: lead.isActive,
+        createdAt: lead.createdAt.toISOString(),
+        
+        requirementType: firstRequirement.requirementType,
+        otherRequirement: firstRequirement.otherRequirement,
+        requirementDescription: firstRequirement.requirementDescription,
+        urgency: firstRequirement.urgency,
+        budget: firstRequirement.budget,
 
-export const updateCustomerLeadService = async (req, session) => {
-  const { id } = req.params;
-  const updateBody = req.body;
-
-  const lead = await CustomerLead.findById(id).session(session);
-  if (!lead) {
-    throw new ApiError(404, 'Customer lead not found');
+        siteAddress: scpData.siteAddress,
+        googleLocationLink: scpData.googleLocationLink,
+        siteType: scpData.siteType,
+        plotSize: scpData.plotSize,
+        totalArea: scpData.totalArea,
+        plinthStatus: scpData.plinthStatus,
+        structureType: scpData.structureType,
+        numUnits: scpData.numUnits,
+        usageType: scpData.usageType,
+        avgStayDuration: scpData.avgStayDuration,
+        additionalFeatures: scpData.additionalFeatures,
+        designIdeas: scpData.designIdeas,
+        drawingStatus: scpData.drawingStatus,
+        architectStatus: scpData.architectStatus,
+        roomRequirements: scpData.roomRequirements,
+        tokenAdvance: scpData.tokenAdvance,
+        financing: scpData.financing,
+        roadWidth: scpData.roadWidth,
+        targetCompletionDate: scpData.targetCompletionDate,
+        siteVisitDate: scpData.siteVisitDate,
+        scpRemarks: scpData.scpRemarks
+      };
+      dataToExport.push(row);
   }
 
-  Object.assign(lead, updateBody);
-  await lead.save({ session });
+  const worksheet = xlsx.utils.json_to_sheet(dataToExport, { header: headers });
+  const workbook = xlsx.utils.book_new();
+  xlsx.utils.book_append_sheet(workbook, worksheet, 'Customer Leads');
 
-  return lead;
+  return xlsx.write(workbook, { bookType: 'xlsx', type: 'buffer' });
 };

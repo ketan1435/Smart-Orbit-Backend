@@ -1,29 +1,21 @@
 import mongoose from 'mongoose';
+import { requirementSchema } from './schema/requirement.schema.js';
 
 const customerLeadSchema = new mongoose.Schema({
   leadSource: { type: String, required: true },
   customerName: { type: String, required: true },
   mobileNumber: { type: String, required: true },
-  whatsappNumber: { type: String },
-  email: { type: String },
-  preferredLanguage: { type: String },
-  state: { type: String },
-  city: { type: String },
-  googleLocationLink: { type: String },
+  alternateContactNumber: { type: String },
+  email: { type: String, lowercase: true, trim: true },
+  state: { type: String, default: '' },
+  city: { type: String, default: '' },
 
-  requirementType: { type: String },
-  otherRequirement: { type: String },
-  requirementDescription: { type: String },
-  urgency: { type: String },
-  budget: { type: String },
+  requirements: [requirementSchema],
 
-  hasDrawing: { type: Boolean },
-  needsArchitect: { type: Boolean },
-  samplePhotoUrl: { type: String },
-  requestSiteVisit: { type: Boolean },
   isActive: { type: Boolean, default: true },
-
-  createdAt: { type: Date, default: Date.now },
+}, {
+  timestamps: true,
 });
+
 const CustomerLead = mongoose.model('CustomerLead', customerLeadSchema);
-export default CustomerLead
+export default CustomerLead;
