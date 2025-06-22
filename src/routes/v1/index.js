@@ -4,10 +4,17 @@ import config from '../../config/config.js';
 
 import customerLeadRoute from './customerLead.route.js';
 import adminRoute from './admin.route.js';
+import fileRoute from './file.route.js';
+import userRoute from './user.route.js';
+import authRoute from './auth.route.js';
 
 const router = express.Router();
 
 const defaultRoutes = [
+  {
+    path: '/auth',
+    route: authRoute,
+  },
   {
     path: '/customer-leads',
     route: customerLeadRoute,
@@ -20,10 +27,14 @@ const defaultRoutes = [
     path: '/admin/',
     route: adminRoute,
   },
-  // {
-  //   path: '/stores',
-  //   route: storeRoute,
-  // },
+  {
+    path: '/files',
+    route: fileRoute,
+  },
+  {
+    path: '/users',
+    route: userRoute,
+  },
   // {
   //   path: '/income',
   //   route: incomeRoute,
@@ -39,10 +50,6 @@ const defaultRoutes = [
   // {
   //   path: '/vendors',
   //   route: vendorRoute,
-  // },
-  // {
-  //   path: '/files',
-  //   route: fileRoute,
   // },
   // {
   //   path: '/subscription-plans',

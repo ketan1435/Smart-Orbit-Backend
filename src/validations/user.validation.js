@@ -1,12 +1,21 @@
 import Joi from 'joi';
 import { password, objectId } from './custom.validation.js';
+import { roles } from '../config/roles.js';
 
 export const createUser = {
   body: Joi.object().keys({
     email: Joi.string().required().email(),
     password: Joi.string().required().custom(password),
     name: Joi.string().required(),
-    role: Joi.string().required().valid('user', 'admin'),
+    role: Joi.string().required().valid(...roles),
+    phoneNumber: Joi.string(),
+    city: Joi.string(),
+    region: Joi.string(),
+    address: Joi.string(),
+    education: Joi.string(),
+    experience: Joi.string(),
+    profilePictureKey: Joi.string(),
+    isActive: Joi.boolean(),
   }),
 };
 
@@ -17,6 +26,9 @@ export const getUsers = {
     sortBy: Joi.string(),
     limit: Joi.number().integer(),
     page: Joi.number().integer(),
+    city: Joi.string(),
+    region: Joi.string(),
+    isActive: Joi.boolean(),
   }),
 };
 
@@ -35,6 +47,14 @@ export const updateUser = {
       email: Joi.string().email(),
       password: Joi.string().custom(password),
       name: Joi.string(),
+      phoneNumber: Joi.string(),
+      city: Joi.string(),
+      region: Joi.string(),
+      address: Joi.string(),
+      education: Joi.string(),
+      experience: Joi.string(),
+      profilePictureKey: Joi.string(),
+      isActive: Joi.boolean(),
     })
     .min(1),
 };

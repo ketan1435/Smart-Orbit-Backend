@@ -2,7 +2,7 @@ import { GridFSStorage } from '../adapter/storageGridFS.js';
 import { S3Storage } from '../adapter/storageS3.js';
 import { LocalStorage } from '../adapter/storageLocal.js';
 
-const STORAGE_TYPE = process.env.STORAGE_TYPE || 'gridfs';
+export const STORAGE_TYPE = process.env.STORAGE_TYPE || 's3';
 
 let storageInstance;
 

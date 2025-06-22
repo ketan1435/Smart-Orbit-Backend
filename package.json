@@ -49,7 +49,9 @@
     "prettier"
   ],
   "dependencies": {
-    "aws-sdk": "^2.1692.0",
+    "@aws-sdk/client-s3": "^3.832.0",
+    "@aws-sdk/lib-storage": "^3.832.0",
+    "@aws-sdk/s3-request-presigner": "^3.832.0",
     "axios": "^1.8.4",
     "bcryptjs": "^2.4.3",
     "compression": "^1.7.4",
@@ -74,10 +76,11 @@
     "pm2": "^5.1.0",
     "swagger-jsdoc": "^6.0.8",
     "swagger-ui-express": "^4.6.3",
+    "uuid": "^11.1.0",
     "validator": "^13.9.0",
     "winston": "^3.9.0",
-    "xss-clean": "^0.1.1",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "xss-clean": "^0.1.1"
   },
   "devDependencies": {
     "coveralls": "^3.0.7",

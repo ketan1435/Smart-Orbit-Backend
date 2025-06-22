@@ -1,54 +1,14 @@
 import catchAsync from '../utils/catchAsync.js';
-import { createCustomerLeadService, listCustomerLeadsService, getCustomerLeadByIdService, activateCustomerLeadService, deactivateCustomerLeadService, importCustomerLeadsService, exportCustomerLeadsService, updateCustomerLeadService } from '../services/customerLead.service.js';
+import {
+  listCustomerLeadsService,
+  getCustomerLeadByIdService,
+  activateCustomerLeadService,
+  deactivateCustomerLeadService,
+  importCustomerLeadsService,
+  exportCustomerLeadsService,
+  updateCustomerLeadService,
+} from '../services/customerLead.service.js';
 import ApiError from '../utils/ApiError.js';
-
-export const createCustomerLeadController = catchAsync(async (req, res) => {
-  const {
-    leadSource,
-    customerName,
-    mobileNumber,
-    whatsappNumber,
-    email,
-    preferredLanguage,
-    state,
-    city,
-    googleLocationLink,
-    requirementType,
-    otherRequirement,
-    requirementDescription,
-    urgency,
-    budget,
-    hasDrawing,
-    needsArchitect,
-    requestSiteVisit
-  } = req.body;
-
-  const samplePhotoUrl = req.file ? req.file.path : undefined;
-
-  const payload = {
-    leadSource,
-    customerName,
-    mobileNumber,
-    whatsappNumber,
-    email,
-    preferredLanguage,
-    state,
-    city,
-    googleLocationLink,
-    requirementType,
-    otherRequirement,
-    requirementDescription,
-    urgency,
-    budget,
-    hasDrawing: hasDrawing === 'Yes',
-    needsArchitect: needsArchitect === 'Yes',
-    requestSiteVisit: requestSiteVisit === 'on' || requestSiteVisit === true,
-    samplePhotoUrl
-  };
-
-  const lead = await createCustomerLeadService(payload);
-  res.status(201).json({ success: true, lead });
-});
 
 export const listCustomerLeadsController = catchAsync(async (req, res) => {
   const filter = {};

@@ -8,7 +8,7 @@ const userSchema = new mongoose.Schema(
     name: {
       type: String,
       required: true,
-      trim: true
+      trim: true,
     },
     email: {
       type: String,
@@ -20,7 +20,7 @@ const userSchema = new mongoose.Schema(
         if (!validator.isEmail(value)) {
           throw new Error('Invalid email');
         }
-      }
+      },
     },
     password: {
       type: String,
@@ -32,20 +32,53 @@ const userSchema = new mongoose.Schema(
           throw new Error('Password must contain at least one letter and one number');
         }
       },
-      private: true // used by the toJSON plugin
+      private: true, // used by the toJSON plugin
     },
     role: {
       type: String,
       enum: roles,
-      default: 'user'
+      default: 'user',
     },
     isEmailVerified: {
       type: Boolean,
-      default: false
-    }
+      default: false,
+    },
+    // Optional fields for different roles
+    phoneNumber: {
+      type: String,
+      trim: true,
+    },
+    city: {
+      type: String,
+      trim: true,
+    },
+    region: {
+      type: String,
+      trim: true,
+    },
+    address: {
+      type: String,
+      trim: true,
+    },
+    education: {
+      type: String,
+      trim: true,
+    },
+    experience: {
+      type: String,
+      trim: true,
+    },
+    profilePicture: {
+      type: String,
+      trim: true,
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
   },
   {
-    timestamps: true
+    timestamps: true,
   }
 );
 
@@ -55,7 +88,7 @@ const userSchema = new mongoose.Schema(
  * @param {ObjectId} [excludeUserId] - The id of the user to be excluded
  * @returns {Promise<boolean>}
  */
-userSchema.statics.isEmailTaken = async function(email, excludeUserId) {
+userSchema.statics.isEmailTaken = async function (email, excludeUserId) {
   const user = await this.findOne({ email, _id: { $ne: excludeUserId } });
   return !!user;
 };
@@ -65,11 +98,11 @@ userSchema.statics.isEmailTaken = async function(email, excludeUserId) {
  * @param {string} password
  * @returns {Promise<boolean>}
  */
-userSchema.methods.isPasswordMatch = async function(password) {
+userSchema.methods.isPasswordMatch = async function (password) {
   return bcrypt.compare(password, this.password);
 };
 
-userSchema.pre('save', async function(next) {
+userSchema.pre('save', async function (next) {
   if (this.isModified('password')) {
     this.password = await bcrypt.hash(this.password, 8);
   }

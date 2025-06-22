@@ -2,9 +2,7 @@ import express from 'express';
 
 import multer from 'multer';
 import path from 'path';
-import fs from 'fs';
 import {
-  createCustomerLeadController,
   listCustomerLeadsController,
   getCustomerLeadController,
   activateCustomerLeadController,
@@ -13,32 +11,25 @@ import {
   exportCustomerLeadsController,
   updateCustomerLeadController,
 } from '../../controllers/customerLead.controller.js';
+import { createCustomerLeadService } from '../../services/customerLead.service.js';
 import auth from '../../middlewares/auth.js';
 import { transactional } from '../../utils/transactional.js';
 import * as customerLeadValidation from '../../validations/customerLead.validation.js';
 import validate from '../../middlewares/validate.js';
 
-const uploadDir = 'uploads/samplePhotos/';
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-
-const importDir = 'uploads/imports/';
-if (!fs.existsSync(importDir)) fs.mkdirSync(importDir, { recursive: true });
-
-const storage = multer.diskStorage({
+// Multer configuration for spreadsheet imports
+const importStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    if (req.route.path.includes('import')) {
-      cb(null, importDir);
-    } else {
-      cb(null, uploadDir);
-    }
+    cb(null, 'uploads/imports/');
   },
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname);
-    cb(null, `${Date.now()}-${file.fieldname}${ext}`);
+    cb(null, `${Date.now()}-spreadsheet${ext}`);
   },
 });
 
-export const upload = multer({ storage });
+const upload = multer({ storage: importStorage });
+
 const router = express.Router();
 
 /**
@@ -204,16 +195,22 @@ router.post('/import', upload.single('spreadsheet'), importCustomerLeadsControll
  *                 type: string
  *               requestSiteVisit:
  *                 type: string
- *               samplePhoto:
+ *               imageUrlKey:
  *                 type: string
- *                 format: binary
+ *                 description: "The key of the uploaded image file in S3."
+ *               videoUrlKey:
+ *                 type: string
+ *                 description: "The key of the uploaded video file in S3."
+ *               voiceMessageUrlKey:
+ *                 type: string
+ *                 description: "The key of the uploaded voice message file in S3."
  *     responses:
  *       201:
  *         description: Lead submitted
  *       400:
  *         description: Invalid input
  */
-router.post('/', upload.single('samplePhoto'), createCustomerLeadController);
+router.post('/', transactional(createCustomerLeadService));
 
 /**
  * @swagger

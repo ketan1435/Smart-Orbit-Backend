@@ -1,25 +1,127 @@
 import xlsx from 'xlsx';
 import CustomerLead from '../models/customerLead.model.js';
 import ApiError from '../utils/ApiError.js';
+import path from 'path';
+import storage from '../factory/storage.factory.js';
+import logger from '../config/logger.js';
 
-export const createCustomerLeadService = async (data) => {
-  return await CustomerLead.create(data);
+export const createCustomerLeadService = async (req, session) => {
+  const { body } = req;
+  const {
+    leadSource,
+    customerName,
+    mobileNumber,
+    whatsappNumber,
+    email,
+    preferredLanguage,
+    state,
+    city,
+    googleLocationLink,
+    requirementType,
+    otherRequirement,
+    requirementDescription,
+    urgency,
+    budget,
+    hasDrawing,
+    needsArchitect,
+    requestSiteVisit,
+    imageUrlKey,
+    videoUrlKey,
+    voiceMessageUrlKey,
+  } = body;
+
+  // 1. Create the lead document first to reserve an ID
+  const leadPayload = {
+    leadSource,
+    customerName,
+    mobileNumber,
+    whatsappNumber,
+    email,
+    preferredLanguage,
+    state,
+    city,
+    googleLocationLink,
+    requirementType,
+    otherRequirement,
+    requirementDescription,
+    urgency,
+    budget,
+    hasDrawing: hasDrawing === 'Yes',
+    needsArchitect: needsArchitect === 'Yes',
+    requestSiteVisit: requestSiteVisit === 'on' || requestSiteVisit === true,
+  };
+  const lead = (await CustomerLead.create([leadPayload], { session }))[0];
+
+  const filesToProcess = [
+    { field: 'imageUrl', tempKey: imageUrlKey, category: 'images' },
+    { field: 'videoUrl', tempKey: videoUrlKey, category: 'videos' },
+    { field: 'voiceMessageUrl', tempKey: voiceMessageUrlKey, category: 'voice-messages' },
+  ].filter((f) => f.tempKey);
+
+  if (filesToProcess.length === 0) {
+    // If no files, the operation is complete
+    return { status: 201, body: { success: true, status: 1, lead } };
+  }
+
+  const permanentLocations = {};
+  const successfullyCopiedKeys = [];
+
+  try {
+    // 2. Perform all S3 copy operations
+    for (const file of filesToProcess) {
+      const extension = path.extname(file.tempKey);
+      const permanentKey = `customer-leads/${lead._id}/${file.category}${extension}`;
+
+      await storage.copyFile(file.tempKey, permanentKey);
+      successfullyCopiedKeys.push(permanentKey); // Track for potential cleanup
+      permanentLocations[file.field] = permanentKey; // Using key, could be URL
+    }
+
+    // 3. If all copies succeed, update the lead document with permanent keys/URLs
+    Object.assign(lead, permanentLocations);
+    await lead.save({ session });
+
+    // 4. Clean up original temporary files from S3
+    const tempKeysToDelete = filesToProcess.map((f) => f.tempKey);
+    const deletePromises = tempKeysToDelete.map((key) => storage.deleteFile(key));
+    await Promise.allSettled(deletePromises); // Non-critical, just log errors if they fail
+  } catch (s3Error) {
+    logger.error(`S3 file processing failed for lead ${lead._id}. Cleaning up orphaned permanent files.`, s3Error);
+    // 5. COMPENSATING ACTION: If any S3 op failed, delete any files that were successfully copied
+    if (successfullyCopiedKeys.length > 0) {
+      const deletePromises = successfullyCopiedKeys.map((key) => storage.deleteFile(key));
+      await Promise.allSettled(deletePromises);
+    }
+    // Re-throw the original error to be caught by the transactional middleware,
+    // which will abort the DB transaction (rolling back the lead creation).
+    throw s3Error;
+  }
+
+  return {
+    status: 201,
+    body: {
+      success: true,
+      status: 1,
+      lead,
+    },
+  };
 };
 
 export const listCustomerLeadsService = async (filter = {}, options = {}) => {
+  const { limit, skip, sortBy } = options;
   const customerLeads = await CustomerLead.find(filter)
-    .sort(options.sortBy || { createdAt: -1 })
-    .skip(options.skip || 0)
-    .limit(options.limit || 10);
+    .sort(sortBy || { createdAt: -1 })
+    .skip(skip || 0)
+    .limit(limit || 10);
 
   const count = await CustomerLead.countDocuments(filter);
 
   return {
     results: customerLeads,
     totalResults: count,
-    page: options.page || 1,
-    limit: options.limit || 10,
-    totalPages: Math.ceil(count / (options.limit || 10)),
+    page: (skip || 0) / (limit || 10) + 1,
+    limit: limit || 10,
+    totalPages: Math.ceil(count / (limit || 10)),
   };
 };
 
