@@ -79,6 +79,26 @@ router
    *           type: string
    *         description: User role
    *       - in: query
+   *         name: experience
+   *         schema:
+   *           type: string
+   *         description: User experience
+   *       - in: query
+   *         name: region
+   *         schema:
+   *           type: string
+   *         description: User region
+   *       - in: query
+   *         name: education
+   *         schema:
+   *           type: string
+   *         description: User education
+   *       - in: query
+   *         name: isActive
+   *         schema:
+   *           type: boolean
+   *         description: Filter by active status
+   *       - in: query
    *         name: sortBy
    *         schema:
    *           type: string
@@ -127,6 +147,56 @@ router
    *         $ref: '#/components/responses/Forbidden'
    */
   .get(auth('getUsers'), validate(userValidation.getUsers), userController.getUsers);
+
+/**
+ * @swagger
+ * /users/search:
+ *   post:
+ *     summary: Search for users with optional filters
+ *     description: Retrieve a list of users based on search criteria in the request body.
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               role:
+ *                 type: string
+ *               experience:
+ *                 type: string
+ *               region:
+ *                 type: string
+ *               education:
+ *                 type: string
+ *               sortBy:
+ *                 type: string
+ *                 description: "Sort order, e.g., name:asc"
+ *               limit:
+ *                 type: integer
+ *               page:
+ *                 type: integer
+ *           example:
+ *             name: "John"
+ *             role: "architect"
+ *             page: 1
+ *             limit: 10
+ *     responses:
+ *       "200":
+ *         description: OK
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UserPagedResults'
+ *       "401":
+ *         $ref: '#/components/responses/Unauthorized'
+ */
+router.post('/search', auth('getUsers'), validate(userValidation.searchUsers), userController.searchUsers);
 
 /**
  * @swagger

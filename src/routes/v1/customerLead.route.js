@@ -10,7 +10,7 @@ import {
   importCustomerLeadsController,
   exportCustomerLeadsController,
   updateCustomerLeadController,
-  shareRequirementController,
+  shareRequirementForUserController,
   getSharedRequirementsForUserController,
   getMySharedRequirementsController,
 } from '../../controllers/customerLead.controller.js';
@@ -519,8 +519,9 @@ router.put(
  */
 router.post(
   '/:leadId/requirements/:requirementId/share',
-  auth('manageLeads'), // Or a more specific permission like 'shareRequirements'
-  shareRequirementController
+  auth('manageLeads'),
+  validate(customerLeadValidation.shareRequirement),
+  shareRequirementForUserController
 );
 
 /**

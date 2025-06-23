@@ -63,6 +63,22 @@ adminSchema.statics.isEmailTaken = async function (email, excludeUserId) {
 };
 
 /**
+ * Check if password matches the user's password
+ * @param {string} password
+ * @returns {Promise<boolean>}
+ */
+adminSchema.methods.isPasswordMatch = async function (password) {
+  return bcrypt.compare(password, this.password);
+};
+
+adminSchema.pre('save', async function (next) {
+  if (this.isModified('password')) {
+    this.password = await bcrypt.hash(this.password, 8);
+  }
+  next();
+});
+
+/**
  * @typedef Admin
  */
 const Admin = mongoose.model('Admin', adminSchema);

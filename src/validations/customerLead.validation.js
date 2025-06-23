@@ -44,9 +44,12 @@ export const createCustomerLead = {
     customerName: Joi.string().required(),
     mobileNumber: Joi.string().required(),
     alternateContactNumber: Joi.string().allow(''),
+    whatsappNumber: Joi.string().allow(''),
     email: Joi.string().email().allow(''),
+    preferredLanguage: Joi.string().allow(''),
     state: Joi.string().allow(''),
     city: Joi.string().allow(''),
+    googleLocationLink: Joi.string().uri({ allowRelative: false }).allow(''),
     requirements: Joi.array().items(requirementSchema).min(1).required(),
   }),
 };
@@ -78,9 +81,12 @@ export const updateCustomerLead = {
       customerName: Joi.string(),
       mobileNumber: Joi.string(),
       alternateContactNumber: Joi.string().allow(''),
+      whatsappNumber: Joi.string().allow(''),
       email: Joi.string().email().allow(''),
+      preferredLanguage: Joi.string().allow(''),
       state: Joi.string().allow(''),
       city: Joi.string().allow(''),
+      googleLocationLink: Joi.string().uri({ allowRelative: false }).allow(''),
       requirements: Joi.array().items(requirementSchema),
       isActive: Joi.boolean(),
     })
@@ -93,6 +99,6 @@ export const shareRequirement = {
     requirementId: Joi.string().custom(objectId).required(),
   }),
   body: Joi.object().keys({
-    userId: Joi.string().custom(objectId).required(),
+    userIds: Joi.array().items(Joi.string().custom(objectId)).min(1).required(),
   }),
 }; 

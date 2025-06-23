@@ -22,13 +22,14 @@ export const createUser = {
 export const getUsers = {
   query: Joi.object().keys({
     name: Joi.string(),
+    isActive: Joi.string(),
     role: Joi.string(),
+    experience: Joi.string(),
+    region: Joi.string(),
+    education: Joi.string(),
     sortBy: Joi.string(),
     limit: Joi.number().integer(),
     page: Joi.number().integer(),
-    city: Joi.string(),
-    region: Joi.string(),
-    isActive: Joi.boolean(),
   }),
 };
 
@@ -62,5 +63,18 @@ export const updateUser = {
 export const deleteUser = {
   params: Joi.object().keys({
     userId: Joi.string().custom(objectId),
+  }),
+};
+
+export const searchUsers = {
+  body: Joi.object().keys({
+    name: Joi.string().allow(''),
+    role: Joi.string().allow(''),
+    experience: Joi.string().allow(''),
+    region: Joi.string().allow(''),
+    education: Joi.string().allow(''),
+    sortBy: Joi.string().allow(''),
+    limit: Joi.number().integer(),
+    page: Joi.number().integer(),
   }),
 };

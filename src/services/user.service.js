@@ -56,15 +56,29 @@ export const queryUsers = async (filter, options) => {
   const { limit = 10, page = 1, sortBy } = options;
   const skip = (page - 1) * limit;
 
-  // Enhance filter for case-insensitive search on name
-  if (filter.name) {
-    filter.name = { $regex: filter.name, $options: 'i' };
-  }
+  const query = {};
+
+  // Build the query dynamically for flexible, case-insensitive searching
+  Object.keys(filter).forEach(key => {
+    const value = filter[key];
+    // This condition ensures that we filter on truthy values, but also when a value is explicitly `false` (for the isActive filter).
+    // It correctly ignores `null`, `undefined`, and empty strings.
+    if (value || value === false) {
+      if (key === 'role' && Array.isArray(value)) {
+        // Use $in for an array of roles, ensuring case-insensitivity
+        query[key] = { $in: value.map(role => new RegExp(`^${role}$`, 'i')) };
+      } else if (['name', 'experience', 'region', 'education'].includes(key)) {
+        query[key] = { $regex: value, $options: 'i' };
+      } else {
+        query[key] = value;
+      }
+    }
+  });
 
   const sortOption = sortBy ? { [sortBy.split(':')[0]]: sortBy.split(':')[1] === 'desc' ? -1 : 1 } : { createdAt: -1 };
 
-  const users = await User.find(filter).sort(sortOption).skip(skip).limit(limit);
-  const totalResults = await User.countDocuments(filter);
+  const users = await User.find(query).sort(sortOption).skip(skip).limit(limit);
+  const totalResults = await User.countDocuments(query);
 
   return {
     results: users,

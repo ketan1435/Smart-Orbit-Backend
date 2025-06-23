@@ -10,7 +10,18 @@ const createUser = catchAsync(async (req, res) => {
 });
 
 const getUsers = catchAsync(async (req, res) => {
-  const filter = pick(req.query, ['name', 'role', 'city', 'region', 'isActive']);
+  const filter = pick(req.query, ['name', 'role', 'experience', 'region', 'education', 'isActive']);
+  if (filter.role && typeof filter.role === 'string') {
+    filter.role = filter.role.split(',').map(role => role.trim());
+  }
+
+  // Only apply isActive filter if it's explicitly provided in the query
+  if (req.query.isActive !== undefined && req.query.isActive !== null) {
+      filter.isActive = req.query.isActive === 'true';
+  } else {
+      delete filter.isActive;
+  }
+  
   const options = pick(req.query, ['sortBy', 'limit', 'page']);
   const result = await userService.queryUsers(filter, options);
   res.send({ status: 1, ...result });
@@ -34,4 +45,19 @@ const deleteUser = catchAsync(async (req, res) => {
   res.status(httpStatus.NO_CONTENT).send();
 });
 
-export { createUser, getUsers, getUser, updateUser, deleteUser }; 
+const searchUsers = catchAsync(async (req, res) => {
+  const filter = pick(req.body, ['name', 'role', 'experience', 'region', 'education']);
+  filter.isActive = true; // Always filter for active users
+  const options = pick(req.body, ['sortBy', 'limit', 'page']);
+  const result = await userService.queryUsers(filter, options);
+  res.send({ status: 1, ...result });
+});
+
+export {
+    createUser,
+    getUsers,
+    getUser,
+    updateUser,
+    deleteUser,
+    searchUsers,
+};

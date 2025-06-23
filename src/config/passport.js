@@ -11,9 +11,9 @@ const jwtOptions = {
 
 const jwtVerify = async (payload, done) => {
   try {
-    const user = await User.findById(payload.id);
+    const user = await User.findById(payload.sub);
     if (!user) {
-      const admin = await Admin.findById(payload.id);
+      const admin = await Admin.findById(payload.sub);
       if (!admin) {
         return done(null, false);
       }

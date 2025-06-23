@@ -48,7 +48,7 @@ export const createCustomerLeadService = async (req, session) => {
           const fileType = type.replace('UrlKeys', '');
           const fileName = tempKey.split('/').pop();
           const permanentKey = `customer-leads/${lead._id}/${requirementId}/${fileType}/${fileName}`;
-          
+
           await storage.copyFile(tempKey, permanentKey);
           
           newRequirement.files.push({ fileType, key: permanentKey });
@@ -67,10 +67,10 @@ export const createCustomerLeadService = async (req, session) => {
       logger.error(`Failed to delete temporary file during cleanup: ${err.message}`);
     });
 
-    return {
+  return {
       status: httpStatus.CREATED,
       body: { status: 1, message: 'Customer lead created successfully', data: lead },
-    };
+  };
   } catch (error) {
     // If an error occurred (e.g., file copy failed), the transactional middleware
     // will abort the database transaction. We just need to re-throw the error.
@@ -151,6 +151,31 @@ export const shareRequirementService = async (leadId, requirementId, userIdToSha
     requirement.sharedWith.push({
         user: userIdToShareWith,
         sharedBy: adminId,
+    });
+
+    await lead.save();
+    return lead;
+};
+
+export const shareRequirementWithUsersService = async (leadId, requirementId, userIds, adminId) => {
+    const lead = await getCustomerLeadByIdService(leadId);
+    if (!lead) {
+        throw new ApiError(httpStatus.NOT_FOUND, 'Customer lead not found');
+    }
+
+    const requirement = lead.requirements.id(requirementId);
+    if (!requirement) {
+        throw new ApiError(httpStatus.NOT_FOUND, 'Requirement not found within the lead');
+    }
+
+    userIds.forEach(userIdToShareWith => {
+        const isAlreadyShared = requirement.sharedWith.some(share => share.user.toString() === userIdToShareWith);
+        if (!isAlreadyShared) {
+            requirement.sharedWith.push({
+                user: userIdToShareWith,
+                sharedBy: adminId,
+            });
+        }
     });
 
     await lead.save();
@@ -275,7 +300,7 @@ export const importCustomerLeadsService = async (filePath) => {
         const index = headerMapping[fieldName];
         return index !== undefined && row[index] !== undefined ? String(row[index]).trim() : undefined;
     }
-    
+
     const leadData = {
       leadSource: getVal('leadSource'),
       customerName: getVal('customerName'),
@@ -289,11 +314,11 @@ export const importCustomerLeadsService = async (filePath) => {
     
     // For simplicity, we'll assume one row in the CSV corresponds to one requirement.
     const requirementData = {
-        requirementType: getVal('requirementType'),
-        otherRequirement: getVal('otherRequirement'),
-        requirementDescription: getVal('requirementDescription'),
-        urgency: getVal('urgency'),
-        budget: getVal('budget'),
+      requirementType: getVal('requirementType'),
+      otherRequirement: getVal('otherRequirement'),
+      requirementDescription: getVal('requirementDescription'),
+      urgency: getVal('urgency'),
+      budget: getVal('budget'),
         scpData: {
             siteAddress: getVal('siteAddress'),
             googleLocationLink: getVal('googleLocationLink'),
@@ -333,19 +358,19 @@ export const importCustomerLeadsService = async (filePath) => {
   }
 
   if (leadsToInsert.length > 0) {
-    try {
+  try {
       const result = await CustomerLead.insertMany(leadsToInsert, { ordered: false });
       importedCount = result.length;
     } catch (dbError) {
       if (dbError.writeErrors) {
         importedCount = dbError.result.nInserted;
         dbError.writeErrors.forEach((writeError) => {
-          errors.push({
+        errors.push({
             row: data[writeError.index].rowNum, // We need to attach rowNum to data items
             error: `Database error: ${writeError.errmsg}`,
-          });
         });
-      } else {
+      });
+    } else {
         throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'A database error occurred during import.');
       }
     }
@@ -356,7 +381,7 @@ export const importCustomerLeadsService = async (filePath) => {
 
 export const exportCustomerLeadsService = async (filter = {}) => {
   const leads = await CustomerLead.find(filter).lean();
-  
+
   if (leads.length === 0) {
     return null;
   }
