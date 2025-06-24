@@ -53,6 +53,60 @@ const searchUsers = catchAsync(async (req, res) => {
   res.send({ status: 1, ...result });
 });
 
+export const activateUserController = catchAsync(async (req, res) => {
+  const user = await userService.activateUser(req.params.userId);
+  res.send({ status: 1, user });
+});
+
+export const deactivateUserController = catchAsync(async (req, res) => {
+  const user = await userService.deactivateUser(req.params.userId);
+  res.send({ status: 1, user });
+});
+
+export const exportUsersController = catchAsync(async (req, res) => {
+  const filter = pick(req.query, ['name', 'role', 'isActive']);
+
+  if (filter.role && typeof filter.role === 'string') {
+    filter.role = filter.role.split(',').map(role => role.trim());
+  }
+
+  // Only apply isActive filter if it's explicitly provided in the query
+  if (req.query.isActive !== undefined && req.query.isActive !== null) {
+      filter.isActive = req.query.isActive === 'true';
+  } else {
+      delete filter.isActive;
+  }
+  
+  // Handle date filters
+  const { dateFilterType, specificDate, startDate, endDate } = req.query;
+  if (dateFilterType === 'specific' && specificDate) {
+    const dayStart = new Date(specificDate);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(specificDate);
+    dayEnd.setHours(23, 59, 59, 999);
+    filter.createdAt = { $gte: dayStart, $lte: dayEnd };
+  } else if (dateFilterType === 'range' && startDate) {
+    const rangeStart = new Date(startDate);
+    rangeStart.setHours(0, 0, 0, 0);
+    const rangeEnd = endDate ? new Date(endDate) : new Date();
+    rangeEnd.setHours(23, 59, 59, 999);
+    filter.createdAt = { $gte: rangeStart, $lte: rangeEnd };
+  }
+
+  const fileBuffer = await userService.exportUsersService(filter);
+
+  if (!fileBuffer) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'No users found for the selected criteria.');
+  }
+
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const fileName = `users-${timestamp}.xlsx`;
+
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+  res.send(fileBuffer);
+});
+
 export {
     createUser,
     getUsers,

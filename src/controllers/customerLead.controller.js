@@ -118,7 +118,22 @@ export const exportCustomerLeadsController = catchAsync(async (req, res) => {
   if (req.query.isActive !== undefined) {
     filter.isActive = req.query.isActive === 'true';
   }
-  // Add any other filters you need, e.g., date range
+  
+  // Handle date filters
+  const { dateFilterType, specificDate, startDate, endDate } = req.query;
+  if (dateFilterType === 'specific' && specificDate) {
+    const dayStart = new Date(specificDate);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(specificDate);
+    dayEnd.setHours(23, 59, 59, 999);
+    filter.createdAt = { $gte: dayStart, $lte: dayEnd };
+  } else if (dateFilterType === 'range' && startDate) {
+    const rangeStart = new Date(startDate);
+    rangeStart.setHours(0, 0, 0, 0);
+    const rangeEnd = endDate ? new Date(endDate) : new Date();
+    rangeEnd.setHours(23, 59, 59, 999);
+    filter.createdAt = { $gte: rangeStart, $lte: rangeEnd };
+  }
 
   const fileBuffer = await exportCustomerLeadsService(filter);
 

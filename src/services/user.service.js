@@ -4,6 +4,7 @@ import User from '../models/user.model.js';
 import ApiError from '../utils/ApiError.js';
 import storage from '../factory/storage.factory.js';
 import logger from '../config/logger.js';
+import xlsx from 'xlsx';
 
 /**
  * Create a user
@@ -164,4 +165,63 @@ export const deleteUserById = async (userId) => {
   }
   await user.deleteOne();
   return user;
+};
+
+export const activateUser = async (userId) => {
+  const user = await getUserById(userId);
+  if (!user) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
+  }
+  user.isActive = true;
+  await user.save();
+  return user;
+};
+
+export const deactivateUser = async (userId) => {
+  const user = await getUserById(userId);
+  if (!user) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
+  }
+  user.isActive = false;
+  await user.save();
+  return user;
+};
+
+export const exportUsersService = async (filter = {}) => {
+  const users = await User.find(filter).lean();
+
+  if (users.length === 0) {
+    return null;
+  }
+
+  const worksheetData = users.map((user) => ({
+    Name: user.name,
+    Email: user.email,
+    Role: user.role,
+    'Phone Number': user.phoneNumber,
+    City: user.city,
+    Region: user.region,
+    Address: user.address,
+    Education: user.education,
+    Experience: user.experience,
+    'Active Status': user.isActive ? 'Active' : 'Inactive',
+    'Email Verified': user.isEmailVerified ? 'Yes' : 'No',
+    'Joined Date': user.createdAt,
+  }));
+
+  const worksheet = xlsx.utils.json_to_sheet(worksheetData);
+  const workbook = xlsx.utils.book_new();
+  xlsx.utils.book_append_sheet(workbook, worksheet, 'Users');
+  
+  // Set date format for the 'Joined Date' column
+  worksheet['!cols'] = [{ wch: 25 }, { wch: 30 }, { wch: 15 }, { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 30 }, { wch: 20 }, { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 20 }];
+  users.forEach((_user, index) => {
+    const cellRef = xlsx.utils.encode_cell({ c: 11, r: index + 1 });
+    if (worksheet[cellRef]) {
+      worksheet[cellRef].z = 'yyyy-mm-dd';
+    }
+  });
+
+
+  return xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' });
 }; 

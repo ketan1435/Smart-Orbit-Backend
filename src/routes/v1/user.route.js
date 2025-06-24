@@ -200,6 +200,71 @@ router.post('/search', auth('getUsers'), validate(userValidation.searchUsers), u
 
 /**
  * @swagger
+ * /users/export:
+ *   get:
+ *     summary: Export users to an Excel file
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: name
+ *         schema:
+ *           type: string
+ *         description: Filter by user name (case insensitive)
+ *       - in: query
+ *         name: role
+ *         schema:
+ *           type: string
+ *         description: Filter by a single role or comma-separated roles
+ *       - in: query
+ *         name: isActive
+ *         schema:
+ *           type: boolean
+ *         description: Filter by active status
+ *       - in: query
+ *         name: dateFilterType
+ *         schema:
+ *           type: string
+ *           enum: [all, specific, range]
+ *         description: Type of date filter
+ *       - in: query
+ *         name: specificDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: The specific date to filter by (e.g., YYYY-MM-DD)
+ *       - in: query
+ *         name: startDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: The start date for the range filter (e.g., YYYY-MM-DD)
+ *       - in: query
+ *         name: endDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: The end date for the range filter (e.g., YYYY-MM-DD)
+ *     responses:
+ *       200:
+ *         description: An Excel file containing the users.
+ *         content:
+ *           application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden'
+ *       404:
+ *         description: No users found for the selected criteria.
+ */
+router.get('/export', auth('getUsers'), userController.exportUsersController);
+
+/**
+ * @swagger
  * /users/me/shared-requirements:
  *   get:
  *     summary: Get all requirements shared with the currently logged-in user
@@ -341,5 +406,69 @@ router
    *         $ref: '#/components/responses/NotFound'
    */
   .delete(auth('manageUsers'), validate(userValidation.deleteUser), userController.deleteUser);
+
+/**
+ * @swagger
+ * /users/{userId}/activate:
+ *   patch:
+ *     summary: Activate a user
+ *     description: Only admins can activate a user.
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: User id
+ *     responses:
+ *       "200":
+ *         description: OK
+ *         content:
+ *           application/json:
+ *             schema:
+ *                $ref: '#/components/schemas/User'
+ *       "401":
+ *         $ref: '#/components/responses/Unauthorized'
+ *       "403":
+ *         $ref: '#/components/responses/Forbidden'
+ *       "404":
+ *         $ref: '#/components/responses/NotFound'
+ */
+router.patch('/:userId/activate', auth('manageUsers'), validate(userValidation.getUser), userController.activateUserController);
+
+/**
+ * @swagger
+ * /users/{userId}/deactivate:
+ *   patch:
+ *     summary: Deactivate a user
+ *     description: Only admins can deactivate a user.
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: User id
+ *     responses:
+ *       "200":
+ *         description: OK
+ *         content:
+ *           application/json:
+ *             schema:
+ *                $ref: '#/components/schemas/User'
+ *       "401":
+ *         $ref: '#/components/responses/Unauthorized'
+ *       "403":
+ *         $ref: '#/components/responses/Forbidden'
+ *       "404":
+ *         $ref: '#/components/responses/NotFound'
+ */
+router.patch('/:userId/deactivate', auth('manageUsers'), validate(userValidation.getUser), userController.deactivateUserController);
 
 export default router; 
