@@ -14,14 +14,6 @@ const getUsers = catchAsync(async (req, res) => {
   if (filter.role && typeof filter.role === 'string') {
     filter.role = filter.role.split(',').map(role => role.trim());
   }
-
-  // Only apply isActive filter if it's explicitly provided in the query
-  if (req.query.isActive !== undefined && req.query.isActive !== null) {
-      filter.isActive = req.query.isActive === 'true';
-  } else {
-      delete filter.isActive;
-  }
-  
   const options = pick(req.query, ['sortBy', 'limit', 'page']);
   const result = await userService.queryUsers(filter, options);
   res.send({ status: 1, ...result });
@@ -72,11 +64,11 @@ export const exportUsersController = catchAsync(async (req, res) => {
 
   // Only apply isActive filter if it's explicitly provided in the query
   if (req.query.isActive !== undefined && req.query.isActive !== null) {
-      filter.isActive = req.query.isActive === 'true';
+    filter.isActive = req.query.isActive === 'true';
   } else {
-      delete filter.isActive;
+    delete filter.isActive;
   }
-  
+
   // Handle date filters
   const { dateFilterType, specificDate, startDate, endDate } = req.query;
   if (dateFilterType === 'specific' && specificDate) {
@@ -107,11 +99,26 @@ export const exportUsersController = catchAsync(async (req, res) => {
   res.send(fileBuffer);
 });
 
+const getMySiteVisits = catchAsync(async (req, res) => {
+  const visits = await userService.getMySiteVisits(req.user.id);
+  res.send({ status: 1, results: visits });
+});
+
+const getSiteEngineers = catchAsync(async (req, res) => {
+  const filter = pick(req.query, ['name']);
+  const options = pick(req.query, ['sortBy', 'limit', 'page']);
+  // a site engineer should be active to be assigned a task
+  const result = await userService.queryUsers({ ...filter, role: 'site-engineer', isActive: true }, options);
+  res.send({ status: 1, ...result });
+});
+
 export {
-    createUser,
-    getUsers,
-    getUser,
-    updateUser,
-    deleteUser,
-    searchUsers,
+  createUser,
+  getUsers,
+  getUser,
+  updateUser,
+  deleteUser,
+  searchUsers,
+  getMySiteVisits,
+  getSiteEngineers,
 };

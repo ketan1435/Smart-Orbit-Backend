@@ -150,6 +150,56 @@ router
 
 /**
  * @swagger
+ * /users/site-engineers:
+ *   get:
+ *     summary: Get all site engineers
+ *     description: Retrieve a list of all users with the 'site-engineer' role.
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: name
+ *         schema:
+ *           type: string
+ *         description: Filter by site engineer name
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *         description: sort by query in the form of field:desc/asc (ex. name:asc)
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *         default: 10
+ *         description: Maximum number of users
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           default: 1
+ *         description: Page number
+ *     responses:
+ *       "200":
+ *         description: OK
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/UserPagedResults'
+ *       "401":
+ *         $ref: '#/components/responses/Unauthorized'
+ *       "403":
+ *         $ref: '#/components/responses/Forbidden'
+ */
+router.get('/site-engineers', auth('getUsers'), userController.getSiteEngineers);
+
+router.get('/me/site-visits', auth('getSiteVisits'), userController.getMySiteVisits);
+
+/**
+ * @swagger
  * /users/search:
  *   post:
  *     summary: Search for users with optional filters

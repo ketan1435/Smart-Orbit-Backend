@@ -23,7 +23,7 @@ export const createCustomerLeadService = async (req, session) => {
   try {
     for (const reqData of requirements) {
       const requirementId = new mongoose.Types.ObjectId();
-      
+
       // Manually construct the requirement object to avoid saving unwanted fields
       const newRequirement = {
         _id: requirementId,
@@ -51,7 +51,7 @@ export const createCustomerLeadService = async (req, session) => {
           const permanentKey = `customer-leads/${lead._id}/${requirementId}/${fileType}/${fileName}`;
 
           await storage.copyFile(tempKey, permanentKey);
-          
+
           newRequirement.files.push({ fileType, key: permanentKey });
           tempFileKeysToDelete.push(tempKey);
         }
@@ -68,10 +68,10 @@ export const createCustomerLeadService = async (req, session) => {
       logger.error(`Failed to delete temporary file during cleanup: ${err.message}`);
     });
 
-  return {
+    return {
       status: httpStatus.CREATED,
       body: { status: 1, message: 'Customer lead created successfully', data: lead },
-  };
+    };
   } catch (error) {
     // If an error occurred (e.g., file copy failed), the transactional middleware
     // will abort the database transaction. We just need to re-throw the error.
@@ -104,19 +104,19 @@ export const getCustomerLeadByIdService = async (id) => {
 };
 
 export const updateCustomerLeadService = async (id, updateBody) => {
-    const lead = await getCustomerLeadByIdService(id);
-    if (!lead) {
-        throw new ApiError(httpStatus.NOT_FOUND, 'Customer lead not found');
-    }
-    Object.assign(lead, updateBody);
-    await lead.save();
-    return lead;
+  const lead = await getCustomerLeadByIdService(id);
+  if (!lead) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Customer lead not found');
+  }
+  Object.assign(lead, updateBody);
+  await lead.save();
+  return lead;
 };
 
 export const activateCustomerLeadService = async (id) => {
   const lead = await getCustomerLeadByIdService(id);
   if (!lead) {
-      throw new ApiError(httpStatus.NOT_FOUND, 'Customer lead not found');
+    throw new ApiError(httpStatus.NOT_FOUND, 'Customer lead not found');
   }
   lead.isActive = true;
   await lead.save();
@@ -124,85 +124,85 @@ export const activateCustomerLeadService = async (id) => {
 };
 
 export const deactivateCustomerLeadService = async (id) => {
-    const lead = await getCustomerLeadByIdService(id);
-    if (!lead) {
-        throw new ApiError(httpStatus.NOT_FOUND, 'Customer lead not found');
-    }
-    lead.isActive = false;
-    await lead.save();
-    return lead;
+  const lead = await getCustomerLeadByIdService(id);
+  if (!lead) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Customer lead not found');
+  }
+  lead.isActive = false;
+  await lead.save();
+  return lead;
 };
 
 export const shareRequirementService = async (leadId, requirementId, userIdToShareWith, adminId) => {
-    const lead = await getCustomerLeadByIdService(leadId);
-    if (!lead) {
-        throw new ApiError(httpStatus.NOT_FOUND, 'Customer lead not found');
-    }
+  const lead = await getCustomerLeadByIdService(leadId);
+  if (!lead) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Customer lead not found');
+  }
 
-    const requirement = lead.requirements.id(requirementId);
-    if (!requirement) {
-        throw new ApiError(httpStatus.NOT_FOUND, 'Requirement not found within the lead');
-    }
+  const requirement = lead.requirements.id(requirementId);
+  if (!requirement) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Requirement not found within the lead');
+  }
 
-    const isAlreadyShared = requirement.sharedWith.some(share => share.user.toString() === userIdToShareWith);
-    if (isAlreadyShared) {
-        throw new ApiError(httpStatus.BAD_REQUEST, 'Requirement already shared with this user');
-    }
+  const isAlreadyShared = requirement.sharedWith.some(share => share.user.toString() === userIdToShareWith);
+  if (isAlreadyShared) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Requirement already shared with this user');
+  }
 
-    requirement.sharedWith.push({
-        user: userIdToShareWith,
-        sharedBy: adminId,
-    });
+  requirement.sharedWith.push({
+    user: userIdToShareWith,
+    sharedBy: adminId,
+  });
 
-    await lead.save();
-    return lead;
+  await lead.save();
+  return lead;
 };
 
 export const shareRequirementWithUsersService = async (leadId, requirementId, userIds, adminId) => {
-    const lead = await getCustomerLeadByIdService(leadId);
-    if (!lead) {
-        throw new ApiError(httpStatus.NOT_FOUND, 'Customer lead not found');
+  const lead = await getCustomerLeadByIdService(leadId);
+  if (!lead) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Customer lead not found');
+  }
+
+  const requirement = lead.requirements.id(requirementId);
+  if (!requirement) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Requirement not found within the lead');
+  }
+
+  userIds.forEach(userIdToShareWith => {
+    const isAlreadyShared = requirement.sharedWith.some(share => share.user.toString() === userIdToShareWith);
+    if (!isAlreadyShared) {
+      requirement.sharedWith.push({
+        user: userIdToShareWith,
+        sharedBy: adminId,
+      });
     }
+  });
 
-    const requirement = lead.requirements.id(requirementId);
-    if (!requirement) {
-        throw new ApiError(httpStatus.NOT_FOUND, 'Requirement not found within the lead');
-    }
-
-    userIds.forEach(userIdToShareWith => {
-        const isAlreadyShared = requirement.sharedWith.some(share => share.user.toString() === userIdToShareWith);
-        if (!isAlreadyShared) {
-            requirement.sharedWith.push({
-                user: userIdToShareWith,
-                sharedBy: adminId,
-            });
-        }
-    });
-
-    await lead.save();
-    return lead;
+  await lead.save();
+  return lead;
 };
 
 export const getSharedRequirementsForUserService = async (userId) => {
-    const leads = await CustomerLead.find({ 'requirements.sharedWith.user': userId }).lean();
+  const leads = await CustomerLead.find({ 'requirements.sharedWith.user': userId }).lean();
 
-    const sharedRequirements = leads.map(lead => {
-        const relevantRequirements = lead.requirements.filter(req =>
-            req.sharedWith.some(share => share.user.toString() === userId.toString())
-        );
+  const sharedRequirements = leads.map(lead => {
+    const relevantRequirements = lead.requirements.filter(req =>
+      req.sharedWith.some(share => share.user.toString() === userId.toString())
+    );
 
-        return {
-            leadId: lead._id,
-            customerName: lead.customerName,
-            mobileNumber: lead.mobileNumber,
-            email: lead.email,
-            state: lead.state,
-            city: lead.city,
-            requirements: relevantRequirements,
-        };
-    }).filter(l => l.requirements.length > 0);
+    return {
+      leadId: lead._id,
+      customerName: lead.customerName,
+      mobileNumber: lead.mobileNumber,
+      email: lead.email,
+      state: lead.state,
+      city: lead.city,
+      requirements: relevantRequirements,
+    };
+  }).filter(l => l.requirements.length > 0);
 
-    return sharedRequirements;
+  return sharedRequirements;
 };
 
 const normalizeHeaders = (headers) => {
@@ -222,7 +222,7 @@ const normalizeHeaders = (headers) => {
     requirementDescription: ['requirementdescription', 'requirement description'],
     urgency: ['urgency'],
     budget: ['budget'],
-    
+
     // SCP Data
     siteAddress: ['siteaddress', 'site address'],
     googleLocationLink: ['googlelocationlink', 'google maps link'],
@@ -297,7 +297,7 @@ export const importCustomerLeadsService = async (filePath) => {
       }
       return cellValue.toString().trim();
     };
-    
+
     // Use a unique identifier for the customer, e.g., email or mobile.
     // Fallback to customer name if others are not present.
     const customerId = getVal('email') || getVal('mobileNumber') || getVal('customerName');
@@ -306,7 +306,7 @@ export const importCustomerLeadsService = async (filePath) => {
       errors.push({ row: index + 2, error: 'Missing customer identifier (Email, Mobile, or Name).' });
       return;
     }
-    
+
     if (!leadsByCustomer.has(customerId)) {
       leadsByCustomer.set(customerId, {
         leadSource: getVal('leadSource'),
@@ -323,7 +323,7 @@ export const importCustomerLeadsService = async (filePath) => {
 
     const customerData = leadsByCustomer.get(customerId);
     customerData._sourceRows.push(index + 2); // Store original row number (2-based index)
-    
+
     const scpData = {
       siteAddress: getVal('siteAddress'),
       googleLocationLink: getVal('googleLocationLink'),
@@ -347,7 +347,7 @@ export const importCustomerLeadsService = async (filePath) => {
       siteVisitDate: getVal('siteVisitDate'),
       scpRemarks: getVal('scpRemarks'),
     };
-    
+
     const requirement = {
       requirementType: getVal('requirementType'),
       otherRequirement: getVal('otherRequirement'),
@@ -356,10 +356,10 @@ export const importCustomerLeadsService = async (filePath) => {
       budget: getVal('budget') ? Number(getVal('budget')) : undefined,
       scpData: getVal('requirementType') === 'Cottage / Structure Proposal' ? scpData : {},
     };
-    
+
     customerData.requirements.push(requirement);
   });
-  
+
   let importedCount = 0;
   for (const [customerId, leadData] of leadsByCustomer.entries()) {
     const { _sourceRows, ...leadPayload } = leadData;
@@ -378,7 +378,7 @@ export const importCustomerLeadsService = async (filePath) => {
           errors.push({ customerId, error: validationError.details.map((d) => d.message).join(', '), location: rowIdentifier });
           continue;
         }
-        
+
         existingLead.requirements.push(...leadPayload.requirements);
         await existingLead.save();
 
@@ -389,10 +389,10 @@ export const importCustomerLeadsService = async (filePath) => {
           errors.push({ customerId, error: validationError.details.map((d) => d.message).join(', '), location: rowIdentifier });
           continue;
         }
-        
+
         await CustomerLead.create(leadPayload);
       }
-      
+
       importedCount++;
     } catch (dbError) {
       const errorMessage = `Failed to process lead. Reason: ${dbError.message}`;
@@ -412,79 +412,79 @@ export const exportCustomerLeadsService = async (filter = {}) => {
 
   const dataToExport = [];
   const headers = [
-      // Basic Info
-      'Lead ID', 'Lead Source', 'Customer Name', 'Mobile Number', 'Alternate Contact', 'Email', 'State', 'City', 'Is Active', 'Created At',
-      // Requirement specific
-      'Requirement ID', 'Requirement Type', 'Other Requirement', 'Description', 'Urgency', 'Budget',
-      // SCP Data
-      'Site Address', 'Google Location', 'Site Type', 'Plot Size', 'Total Area', 'Plinth Status', 'Structure Type', 'Num Units', 'Usage Type',
-      'Avg Stay Duration', 'Additional Features', 'Design Ideas', 'Drawing Status', 'Architect Status', 'Room Requirements', 'Token Advance',
-      'Financing', 'Road Width', 'Target Completion', 'Site Visit Date', 'SCP Remarks'
+    // Basic Info
+    'Lead ID', 'Lead Source', 'Customer Name', 'Mobile Number', 'Alternate Contact', 'Email', 'State', 'City', 'Is Active', 'Created At',
+    // Requirement specific
+    'Requirement ID', 'Requirement Type', 'Other Requirement', 'Description', 'Urgency', 'Budget',
+    // SCP Data
+    'Site Address', 'Google Location', 'Site Type', 'Plot Size', 'Total Area', 'Plinth Status', 'Structure Type', 'Num Units', 'Usage Type',
+    'Avg Stay Duration', 'Additional Features', 'Design Ideas', 'Drawing Status', 'Architect Status', 'Room Requirements', 'Token Advance',
+    'Financing', 'Road Width', 'Target Completion', 'Site Visit Date', 'SCP Remarks'
   ];
-  
-  for (const lead of customerLeads) {
-      if (lead.requirements && lead.requirements.length > 0) {
-        for (const requirement of lead.requirements) {
-            const scpData = requirement.scpData || {};
-            const row = {
-                'Lead ID': lead._id.toString(),
-    'Lead Source': lead.leadSource,
-    'Customer Name': lead.customerName,
-    'Mobile Number': lead.mobileNumber,
-                'Alternate Contact': lead.alternateContactNumber,
-                'Email': lead.email,
-                'State': lead.state,
-                'City': lead.city,
-                'Is Active': lead.isActive,
-    'Created At': lead.createdAt.toISOString(),
-                
-                'Requirement ID': requirement._id.toString(),
-                'Requirement Type': requirement.requirementType,
-                'Other Requirement': requirement.otherRequirement,
-                'Description': requirement.requirementDescription,
-                'Urgency': requirement.urgency,
-                'Budget': requirement.budget,
 
-                'Site Address': scpData.siteAddress,
-                'Google Location': scpData.googleLocationLink,
-                'Site Type': scpData.siteType,
-                'Plot Size': scpData.plotSize,
-                'Total Area': scpData.totalArea,
-                'Plinth Status': scpData.plinthStatus,
-                'Structure Type': scpData.structureType,
-                'Num Units': scpData.numUnits,
-                'Usage Type': scpData.usageType,
-                'Avg Stay Duration': scpData.avgStayDuration,
-                'Additional Features': scpData.additionalFeatures,
-                'Design Ideas': scpData.designIdeas,
-                'Drawing Status': scpData.drawingStatus,
-                'Architect Status': scpData.architectStatus,
-                'Room Requirements': scpData.roomRequirements,
-                'Token Advance': scpData.tokenAdvance,
-                'Financing': scpData.financing,
-                'Road Width': scpData.roadWidth,
-                'Target Completion': scpData.targetCompletionDate,
-                'Site Visit Date': scpData.siteVisitDate,
-                'SCP Remarks': scpData.scpRemarks
-            };
-            dataToExport.push(row);
-        }
-      } else {
-          // Add a row for leads without any requirements
-          const row = {
-            'Lead ID': lead._id.toString(),
-            'Lead Source': lead.leadSource,
-            'Customer Name': lead.customerName,
-            'Mobile Number': lead.mobileNumber,
-            'Alternate Contact': lead.alternateContactNumber,
-            'Email': lead.email,
-            'State': lead.state,
-            'City': lead.city,
-            'Is Active': lead.isActive,
-            'Created At': lead.createdAt.toISOString(),
-          };
-          dataToExport.push(row);
+  for (const lead of customerLeads) {
+    if (lead.requirements && lead.requirements.length > 0) {
+      for (const requirement of lead.requirements) {
+        const scpData = requirement.scpData || {};
+        const row = {
+          'Lead ID': lead._id.toString(),
+          'Lead Source': lead.leadSource,
+          'Customer Name': lead.customerName,
+          'Mobile Number': lead.mobileNumber,
+          'Alternate Contact': lead.alternateContactNumber,
+          'Email': lead.email,
+          'State': lead.state,
+          'City': lead.city,
+          'Is Active': lead.isActive,
+          'Created At': lead.createdAt.toISOString(),
+
+          'Requirement ID': requirement._id.toString(),
+          'Requirement Type': requirement.requirementType,
+          'Other Requirement': requirement.otherRequirement,
+          'Description': requirement.requirementDescription,
+          'Urgency': requirement.urgency,
+          'Budget': requirement.budget,
+
+          'Site Address': scpData.siteAddress,
+          'Google Location': scpData.googleLocationLink,
+          'Site Type': scpData.siteType,
+          'Plot Size': scpData.plotSize,
+          'Total Area': scpData.totalArea,
+          'Plinth Status': scpData.plinthStatus,
+          'Structure Type': scpData.structureType,
+          'Num Units': scpData.numUnits,
+          'Usage Type': scpData.usageType,
+          'Avg Stay Duration': scpData.avgStayDuration,
+          'Additional Features': scpData.additionalFeatures,
+          'Design Ideas': scpData.designIdeas,
+          'Drawing Status': scpData.drawingStatus,
+          'Architect Status': scpData.architectStatus,
+          'Room Requirements': scpData.roomRequirements,
+          'Token Advance': scpData.tokenAdvance,
+          'Financing': scpData.financing,
+          'Road Width': scpData.roadWidth,
+          'Target Completion': scpData.targetCompletionDate,
+          'Site Visit Date': scpData.siteVisitDate,
+          'SCP Remarks': scpData.scpRemarks
+        };
+        dataToExport.push(row);
       }
+    } else {
+      // Add a row for leads without any requirements
+      const row = {
+        'Lead ID': lead._id.toString(),
+        'Lead Source': lead.leadSource,
+        'Customer Name': lead.customerName,
+        'Mobile Number': lead.mobileNumber,
+        'Alternate Contact': lead.alternateContactNumber,
+        'Email': lead.email,
+        'State': lead.state,
+        'City': lead.city,
+        'Is Active': lead.isActive,
+        'Created At': lead.createdAt.toISOString(),
+      };
+      dataToExport.push(row);
+    }
   }
 
   const worksheet = xlsx.utils.json_to_sheet(dataToExport, { header: headers });

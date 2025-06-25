@@ -45,4 +45,14 @@ export const requirementSchema = new mongoose.Schema({
     scpData: { type: scpDataSchema, default: () => ({}) },
     files: [fileSchema],
     sharedWith: [sharedWithSchema],
+}, {
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
+});
+
+// Virtual property to populate site visits
+requirementSchema.virtual('visits', {
+    ref: 'SiteVisit',
+    localField: '_id',
+    foreignField: 'requirement',
 }); 

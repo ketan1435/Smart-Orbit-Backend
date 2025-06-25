@@ -53,18 +53,18 @@ export const listCustomerLeadsController = catchAsync(async (req, res) => {
 export const getCustomerLeadController = catchAsync(async (req, res) => {
   const { id } = req.params;
   const lead = await getCustomerLeadByIdService(id);
-  
+
   if (!lead) {
     throw new ApiError(404, 'Customer lead not found');
   }
-  
+
   res.status(200).json({ status: 1, data: lead });
 });
 
 export const updateCustomerLeadController = catchAsync(async (req, res) => {
-    const { id } = req.params;
-    const lead = await updateCustomerLeadService(id, req.body);
-    res.status(200).json({ status: 1, message: 'Customer lead updated successfully', data: lead });
+  const { id } = req.params;
+  const lead = await updateCustomerLeadService(id, req.body);
+  res.status(200).json({ status: 1, message: 'Customer lead updated successfully', data: lead });
 });
 
 export const activateCustomerLeadController = catchAsync(async (req, res) => {
@@ -118,7 +118,7 @@ export const exportCustomerLeadsController = catchAsync(async (req, res) => {
   if (req.query.isActive !== undefined) {
     filter.isActive = req.query.isActive === 'true';
   }
-  
+
   // Handle date filters
   const { dateFilterType, specificDate, startDate, endDate } = req.query;
   if (dateFilterType === 'specific' && specificDate) {
@@ -150,23 +150,23 @@ export const exportCustomerLeadsController = catchAsync(async (req, res) => {
 });
 
 export const shareRequirementForUserController = catchAsync(async (req, res) => {
-    const { leadId, requirementId } = req.params;
-    const { userIds } = req.body;
-    const adminId = req.user.id; // Assuming admin's ID is on req.user
+  const { leadId, requirementId } = req.params;
+  const { userIds } = req.body;
+  const adminId = req.user.id; // Assuming admin's ID is on req.user
 
-    const lead = await shareRequirementWithUsersService(leadId, requirementId, userIds, adminId);
-    res.status(httpStatus.OK).json({ status: 1, message: 'Requirement shared successfully.', data: lead });
+  const lead = await shareRequirementWithUsersService(leadId, requirementId, userIds, adminId);
+  res.status(httpStatus.OK).json({ status: 1, message: 'Requirement shared successfully.', data: lead });
 });
 
 export const getMySharedRequirementsController = catchAsync(async (req, res) => {
-    const userId = req.user.id;
-    const requirements = await getSharedRequirementsForUserService(userId);
-    res.status(httpStatus.OK).json({ status: 1, data: requirements });
+  const userId = req.user.id;
+  const requirements = await getSharedRequirementsForUserService(userId);
+  res.status(httpStatus.OK).json({ status: 1, data: requirements });
 });
 
 // This is for an admin to view any user's shared items.
 export const getSharedRequirementsForUserController = catchAsync(async (req, res) => {
-    const { userId } = req.params;
-    const requirements = await getSharedRequirementsForUserService(userId);
-    res.status(httpStatus.OK).json({ status: 1, data: requirements });
+  const { userId } = req.params;
+  const requirements = await getSharedRequirementsForUserService(userId);
+  res.status(httpStatus.OK).json({ status: 1, data: requirements });
 });

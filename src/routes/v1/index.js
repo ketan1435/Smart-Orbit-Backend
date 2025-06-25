@@ -7,6 +7,7 @@ import adminRoute from './admin.route.js';
 import fileRoute from './file.route.js';
 import userRoute from './user.route.js';
 import authRoute from './auth.route.js';
+import siteVisitRoute from './siteVisit.route.js';
 
 const router = express.Router();
 
@@ -34,6 +35,10 @@ const defaultRoutes = [
   {
     path: '/users',
     route: userRoute,
+  },
+  {
+    path: '/site-visits',
+    route: siteVisitRoute,
   },
   // {
   //   path: '/income',

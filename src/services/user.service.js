@@ -5,6 +5,7 @@ import ApiError from '../utils/ApiError.js';
 import storage from '../factory/storage.factory.js';
 import logger from '../config/logger.js';
 import xlsx from 'xlsx';
+import { SiteVisit, CustomerLead } from '../models/index.js';
 
 /**
  * Create a user
@@ -167,6 +168,54 @@ export const deleteUserById = async (userId) => {
   return user;
 };
 
+/**
+ * Get site visits assigned to a user
+ * @param {ObjectId} userId
+ * @returns {Promise<SiteVisit[]>}
+ */
+export const getMySiteVisits = async (userId) => {
+  const visits = await SiteVisit.find({ siteEngineer: userId })
+    .populate('siteEngineer', 'name role')
+    .sort({ visitDate: -1 })
+    .lean(); // Use .lean() for better performance as we are manually attaching data
+
+  if (!visits.length) {
+    return [];
+  }
+
+  // Get all unique requirement IDs from the visits
+  const requirementIds = [...new Set(visits.map(v => v.requirement.toString()))];
+
+  // Find all customer leads that contain these requirements
+  const leads = await CustomerLead.find({ 'requirements._id': { $in: requirementIds } })
+    .select('customerName mobileNumber requirements._id requirements.requirementType requirements.urgency')
+    .lean();
+
+  // Create a map for quick lookup of lead data by requirement ID
+  const requirementToLeadMap = new Map();
+  leads.forEach(lead => {
+    lead.requirements.forEach(req => {
+      requirementToLeadMap.set(req._id.toString(), {
+        customerName: lead.customerName,
+        mobileNumber: lead.mobileNumber,
+        requirementType: req.requirementType,
+        urgency: req.urgency,
+      });
+    });
+  });
+
+  // Attach the lead data to each visit
+  const visitsWithLeadData = visits.map(visit => {
+    const leadData = requirementToLeadMap.get(visit.requirement.toString());
+    return {
+      ...visit,
+      lead: leadData || null, // Attach the found lead data
+    };
+  });
+
+  return visitsWithLeadData;
+};
+
 export const activateUser = async (userId) => {
   const user = await getUserById(userId);
   if (!user) {
@@ -212,7 +261,7 @@ export const exportUsersService = async (filter = {}) => {
   const worksheet = xlsx.utils.json_to_sheet(worksheetData);
   const workbook = xlsx.utils.book_new();
   xlsx.utils.book_append_sheet(workbook, worksheet, 'Users');
-  
+
   // Set date format for the 'Joined Date' column
   worksheet['!cols'] = [{ wch: 25 }, { wch: 30 }, { wch: 15 }, { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 30 }, { wch: 20 }, { wch: 20 }, { wch: 15 }, { wch: 15 }, { wch: 20 }];
   users.forEach((_user, index) => {
