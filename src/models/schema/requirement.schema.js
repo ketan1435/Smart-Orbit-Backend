@@ -30,7 +30,7 @@ const sharedWithSchema = new mongoose.Schema({
     sharedAt: { type: Date, default: Date.now },
 }, { _id: false });
 
-const fileSchema = new mongoose.Schema({
+export const fileSchema = new mongoose.Schema({
     fileType: { type: String, required: true, enum: ['image', 'video', 'voiceMessage', 'sketch'] },
     key: { type: String, required: true },
     uploadedAt: { type: Date, default: Date.now },
@@ -45,6 +45,10 @@ export const requirementSchema = new mongoose.Schema({
     scpData: { type: scpDataSchema, default: () => ({}) },
     files: [fileSchema],
     sharedWith: [sharedWithSchema],
+    project: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Project',
+    },
 }, {
     toJSON: { virtuals: true },
     toObject: { virtuals: true },

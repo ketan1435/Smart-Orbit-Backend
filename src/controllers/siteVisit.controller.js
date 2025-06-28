@@ -23,8 +23,13 @@ export const getSiteVisitById = catchAsync(async (req, res) => {
     res.send(visit);
 });
 
+export const updateSiteVisit = catchAsync(async (req, res) => {
+    const visit = await siteVisitService.updateSiteVisit(req.params.visitId, req.body);
+    res.send(visit);
+});
+
 export const completeSiteVisit = catchAsync(async (req, res) => {
-    const visit = await siteVisitService.completeSiteVisit(req.params.visitId, req.body);
+    const visit = await siteVisitService.completeSiteVisit(req.params.visitId);
     res.send(visit);
 });
 

@@ -6,59 +6,84 @@ import storage from '../factory/storage.factory.js';
 import mongoose from 'mongoose';
 import logger from '../config/logger.js';
 import { createCustomerLead, updateCustomerLead } from '../validations/customerLead.validation.js';
+import { createProject } from './project.service.js';
 
 export const createCustomerLeadService = async (req, session) => {
   const { body: leadData } = req;
   const tempFileKeysToDelete = [];
-
   const { requirements, ...basicLeadInfo } = leadData;
+
+  // 1. Prepare all requirement subdocuments
+  const requirementsPayload = [];
+  for (const reqData of requirements) {
+    const requirementId = new mongoose.Types.ObjectId();
+    const newRequirement = {
+      _id: requirementId,
+      projectName: reqData.projectName,
+      requirementType: reqData.requirementType,
+      otherRequirement: reqData.otherRequirement,
+      requirementDescription: reqData.requirementDescription,
+      urgency: reqData.urgency,
+      budget: reqData.budget,
+      scpData: reqData.scpData || {},
+      files: [],
+      sharedWith: [],
+    };
+
+    const fileKeys = {
+      imageUrlKeys: reqData.imageUrlKeys || [],
+      videoUrlKeys: reqData.videoUrlKeys || [],
+      voiceMessageUrlKeys: reqData.voiceMessageUrlKeys || [],
+      sketchUrlKeys: reqData.sketchUrlKeys || [],
+    };
+
+    for (const [type, keys] of Object.entries(fileKeys)) {
+      for (const tempKey of keys) {
+        const fileType = type.replace('UrlKeys', '');
+        const fileName = tempKey.split('/').pop();
+        // The lead ID will be assigned after creation, so we need to copy files later
+        newRequirement.files.push({ fileType, tempKey }); // Store tempKey temporarily
+        tempFileKeysToDelete.push(tempKey);
+      }
+    }
+    requirementsPayload.push(newRequirement);
+  }
+
+  // 2. Create the lead with all its requirements at once
   const leadPayload = {
     ...basicLeadInfo,
     createdBy: req.user.id,
-    requirements: [],
+    requirements: requirementsPayload,
   };
 
   const lead = (await CustomerLead.create([leadPayload], { session }))[0];
 
   try {
-    for (const reqData of requirements) {
-      const requirementId = new mongoose.Types.ObjectId();
-
-      // Manually construct the requirement object to avoid saving unwanted fields
-      const newRequirement = {
-        _id: requirementId,
-        requirementType: reqData.requirementType,
-        otherRequirement: reqData.otherRequirement,
-        requirementDescription: reqData.requirementDescription,
-        urgency: reqData.urgency,
-        budget: reqData.budget,
-        scpData: reqData.scpData || {},
-        files: [],
-        sharedWith: [],
-      };
-
-      const fileKeys = {
-        imageUrlKeys: reqData.imageUrlKeys || [],
-        videoUrlKeys: reqData.videoUrlKeys || [],
-        voiceMessageUrlKeys: reqData.voiceMessageUrlKeys || [],
-        sketchUrlKeys: reqData.sketchUrlKeys || [],
-      };
-
-      for (const [type, keys] of Object.entries(fileKeys)) {
-        for (const tempKey of keys) {
-          const fileType = type.replace('UrlKeys', '');
-          const fileName = tempKey.split('/').pop();
-          const permanentKey = `customer-leads/${lead._id}/${requirementId}/${fileType}/${fileName}`;
-
-          await storage.copyFile(tempKey, permanentKey);
-
-          newRequirement.files.push({ fileType, key: permanentKey });
-          tempFileKeysToDelete.push(tempKey);
-        }
+    // 3. Create projects and update requirements with permanent file paths
+    for (const requirement of lead.requirements) {
+      // Handle file moves now that we have the lead._id
+      const finalFiles = [];
+      for (const file of requirement.files) {
+        const fileName = file.tempKey.split('/').pop();
+        const permanentKey = `customer-leads/${lead._id}/${requirement._id}/${file.fileType}/${fileName}`;
+        await storage.copyFile(file.tempKey, permanentKey);
+        finalFiles.push({ fileType: file.fileType, key: permanentKey });
       }
-      lead.requirements.push(newRequirement);
+      requirement.files = finalFiles; // Overwrite with permanent file data
+
+      // Create a project for the requirement
+      const project = await createProject({
+        projectName: requirement.projectName,
+        requirement: requirement._id,
+        lead: lead._id,
+        budget: requirement.budget ? parseFloat(requirement.budget.replace(/[^0-9.-]+/g, '')) : 0,
+        createdBy: req.user.id,
+      }, session);
+
+      requirement.project = project._id;
     }
 
+    // 4. Save the lead again to persist project IDs and permanent file keys
     await lead.save({ session });
 
     // This part runs after the transaction is committed.

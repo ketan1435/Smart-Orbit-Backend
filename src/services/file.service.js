@@ -16,7 +16,12 @@ export const initiateUploadService = async (body) => {
 
   const uniqueId = uuidv4();
   const fileExtension = path.extname(fileName);
-  const key = `uploads/tmp/${fileCategory}/${uniqueId}${fileExtension}`;
+  const fileBaseName = path.basename(fileName, fileExtension)
+    .toLowerCase()
+    .replace(/\s+/g, '-')      // replace spaces with -
+    .replace(/[^\w-]+/g, ''); // remove all non-word chars except -
+
+  const key = `uploads/tmp/${fileCategory}/${fileBaseName}-${uniqueId}${fileExtension}`;
 
   try {
     const uploadUrl = await storage.generatePresignedUploadUrl(key, fileType);

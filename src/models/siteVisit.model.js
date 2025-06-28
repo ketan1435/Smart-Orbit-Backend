@@ -19,7 +19,7 @@ const siteVisitSchema = mongoose.Schema(
         },
         status: {
             type: String,
-            enum: ['Scheduled', 'Completed', 'Approved', 'Cancelled', 'Outdated'],
+            enum: ['Scheduled', 'InProgress', 'Completed', 'Approved', 'Cancelled', 'Outdated'],
             default: 'Scheduled',
         },
         updatedData: {

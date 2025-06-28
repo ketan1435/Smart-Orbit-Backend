@@ -9,7 +9,7 @@ const scpDataSchema = Joi.object({
   totalArea: Joi.string().allow(''),
   plinthStatus: Joi.string().allow(''),
   structureType: Joi.string().allow(''),
-  numUnits: Joi.number().allow(null, ''),
+  numUnits: Joi.string().allow(null, ''),
   usageType: Joi.string().allow(''),
   avgStayDuration: Joi.string().allow(''),
   additionalFeatures: Joi.string().allow(''),
@@ -26,6 +26,7 @@ const scpDataSchema = Joi.object({
 });
 
 const requirementSchema = Joi.object({
+  projectName: Joi.string().required().min(3),
   requirementType: Joi.string().allow(''),
   otherRequirement: Joi.string().allow(''),
   requirementDescription: Joi.string().allow(''),

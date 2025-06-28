@@ -37,4 +37,14 @@ export const approveSiteVisit = {
     params: Joi.object().keys({
         visitId: Joi.string().custom(objectId).required(),
     }),
+};
+
+export const updateSiteVisit = {
+    params: Joi.object().keys({
+        visitId: Joi.string().custom(objectId).required(),
+    }),
+    body: Joi.object().keys({
+        updatedData: Joi.object(),
+        remarks: Joi.string().allow('').optional(),
+    }).min(1),
 }; 

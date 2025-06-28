@@ -8,6 +8,7 @@ import fileRoute from './file.route.js';
 import userRoute from './user.route.js';
 import authRoute from './auth.route.js';
 import siteVisitRoute from './siteVisit.route.js';
+import projectRoute from './project.route.js';
 
 const router = express.Router();
 
@@ -39,6 +40,10 @@ const defaultRoutes = [
   {
     path: '/site-visits',
     route: siteVisitRoute,
+  },
+  {
+    path: '/projects',
+    route: projectRoute,
   },
   // {
   //   path: '/income',

@@ -187,29 +187,32 @@ export const getMySiteVisits = async (userId) => {
   const requirementIds = [...new Set(visits.map(v => v.requirement.toString()))];
 
   // Find all customer leads that contain these requirements
-  const leads = await CustomerLead.find({ 'requirements._id': { $in: requirementIds } })
-    .select('customerName mobileNumber requirements._id requirements.requirementType requirements.urgency')
-    .lean();
+  // Remove .select() to fetch the full lead and requirement documents
+  const leads = await CustomerLead.find({ 'requirements._id': { $in: requirementIds } }).lean();
 
-  // Create a map for quick lookup of lead data by requirement ID
-  const requirementToLeadMap = new Map();
+  // Create a map for quick lookup of lead and requirement data by requirement ID
+  const requirementDataMap = new Map();
   leads.forEach(lead => {
     lead.requirements.forEach(req => {
-      requirementToLeadMap.set(req._id.toString(), {
-        customerName: lead.customerName,
-        mobileNumber: lead.mobileNumber,
-        requirementType: req.requirementType,
-        urgency: req.urgency,
-      });
+      if (requirementIds.includes(req._id.toString())) {
+        requirementDataMap.set(req._id.toString(), {
+          lead: {
+            _id: lead._id,
+            customerName: lead.customerName,
+          },
+          requirement: req,
+        });
+      }
     });
   });
 
-  // Attach the lead data to each visit
+  // Attach the lead and full requirement data to each visit
   const visitsWithLeadData = visits.map(visit => {
-    const leadData = requirementToLeadMap.get(visit.requirement.toString());
+    const data = requirementDataMap.get(visit.requirement.toString());
     return {
       ...visit,
-      lead: leadData || null, // Attach the found lead data
+      lead: data?.lead || null,
+      requirement: data?.requirement || null,
     };
   });
 

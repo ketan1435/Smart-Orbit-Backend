@@ -30,10 +30,18 @@ router
     );
 
 router
+    .route('/visits/:visitId/save')
+    .patch(
+        auth('manageSiteVisits'), // Site Engineers should have this right
+        validate(siteVisitValidation.updateSiteVisit),
+        siteVisitController.updateSiteVisit
+    );
+
+router
     .route('/visits/:visitId/complete')
     .put(
         auth('manageSiteVisits'), // Site Engineers should have this right
-        validate(siteVisitValidation.completeSiteVisit),
+        validate(siteVisitValidation.getSiteVisitById), // Only needs visitId from params
         siteVisitController.completeSiteVisit
     );
 
@@ -162,9 +170,57 @@ export default router;
 
 /**
  * @swagger
+ * /visits/{visitId}/save:
+ *   patch:
+ *     summary: Save a site visit's progress (for site engineers)
+ *     description: Allows a site engineer to save their progress (updatedData, remarks) without finalizing the visit. The visit status will be moved to 'InProgress'.
+ *     tags: [SiteVisits]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: visitId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the site visit to update
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               updatedData:
+ *                 type: object
+ *                 description: The snapshot of updated SCP data
+ *               remarks:
+ *                 type: string
+ *                 description: Any remarks or notes from the visit
+ *             example:
+ *               updatedData: { "plotSize": "5500 sqft" }
+ *               remarks: "Customer wants to confirm the boundary."
+ *     responses:
+ *       "200":
+ *         description: OK
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SiteVisit'
+ *       "401":
+ *         $ref: '#/components/responses/Unauthorized'
+ *       "403":
+ *         $ref: '#/components/responses/Forbidden'
+ *       "404":
+ *         $ref: '#/components/responses/NotFound'
+ */
+
+/**
+ * @swagger
  * /visits/{visitId}/complete:
  *   put:
  *     summary: Complete a site visit (for site engineers)
+ *     description: Finalizes a site visit after all data has been saved. This moves the status to 'Completed' and locks the record for admin approval. No request body is needed.
  *     tags: [SiteVisits]
  *     security:
  *       - bearerAuth: []
@@ -175,24 +231,6 @@ export default router;
  *         schema:
  *           type: string
  *         description: The ID of the site visit to complete
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - updatedData
- *             properties:
- *               updatedData:
- *                 type: object
- *                 description: The snapshot of updated SCP data
- *               remarks:
- *                 type: string
- *                 description: Any remarks or notes from the visit
- *             example:
- *               updatedData: { "plotSize": "5500 sqft", "roadWidth": "15 feet" }
- *               remarks: "Customer confirmed the plot size and new road width."
  *     responses:
  *       "200":
  *         description: OK
