@@ -31,7 +31,7 @@ const sharedWithSchema = new mongoose.Schema({
 }, { _id: false });
 
 export const fileSchema = new mongoose.Schema({
-    fileType: { type: String, required: true, enum: ['image', 'video', 'voiceMessage', 'sketch'] },
+    fileType: { type: String, required: true, enum: ['image', 'video', 'voiceMessage', 'sketch', 'pdf', 'document'] },
     key: { type: String, required: true },
     uploadedAt: { type: Date, default: Date.now },
 }, { _id: false });

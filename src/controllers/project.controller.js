@@ -1,6 +1,7 @@
 import httpStatus from 'http-status';
 import catchAsync from '../utils/catchAsync.js';
 import * as projectService from '../services/project.service.js';
+import * as siteVisitService from '../services/siteVisit.service.js';
 import pick from '../utils/pick.js';
 
 // Controller methods for Project will be added here.
@@ -17,4 +18,12 @@ export const getProjects = catchAsync(async (req, res) => {
     const options = pick(req.query, ['sortBy', 'limit', 'page']);
     const result = await projectService.queryProjects(filter, options);
     res.status(httpStatus.OK).send({ status: 1, message: 'Projects fetched successfully.', data: result });
+});
+
+export const getProjectSiteVisits = catchAsync(async (req, res) => {
+    const filter = pick(req.query, ['status', 'siteEngineer']);
+    filter.project = req.params.projectId;
+    const options = pick(req.query, ['sortBy', 'limit', 'page']);
+    const result = await siteVisitService.querySiteVisits(filter, options);
+    res.send(result);
 });

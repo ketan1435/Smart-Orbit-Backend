@@ -32,9 +32,6 @@ const tokenSchema = new mongoose.Schema(
   }
 );
 
-/**
- * @typedef Token
- */
 const Token = mongoose.model('Token', tokenSchema);
 
 export default Token;

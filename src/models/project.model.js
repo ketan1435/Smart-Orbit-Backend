@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import { fileSchema } from './schema/requirement.schema.js';
 
-const projectSchema = mongoose.Schema(
+const projectSchema = new mongoose.Schema(
     {
         projectName: {
             type: String,
@@ -14,7 +14,6 @@ const projectSchema = mongoose.Schema(
             unique: true,
             trim: true,
         },
-
         lead: {
             type: mongoose.Schema.Types.ObjectId,
             ref: 'CustomerLead',
@@ -25,13 +24,9 @@ const projectSchema = mongoose.Schema(
             enum: ['Draft', 'Pending', 'Active', 'OnHold', 'Completed', 'Cancelled'],
             default: 'Draft',
         },
-        assignedArchitect: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'User',
-        },
-        assignedSiteEngineer: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'User',
+        siteVisits: {
+            type: [mongoose.Schema.Types.ObjectId],
+            ref: 'SiteVisit',
         },
         startDate: {
             type: Date,
@@ -67,9 +62,7 @@ const projectSchema = mongoose.Schema(
 );
 
 
-/**
- * @typedef Project
- */
+
 const Project = mongoose.model('Project', projectSchema);
 
 export default Project; 

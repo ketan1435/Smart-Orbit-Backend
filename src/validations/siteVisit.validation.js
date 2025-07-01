@@ -47,4 +47,38 @@ export const updateSiteVisit = {
         updatedData: Joi.object(),
         remarks: Joi.string().allow('').optional(),
     }).min(1),
+};
+
+export const addDocuments = {
+    params: Joi.object().keys({
+        visitId: Joi.string().custom(objectId).required(),
+    }),
+    body: Joi.object().keys({
+        engineerFeedback: Joi.string().optional(),
+        files: Joi.array().items(Joi.object({
+            fileType: Joi.string().required(),
+            key: Joi.string().required(),
+        })).min(1).required(),
+    }),
+};
+
+export const getSiteVisitDocuments = {
+    params: Joi.object().keys({
+        visitId: Joi.string().custom(objectId).required(),
+    }),
+    query: Joi.object().keys({
+        page: Joi.number().integer().min(1),
+        limit: Joi.number().integer().min(1),
+    }),
+};
+
+export const querySiteVisits = {
+    query: Joi.object().keys({
+        siteEngineer: Joi.string().custom(objectId),
+        project: Joi.string().custom(objectId),
+        status: Joi.string().valid('Scheduled', 'InProgress', 'Completed', 'Cancelled', 'Outdated'),
+        page: Joi.number().integer(),
+        limit: Joi.number().integer(),
+        sortBy: Joi.string(),
+    }),
 }; 
