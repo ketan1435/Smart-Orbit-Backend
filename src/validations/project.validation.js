@@ -18,4 +18,17 @@ export const getProjects = {
         limit: Joi.number().integer(),
         page: Joi.number().integer(),
     }),
+};
+
+export const getProjectSiteVisits = {
+    params: Joi.object().keys({
+        projectId: Joi.string().custom(objectId).required(),
+    }),
+    query: Joi.object().keys({
+        siteEngineer: Joi.string().custom(objectId),
+        status: Joi.string().valid('Scheduled', 'InProgress', 'Completed', 'Cancelled', 'Outdated'),
+        page: Joi.number().integer(),
+        limit: Joi.number().integer(),
+        sortBy: Joi.string(),
+    }),
 }; 

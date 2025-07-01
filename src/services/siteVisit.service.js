@@ -2,38 +2,94 @@ import mongoose from 'mongoose';
 import httpStatus from 'http-status';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
-import { SiteVisit, CustomerLead } from '../models/index.js';
+import SiteVisit from '../models/siteVisit.model.js';
+import CustomerLead from '../models/customerLead.model.js';
 import storage from '../factory/storage.factory.js';
 import ApiError from '../utils/ApiError.js';
 import * as userService from './user.service.js';
+import Project from '../models/project.model.js';
+
+/**
+ * Query for site visits
+ * @param {Object} filter - Mongo filter
+ * @param {Object} options - Query options
+ * @param {string} [options.sortBy] - Sort option in the format: sortField:(desc|asc)
+ * @param {number} [options.limit] - Maximum number of results per page (default: 10)
+ * @param {number} [options.page] - Current page (default: 1)
+ * @returns {Promise<QueryResult>}
+ */
+export const querySiteVisits = async (filter, options) => {
+    const { page = 1, limit = 10, sortBy } = options;
+    const customOptions = {
+        page,
+        limit,
+        sort: sortBy,
+        populate: [
+            { path: 'siteEngineer', select: 'name email role' },
+            { path: 'project', select: 'projectName projectCode' },
+        ],
+    };
+
+    const visits = await SiteVisit.paginate(filter, customOptions);
+    return visits;
+};
 
 /**
  * Schedule a new site visit
  * @param {string} requirementId
  * @param {Object} visitBody
- * @param {mongoose.Types.ObjectId} createdBy
  * @returns {Promise<SiteVisit>}
  */
 export const scheduleSiteVisit = async (requirementId, visitBody) => {
-    const { siteEngineerId, visitDate } = visitBody;
+    const { siteEngineerId, visitDate, hasRequirementEditAccess } = visitBody;
 
-    // Check if the requirement exists
-    const lead = await CustomerLead.findOne({ 'requirements._id': requirementId });
-    if (!lead) {
-        throw new ApiError(httpStatus.NOT_FOUND, 'Requirement not found');
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+        // Check if the requirement exists
+        const lead = await CustomerLead.findOne({ 'requirements._id': requirementId }).session(session);
+        if (!lead) {
+            throw new ApiError(httpStatus.NOT_FOUND, 'Requirement not found');
+        }
+
+        const project = await Project.findOne({ lead: lead._id }).session(session);
+        if (!project) {
+            throw new ApiError(httpStatus.NOT_FOUND, 'Project not found for this lead');
+        }
+
+        // Check if the site engineer exists and has the correct role
+        const siteEngineer = await userService.getUserById(siteEngineerId);
+        if (!siteEngineer || siteEngineer.role !== 'site-engineer') {
+            throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid site engineer');
+        }
+
+        // Ensure only the new visit has edit access
+        await SiteVisit.updateMany({ requirement: requirementId }, { $set: { hasRequirementEditAccess: false } }, { session });
+
+        const [siteVisit] = await SiteVisit.create(
+            [
+                {
+                    requirement: requirementId,
+                    siteEngineer: siteEngineerId,
+                    visitDate,
+                    project: project._id,
+                    hasRequirementEditAccess: hasRequirementEditAccess,
+                },
+            ],
+            { session }
+        );
+
+        project.siteVisits.push(siteVisit._id);
+        await project.save({ session });
+
+        await session.commitTransaction();
+        return siteVisit;
+    } catch (error) {
+        await session.abortTransaction();
+        throw error;
+    } finally {
+        session.endSession();
     }
-
-    // Check if the site engineer exists and has the correct role
-    const siteEngineer = await userService.getUserById(siteEngineerId);
-    if (!siteEngineer || siteEngineer.role !== 'site-engineer') {
-        throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid site engineer');
-    }
-
-    return SiteVisit.create({
-        requirement: requirementId,
-        siteEngineer: siteEngineerId,
-        visitDate,
-    });
 };
 
 /**
@@ -42,7 +98,7 @@ export const scheduleSiteVisit = async (requirementId, visitBody) => {
  * @returns {Promise<SiteVisit[]>}
  */
 export const getSiteVisitsForRequirement = async (requirementId) => {
-    return SiteVisit.find({ requirement: requirementId }).populate('siteEngineer', 'name role').populate('approvedBy', 'name');
+    return SiteVisit.find({ requirement: requirementId }).populate('siteEngineer', 'name role').populate('reviewedBy', 'name');
 };
 
 /**
@@ -51,7 +107,7 @@ export const getSiteVisitsForRequirement = async (requirementId) => {
  * @returns {Promise<SiteVisit>}
  */
 export const getSiteVisitById = async (visitId) => {
-    const visit = await SiteVisit.findById(visitId).populate('siteEngineer', 'name role').populate('approvedBy', 'name', 'requirement');
+    const visit = await SiteVisit.findById(visitId).populate('siteEngineer', 'name role').populate('reviewedBy', 'name');
     if (!visit) {
         throw new ApiError(httpStatus.NOT_FOUND, 'Site visit not found');
     }
@@ -197,8 +253,8 @@ export const approveSiteVisit = async (visitId, adminId) => {
 
         // Update the visit status
         visit.status = 'Approved';
-        visit.approvedBy = adminId;
-        visit.approvedAt = new Date();
+        visit.reviewedBy = adminId;
+        visit.reviewedAt = new Date();
         await visit.save({ session });
 
         // Optional: Mark other pending visits for this requirement as 'Outdated'
@@ -220,4 +276,139 @@ export const approveSiteVisit = async (visitId, adminId) => {
     } finally {
         session.endSession();
     }
+};
+
+/**
+ * Add documents to a site visit (by site engineer)
+ * Handles file uploads transactionally.
+ * @param {string} visitId
+ * @param {Object} body
+ * @param {Object} user
+ * @returns {Promise<SiteVisit>}
+ */
+export const addDocumentsToSiteVisit = async (visitId, body, user) => {
+    const { files, engineerFeedback } = body;
+
+    const visit = await getSiteVisitById(visitId);
+    if (!visit) {
+        throw new ApiError(httpStatus.NOT_FOUND, 'Site visit not found');
+    }
+    if (['Completed', 'Cancelled'].includes(visit.status)) {
+        throw new ApiError(httpStatus.BAD_REQUEST, `Documents cannot be added when visit status is '${visit.status}'`);
+    }
+    if (visit.siteEngineer._id.toString() !== user.id.toString()) {
+        throw new ApiError(httpStatus.FORBIDDEN, 'You are not authorized to add documents to this site visit.');
+    }
+
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    const successfullyMovedFiles = [];
+    const permanentFiles = [];
+
+    try {
+        const lead = await CustomerLead.findOne({ 'requirements._id': visit.requirement }).session(session);
+        if (!lead) {
+            throw new ApiError(httpStatus.NOT_FOUND, 'Parent requirement not found.');
+        }
+
+        const newDocumentId = new mongoose.Types.ObjectId();
+
+        for (const file of files) {
+            if (!file.key || !file.key.startsWith('uploads/tmp/')) {
+                throw new ApiError(httpStatus.BAD_REQUEST, `Invalid file key provided: ${file.key}`);
+            }
+
+            const fileExtension = path.extname(file.key);
+            const newKey = `customer-leads/${lead._id}/requirements/${visit.requirement}/visits/${visit._id}/documents/${newDocumentId}/${uuidv4()}${fileExtension}`;
+
+            await storage.copyFile(file.key, newKey);
+            successfullyMovedFiles.push({ oldKey: file.key, newKey });
+
+            permanentFiles.push({
+                ...file,
+                key: newKey,
+            });
+        }
+
+        visit.documents.push({
+            _id: newDocumentId,
+            files: permanentFiles,
+            engineerFeedback,
+            engineerFeedbackBy: user.id,
+        });
+
+
+        if (visit.status === 'Scheduled') {
+            visit.status = 'InProgress';
+        }
+
+        await visit.save({ session });
+        await session.commitTransaction();
+
+        for (const movedFile of successfullyMovedFiles) {
+            await storage.deleteFile(movedFile.oldKey);
+        }
+
+        return visit;
+    } catch (error) {
+        await session.abortTransaction();
+
+        for (const movedFile of successfullyMovedFiles) {
+            await storage.deleteFile(movedFile.newKey);
+        }
+
+        throw error;
+    } finally {
+        session.endSession();
+    }
+};
+
+/**
+ * Get paginated documents for a specific site visit
+ * @param {string} visitId
+ * @param {Object} user - The authenticated user object
+ * @param {Object} options - Pagination options (page, limit)
+ * @returns {Promise<Object>}
+ */
+export const getSiteVisitDocuments = async (visitId, user, options) => {
+    // First, verify the user is the assigned engineer for this visit
+    const visit = await getSiteVisitById(visitId);
+    if (!visit) {
+        throw new ApiError(httpStatus.NOT_FOUND, 'Site visit not found');
+    }
+    if (visit.siteEngineer._id.toString() !== user.id.toString()) {
+        throw new ApiError(httpStatus.FORBIDDEN, 'You are not authorized to view documents for this visit.');
+    }
+
+    const limit = parseInt(options.limit, 10) || 10;
+    const page = parseInt(options.page, 10) || 1;
+    const skip = (page - 1) * limit;
+
+    const aggregationPipeline = [
+        { $match: { _id: new mongoose.Types.ObjectId(visitId) } },
+        { $unwind: '$documents' },
+        { $replaceRoot: { newRoot: '$documents' } },
+        { $sort: { addedAt: -1 } },
+        {
+            $facet: {
+                metadata: [{ $count: 'totalDocs' }],
+                data: [{ $skip: skip }, { $limit: limit }],
+            },
+        },
+    ];
+
+    const results = await SiteVisit.aggregate(aggregationPipeline);
+
+    const docs = results[0]?.data || [];
+    const totalDocs = results[0]?.metadata[0]?.totalDocs || 0;
+    const totalPages = Math.ceil(totalDocs / limit);
+
+    return {
+        docs,
+        totalDocs,
+        limit,
+        page,
+        totalPages,
+    };
 }; 

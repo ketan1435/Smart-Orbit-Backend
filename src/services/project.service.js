@@ -71,8 +71,6 @@ export const queryProjects = async (filter, options) => {
 
     const projects = await Project.find(projectFilter)
         .populate('lead')
-        .populate('assignedSiteEngineer', 'name')
-        .populate('assignedArchitect', 'name')
         .sort(sort)
         .skip((page - 1) * limit)
         .limit(limit)

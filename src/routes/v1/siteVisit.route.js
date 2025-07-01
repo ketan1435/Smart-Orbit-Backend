@@ -6,6 +6,14 @@ import * as siteVisitController from '../../controllers/siteVisit.controller.js'
 
 const router = express.Router();
 
+router
+    .route('/')
+    .get(
+        auth('getSiteVisits'), // Accessible by admin and sales-admin
+        validate(siteVisitValidation.querySiteVisits),
+        siteVisitController.getSiteVisits
+    );
+
 // Routes for a specific requirement's visits
 router
     .route('/requirements/:requirementId/visits')
@@ -53,6 +61,19 @@ router
         siteVisitController.approveSiteVisit
     );
 
+router
+    .route('/visits/:visitId/documents')
+    .post(
+        auth('manageSiteVisits'), // Or a more specific permission
+        validate(siteVisitValidation.addDocuments),
+        siteVisitController.addDocumentsToSiteVisit
+    )
+    .get(
+        auth('getSiteVisits'), // Assuming site engineers have this permission
+        validate(siteVisitValidation.getSiteVisitDocuments),
+        siteVisitController.getSiteVisitDocuments
+    );
+
 export default router;
 
 /**
@@ -60,6 +81,63 @@ export default router;
  * tags:
  *   name: SiteVisits
  *   description: Site Visit management and approval
+ */
+
+/**
+ * @swagger
+ * /visits:
+ *   get:
+ *     summary: Get all site visits (for admins)
+ *     description: Retrieves a paginated list of all site visits. Can be filtered by site engineer, project, and status. Accessible by users with 'getSiteVisits' permission (e.g., admin, sales-admin).
+ *     tags: [SiteVisits]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: siteEngineer
+ *         schema:
+ *           type: string
+ *         description: ID of the site engineer to filter by.
+ *       - in: query
+ *         name: project
+ *         schema:
+ *           type: string
+ *         description: ID of the project to filter by.
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [Scheduled, InProgress, Completed, Cancelled, Outdated]
+ *         description: Filter visits by their status.
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number for pagination.
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Number of visits to return per page.
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *           example: 'visitDate:desc'
+ *         description: Sort order for the results. Format is field:order (e.g., createdAt:asc).
+ *     responses:
+ *       "200":
+ *         description: OK
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SiteVisitPaginated'
+ *       "401":
+ *         $ref: '#/components/responses/Unauthorized'
+ *       "403":
+ *         $ref: '#/components/responses/Forbidden'
  */
 
 /**
@@ -94,9 +172,13 @@ export default router;
  *                 type: string
  *                 format: date-time
  *                 description: The scheduled date for the visit
+ *               hasRequirementEditAccess:
+ *                 type: boolean
+ *                 description: Whether the site engineer has edit access to the requirement
  *             example:
  *               siteEngineerId: '60d0fe4f5311236168a109ca'
  *               visitDate: '2024-08-15T10:00:00.000Z'
+ *               hasRequirementEditAccess: true
  *     responses:
  *       "201":
  *         description: Created
@@ -238,6 +320,146 @@ export default router;
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/SiteVisit'
+ *       "401":
+ *         $ref: '#/components/responses/Unauthorized'
+ *       "403":
+ *         $ref: '#/components/responses/Forbidden'
+ *       "404":
+ *         $ref: '#/components/responses/NotFound'
+ */
+
+/**
+ * @swagger
+ * /visits/{visitId}/documents:
+ *   post:
+ *     summary: Add documents to a site visit
+ *     description: Allows a site engineer to upload documents (e.g., photos, measurement files) for a specific site visit.
+ *     tags: [SiteVisits]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: visitId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the site visit
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - files
+ *             properties:
+ *               engineerFeedback:
+ *                 type: string
+ *                 description: Optional feedback or notes from the engineer regarding these documents.
+ *               files:
+ *                 type: array
+ *                 description: An array of file objects that have been uploaded.
+ *                 items:
+ *                   type: object
+ *                   required:
+ *                     - key
+ *                     - name
+ *                     - type
+ *                     - size
+ *                   properties:
+ *                     key:
+ *                       type: string
+ *                       description: The S3 key returned from the `/files/initiate-upload` endpoint.
+ *                     name:
+ *                       type: string
+ *                       description: The original name of the file.
+ *                     type:
+ *                       type: string
+ *                       description: The MIME type of the file.
+ *                     size:
+ *                       type: number
+ *                       description: The size of the file in bytes.
+ *                   example:
+ *                     key: "uploads/tmp/site-visit-documents/some-uuid.jpg"
+ *                     name: "site-photo-1.jpg"
+ *                     type: "image/jpeg"
+ *                     size: 102400
+ *     responses:
+ *       "200":
+ *         description: OK
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SiteVisit'
+ *       "400":
+ *         $ref: '#/components/responses/BadRequest'
+ *       "401":
+ *         $ref: '#/components/responses/Unauthorized'
+ *       "403":
+ *         $ref: '#/components/responses/Forbidden'
+ *       "404":
+ *         $ref: '#/components/responses/NotFound'
+ *
+ *   get:
+ *     summary: Get documents for a site visit (paginated)
+ *     description: |
+ *       Allows an assigned site engineer to retrieve a paginated list of documents for a specific site visit.
+ *       The documents are sorted by the date they were added, with the most recent first.
+ *     tags: [SiteVisits]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: visitId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the site visit
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: The page number for pagination.
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: The number of documents to return per page.
+ *     responses:
+ *       "200":
+ *         description: OK
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: "Documents fetched successfully"
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     docs:
+ *                       type: array
+ *                       items:
+ *                         $ref: '#/components/schemas/SiteVisitDocument'
+ *                     totalDocs:
+ *                       type: integer
+ *                       example: 25
+ *                     limit:
+ *                       type: integer
+ *                       example: 10
+ *                     page:
+ *                       type: integer
+ *                       example: 1
+ *                     totalPages:
+ *                       type: integer
+ *                       example: 3
  *       "401":
  *         $ref: '#/components/responses/Unauthorized'
  *       "403":

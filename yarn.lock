@@ -5499,7 +5499,21 @@ mongodb@~6.14.0:
     bson "^6.10.3"
     mongodb-connection-string-url "^3.0.0"
 
-mongoose@^8.12.2:
+mongoose-lean-virtuals@^1.1.0:
+  version "1.1.1"
+  resolved "https://registry.npmjs.org/mongoose-lean-virtuals/-/mongoose-lean-virtuals-1.1.1.tgz"
+  integrity sha512-8chOqpVE3bcoWT2pIgcJeIZlXaOfQCavZgQZF4qytUtjRBqsNMyzUoR16qdw9XL2kC478N8iA8z0AA+NSS0d1A==
+  dependencies:
+    mpath "^0.8.4"
+
+mongoose-paginate-v2@^1.9.1:
+  version "1.9.1"
+  resolved "https://registry.npmjs.org/mongoose-paginate-v2/-/mongoose-paginate-v2-1.9.1.tgz"
+  integrity sha512-DgURdWkPCeY6cuzkONk0snkFFG/l6ABABDkV3PyW/M2XGvfK/yP4i6Y/PuXkqhfVxKHFLvZ/qBnQxkGzzvo43Q==
+  dependencies:
+    mongoose-lean-virtuals "^1.1.0"
+
+mongoose@^8.12.2, mongoose@>=5.11.10:
   version "8.12.2"
   resolved "https://registry.npmjs.org/mongoose/-/mongoose-8.12.2.tgz"
   integrity sha512-tfCyekj0CK4Hw41u78dHCN7fimvvky0oH4QOiHxzcHtjNLosljZVjwlOqFAolIn/sROFLYGheGafqd3h/BzaFA==
@@ -5522,6 +5536,11 @@ morgan@^1.9.1:
     depd "~2.0.0"
     on-finished "~2.3.0"
     on-headers "~1.0.2"
+
+mpath@^0.8.4:
+  version "0.8.4"
+  resolved "https://registry.npmjs.org/mpath/-/mpath-0.8.4.tgz"
+  integrity sha512-DTxNZomBcTWlrMW76jy1wvV37X/cNNxPW1y2Jzd4DZkAaC5ZGsm8bfGfNOthcDuRJujXLqiuS6o3Tpy0JEoh7g==
 
 mpath@0.9.0:
   version "0.9.0"
