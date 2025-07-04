@@ -383,7 +383,7 @@ router.patch('/:id/deactivate', deactivateCustomerLeadController);
  * /customer-leads/{id}:
  *   put:
  *     summary: Update a customer lead
- *     description: Update specific fields of a customer lead. Only provided fields will be updated.
+ *     description: Update specific fields of a customer lead. Also supports optional updates to associated requirements.
  *     tags: [Customer Leads]
  *     security:
  *       - bearerAuth: []
@@ -421,27 +421,44 @@ router.patch('/:id/deactivate', deactivateCustomerLeadController);
  *               googleLocationLink:
  *                 type: string
  *                 format: uri
- *               requirementType:
- *                 type: string
- *               otherRequirement:
- *                 type: string
- *               requirementDescription:
- *                 type: string
- *               urgency:
- *                 type: string
- *               budget:
- *                 type: string
- *               hasDrawing:
- *                 type: boolean
- *               needsArchitect:
- *                 type: boolean
- *               requestSiteVisit:
- *                 type: boolean
  *               isActive:
  *                 type: boolean
- *             example:
- *               customerName: "John Doe Updated"
- *               email: "john.doe.updated@example.com"
+ *               requirementsToUpdate:
+ *                 type: array
+ *                 description: Array of requirement updates
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     _id:
+ *                       type: string
+ *                       description: Requirement ID to update (must belong to this lead)
+ *                     requirementType:
+ *                       type: string
+ *                     otherRequirement:
+ *                       type: string
+ *                     requirementDescription:
+ *                       type: string
+ *                     urgency:
+ *                       type: string
+ *                     budget:
+ *                       type: string
+ *                     roomRequirements:
+ *                       type: string
+ *                     architectStatus:
+ *                       type: string
+ *                     drawingStatus:
+ *                       type: string
+ *                     scpRemarks:
+ *                       type: string
+ *     examples:
+ *       application/json:
+ *         value:
+ *           customerName: "John Doe Updated"
+ *           email: "john.doe.updated@example.com"
+ *           requirementsToUpdate:
+ *             - _id: "64f31a7b7e5d6e001f7e1234"
+ *               urgency: "Immediate"
+ *               requirementType: "New Construction"
  *     responses:
  *       200:
  *         description: Customer lead updated successfully
@@ -476,7 +493,7 @@ router.put(
  * @swagger
  * /customer-leads/{leadId}/requirements/{requirementId}/share:
  *   post:
- *     summary: Share a specific requirement with a user
+ *     summary: Share a specific requirement with one or more users
  *     tags: [Customer Leads]
  *     security:
  *       - bearerAuth: []
@@ -500,16 +517,33 @@ router.put(
  *           schema:
  *             type: object
  *             required:
- *               - userId
+ *               - userIds
  *             properties:
- *               userId:
- *                 type: string
- *                 description: The ID of the user to share the requirement with
+ *               userIds:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: Array of user IDs to share the requirement with
+ *             example:
+ *               userIds: ["64f57c1a7baf4a001f68b111", "64f57c1a7baf4a001f68b222"]
  *     responses:
  *       200:
  *         description: Requirement shared successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: Requirement shared successfully.
+ *                 data:
+ *                   type: object
  *       400:
- *         description: Bad Request (e.g., already shared with this user)
+ *         description: Bad Request (e.g., already shared with user)
  *       401:
  *         description: Unauthorized
  *       403:

@@ -27,3 +27,72 @@ export const getProjectSiteVisits = catchAsync(async (req, res) => {
     const result = await siteVisitService.querySiteVisits(filter, options);
     res.send(result);
 });
+
+export const submitProposal = catchAsync(async (req, res) => {
+    const project = await projectService.addArchitectProposal(req.params.projectId, req.user, req.body);
+    res.status(httpStatus.CREATED).send(project);
+});
+
+export const acceptProposal = catchAsync(async (req, res) => {
+    const { projectId, proposalId } = req.params;
+    const project = await projectService.acceptArchitectProposal(projectId, proposalId, req.user);
+    res.send(project);
+});
+
+export const getProposalsForProject = catchAsync(async (req, res) => {
+    const proposals = await projectService.getProposalsForProject(req.params.projectId);
+    res.send(proposals);
+});
+
+export const submitArchitectDocument = async (req, session) => {
+    const project = await projectService.submitArchitectDocument(req.params.projectId, req.user, req.body, session);
+    return {
+        status: httpStatus.CREATED,
+        body: project,
+        message: 'Document submitted successfully'
+    };
+};
+
+export const getArchitectDocuments = catchAsync(async (req, res) => {
+    const documents = await projectService.getArchitectDocuments(req.params.projectId);
+    res.send(documents);
+});
+
+export const getProjectsForCustomer = catchAsync(async (req, res) => {
+    const options = pick(req.query, ['sortBy', 'limit', 'page']);
+    const result = await projectService.getProjectsForCustomer(req.user, options);
+    res.status(httpStatus.OK).send({ status: 1, message: 'Your projects fetched successfully.', data: result });
+});
+
+export const getArchitectDocumentsForCustomer = catchAsync(async (req, res) => {
+    const documents = await projectService.getArchitectDocumentsForCustomer(req.params.projectId, req.user);
+    res.status(httpStatus.OK).send(documents);
+});
+
+export const reviewArchitectDocument = catchAsync(async (req, res) => {
+    const project = await projectService.reviewArchitectDocument(
+        req.params.projectId,
+        req.params.documentId,
+        req.body,
+        req.user
+    );
+    res.send(project);
+});
+
+export const sendDocumentToCustomer = catchAsync(async (req, res) => {
+    const project = await projectService.sendDocumentToCustomer(
+        req.params.projectId,
+        req.params.documentId,
+        req.user
+    );
+    res.send(project);
+});
+
+export const customerReviewDocument = catchAsync(async (req, res) => {
+    const project = await projectService.customerReviewDocument(
+        req.params.projectId,
+        req.params.documentId,
+        req.body
+    );
+    res.send(project);
+});

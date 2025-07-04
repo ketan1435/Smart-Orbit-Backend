@@ -174,50 +174,50 @@ export const deleteUserById = async (userId) => {
  * @returns {Promise<SiteVisit[]>}
  */
 export const getMySiteVisits = async (userId) => {
+  // 1. Fetch all visits assigned to the user
   const visits = await SiteVisit.find({ siteEngineer: userId })
     .populate('siteEngineer', 'name role')
-    .sort({ visitDate: -1 })
-    .lean(); // Use .lean() for better performance as we are manually attaching data
-
-  if (!visits.length) {
-    return [];
-  }
-
-  // Get all unique requirement IDs from the visits
-  const requirementIds = [...new Set(visits.map(v => v.requirement.toString()))];
-
-  // Find all customer leads that contain these requirements
-  // Remove .select() to fetch the full lead and requirement documents
-  const leads = await CustomerLead.find({ 'requirements._id': { $in: requirementIds } }).lean();
-
-  // Create a map for quick lookup of lead and requirement data by requirement ID
-  const requirementDataMap = new Map();
-  leads.forEach(lead => {
-    lead.requirements.forEach(req => {
-      if (requirementIds.includes(req._id.toString())) {
-        requirementDataMap.set(req._id.toString(), {
-          lead: {
-            _id: lead._id,
-            customerName: lead.customerName,
-          },
-          requirement: req,
-        });
+    .populate({
+      path: 'requirement',
+      populate: {
+        path: 'lead',
+        select: 'customerName mobileNumber email state city'
       }
-    });
-  });
+    })
+    .populate({
+      path: 'requirement',
+      populate: {
+        path: 'project',
+        select: 'projectName status'
+      }
+    })
+    .sort({ visitDate: -1 })
+    .lean();
 
-  // Attach the lead and full requirement data to each visit
-  const visitsWithLeadData = visits.map(visit => {
-    const data = requirementDataMap.get(visit.requirement.toString());
+  if (!visits.length) return [];
+
+  // 2. Format response with lead and requirement attached
+  const formattedVisits = visits.map(visit => {
+    const requirement = visit.requirement || {};
+    const lead = requirement.lead || null;
+
     return {
       ...visit,
-      lead: data?.lead || null,
-      requirement: data?.requirement || null,
+      lead: lead ? {
+        _id: lead._id,
+        customerName: lead.customerName,
+        mobileNumber: lead.mobileNumber,
+        email: lead.email,
+        state: lead.state,
+        city: lead.city,
+      } : null,
+      requirement,
     };
   });
 
-  return visitsWithLeadData;
+  return formattedVisits;
 };
+
 
 export const activateUser = async (userId) => {
   const user = await getUserById(userId);
@@ -276,4 +276,4 @@ export const exportUsersService = async (filter = {}) => {
 
 
   return xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' });
-}; 
+};

@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import mongoosePaginate from 'mongoose-paginate-v2';
-import { fileSchema } from './schema/requirement.schema.js';
+import { fileSchema } from './requirement.model.js';
 
 const documentSchema = new mongoose.Schema({
     status: {

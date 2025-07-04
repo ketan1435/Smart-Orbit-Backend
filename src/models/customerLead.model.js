@@ -1,5 +1,4 @@
 import mongoose from 'mongoose';
-import { requirementSchema } from './schema/requirement.schema.js';
 
 const customerLeadSchema = new mongoose.Schema({
   leadSource: { type: String, required: true },
@@ -13,7 +12,11 @@ const customerLeadSchema = new mongoose.Schema({
   city: { type: String, default: '' },
   googleLocationLink: { type: String },
 
-  requirements: [requirementSchema],
+  // Changed: requirements is now an array of ObjectId references to the Requirement model
+  requirements: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Requirement',
+  }],
 
   isActive: { type: Boolean, default: true },
 }, {

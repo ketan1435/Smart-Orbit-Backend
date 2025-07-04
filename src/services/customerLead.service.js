@@ -7,28 +7,29 @@ import mongoose from 'mongoose';
 import logger from '../config/logger.js';
 import { createCustomerLead, updateCustomerLead } from '../validations/customerLead.validation.js';
 import { createProject } from './project.service.js';
+import Requirement from '../models/requirement.model.js';
+
 
 export const createCustomerLeadService = async (req, session) => {
   const { body: leadData } = req;
   const tempFileKeysToDelete = [];
   const { requirements, ...basicLeadInfo } = leadData;
 
-  // 1. Prepare all requirement subdocuments
-  const requirementsPayload = [];
+  const requirementIds = [];
+
+  // 1. Create the CustomerLead first
+  const leadPayload = {
+    ...basicLeadInfo,
+    createdBy: req.user.id,
+    requirements: [], // will update after creating Requirement docs
+  };
+
+  const lead = (await CustomerLead.create([leadPayload], { session }))[0];
+
+  // 2. Process each requirement separately
   for (const reqData of requirements) {
     const requirementId = new mongoose.Types.ObjectId();
-    const newRequirement = {
-      _id: requirementId,
-      projectName: reqData.projectName,
-      requirementType: reqData.requirementType,
-      otherRequirement: reqData.otherRequirement,
-      requirementDescription: reqData.requirementDescription,
-      urgency: reqData.urgency,
-      budget: reqData.budget,
-      scpData: reqData.scpData || {},
-      files: [],
-      sharedWith: [],
-    };
+    const files = [];
 
     const fileKeys = {
       imageUrlKeys: reqData.imageUrlKeys || [],
@@ -41,77 +42,83 @@ export const createCustomerLeadService = async (req, session) => {
       for (const tempKey of keys) {
         const fileType = type.replace('UrlKeys', '');
         const fileName = tempKey.split('/').pop();
-        // The lead ID will be assigned after creation, so we need to copy files later
-        newRequirement.files.push({ fileType, tempKey }); // Store tempKey temporarily
+        const permanentKey = `customer-leads/${lead._id}/${requirementId}/${fileType}/${fileName}`;
+        await storage.copyFile(tempKey, permanentKey);
+        files.push({ fileType, key: permanentKey });
         tempFileKeysToDelete.push(tempKey);
       }
     }
-    requirementsPayload.push(newRequirement);
+
+    // 3. Create Requirement document
+    const requirement = await Requirement.create([{
+      _id: requirementId,
+      lead: lead._id,
+      projectName: reqData.projectName,
+      requirementType: reqData.requirementType,
+      otherRequirement: reqData.otherRequirement,
+      requirementDescription: reqData.requirementDescription,
+      urgency: reqData.urgency,
+      budget: reqData.budget,
+      scpData: reqData.scpData || {},
+      files,
+      sharedWith: [],
+    }], { session });
+
+    requirementIds.push(requirementId);
+
+    // 4. Create a project and link back to requirement
+    const project = await createProject({
+      projectName: reqData.projectName,
+      requirement: requirementId,
+      lead: lead._id,
+      budget: reqData.budget ? parseFloat(reqData.budget.replace(/[^0-9.-]+/g, '')) : 0,
+      createdBy: req.user.id,
+      createdByModel: req.user.constructor.modelName,
+    }, session);
+
+    // 5. Update the requirement with the project ID
+    await Requirement.findByIdAndUpdate(requirementId, {
+      project: project._id,
+    }, { session });
   }
 
-  // 2. Create the lead with all its requirements at once
-  const leadPayload = {
-    ...basicLeadInfo,
-    createdBy: req.user.id,
-    requirements: requirementsPayload,
+  // 6. Update the lead with the array of requirement references
+  lead.requirements = requirementIds;
+  await lead.save({ session });
+
+  // 7. Clean up temp S3 files after commit
+  Promise.all(tempFileKeysToDelete.map(key => storage.deleteFile(key))).catch(err => {
+    logger.error(`Failed to delete temporary file during cleanup: ${err.message}`);
+  });
+
+  return {
+    status: httpStatus.CREATED,
+    body: { status: 1, message: 'Customer lead created successfully', data: lead },
   };
-
-  const lead = (await CustomerLead.create([leadPayload], { session }))[0];
-
-  try {
-    // 3. Create projects and update requirements with permanent file paths
-    for (const requirement of lead.requirements) {
-      // Handle file moves now that we have the lead._id
-      const finalFiles = [];
-      for (const file of requirement.files) {
-        const fileName = file.tempKey.split('/').pop();
-        const permanentKey = `customer-leads/${lead._id}/${requirement._id}/${file.fileType}/${fileName}`;
-        await storage.copyFile(file.tempKey, permanentKey);
-        finalFiles.push({ fileType: file.fileType, key: permanentKey });
-      }
-      requirement.files = finalFiles; // Overwrite with permanent file data
-
-      // Create a project for the requirement
-      const project = await createProject({
-        projectName: requirement.projectName,
-        requirement: requirement._id,
-        lead: lead._id,
-        budget: requirement.budget ? parseFloat(requirement.budget.replace(/[^0-9.-]+/g, '')) : 0,
-        createdBy: req.user.id,
-      }, session);
-
-      requirement.project = project._id;
-    }
-
-    // 4. Save the lead again to persist project IDs and permanent file keys
-    await lead.save({ session });
-
-    // This part runs after the transaction is committed.
-    // If the server crashes here, S3 lifecycle policy will clean up the temp files.
-    Promise.all(tempFileKeysToDelete.map(key => storage.deleteFile(key))).catch(err => {
-      // Log this error, but don't fail the request since the lead was already created.
-      logger.error(`Failed to delete temporary file during cleanup: ${err.message}`);
-    });
-
-    return {
-      status: httpStatus.CREATED,
-      body: { status: 1, message: 'Customer lead created successfully', data: lead },
-    };
-  } catch (error) {
-    // If an error occurred (e.g., file copy failed), the transactional middleware
-    // will abort the database transaction. We just need to re-throw the error.
-    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, `Failed to process lead files: ${error.message}`);
-  }
 };
 
 export const listCustomerLeadsService = async (filter = {}, options = {}) => {
   const { limit = 10, page = 1, sortBy } = options;
-  const sort = sortBy || { createdAt: -1 };
+
+  let sort;
+  if (typeof sortBy === 'string') {
+    const [field, order] = sortBy.split(':');
+    sort = { [field]: order === 'desc' ? -1 : 1 };
+  } else if (typeof sortBy === 'object' && sortBy !== null) {
+    sort = sortBy;
+  } else {
+    sort = { createdAt: -1 };
+  }
 
   const customerLeads = await CustomerLead.find(filter)
+    .populate({
+      path: 'requirements',
+      populate: { path: 'visits' },
+    })
     .sort(sort)
     .skip((page - 1) * limit)
-    .limit(limit);
+    .limit(limit)
+    .lean();
 
   const totalResults = await CustomerLead.countDocuments(filter);
 
@@ -125,7 +132,11 @@ export const listCustomerLeadsService = async (filter = {}, options = {}) => {
 };
 
 export const getCustomerLeadByIdService = async (id) => {
-  return CustomerLead.findById(id);
+  return CustomerLead.findById(id)
+    .populate({
+      path: 'requirements',
+      populate: { path: 'visits' }  // Optional: only if you need visits too
+    });
 };
 
 export const updateCustomerLeadService = async (id, updateBody) => {
@@ -133,10 +144,28 @@ export const updateCustomerLeadService = async (id, updateBody) => {
   if (!lead) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Customer lead not found');
   }
-  Object.assign(lead, updateBody);
+
+  const { requirementsToUpdate, ...leadUpdates } = updateBody;
+
+  // Update lead fields
+  Object.assign(lead, leadUpdates);
   await lead.save();
+
+  // Update individual requirements if provided
+  if (Array.isArray(requirementsToUpdate)) {
+    for (const reqUpdate of requirementsToUpdate) {
+      if (!reqUpdate._id) continue;
+      await Requirement.findOneAndUpdate(
+        { _id: reqUpdate._id, lead: lead._id },
+        reqUpdate,
+        { new: true }
+      );
+    }
+  }
+
   return lead;
 };
+
 
 export const activateCustomerLeadService = async (id) => {
   const lead = await getCustomerLeadByIdService(id);
@@ -184,50 +213,52 @@ export const shareRequirementService = async (leadId, requirementId, userIdToSha
 };
 
 export const shareRequirementWithUsersService = async (leadId, requirementId, userIds, adminId) => {
-  const lead = await getCustomerLeadByIdService(leadId);
-  if (!lead) {
-    throw new ApiError(httpStatus.NOT_FOUND, 'Customer lead not found');
-  }
-
-  const requirement = lead.requirements.id(requirementId);
+  const requirement = await Requirement.findOne({ _id: requirementId, lead: leadId });
   if (!requirement) {
-    throw new ApiError(httpStatus.NOT_FOUND, 'Requirement not found within the lead');
+    throw new ApiError(httpStatus.NOT_FOUND, 'Requirement not found for this lead');
   }
 
-  userIds.forEach(userIdToShareWith => {
-    const isAlreadyShared = requirement.sharedWith.some(share => share.user.toString() === userIdToShareWith);
-    if (!isAlreadyShared) {
-      requirement.sharedWith.push({
-        user: userIdToShareWith,
-        sharedBy: adminId,
-      });
+  let updated = false;
+
+  userIds.forEach(userId => {
+    const alreadyShared = requirement.sharedWith.some(share => share.user.toString() === userId);
+    if (!alreadyShared) {
+      requirement.sharedWith.push({ user: userId, sharedBy: adminId });
+      updated = true;
     }
   });
 
-  await lead.save();
-  return lead;
+  if (updated) {
+    await requirement.save();
+  }
+
+  return requirement;
 };
 
 export const getSharedRequirementsForUserService = async (userId) => {
-  const leads = await CustomerLead.find({ 'requirements.sharedWith.user': userId }).lean();
+  const requirements = await Requirement.find({ 'sharedWith.user': userId })
+    .populate('lead', 'customerName mobileNumber email state city') // populate only necessary lead fields
+    .lean();
 
-  const sharedRequirements = leads.map(lead => {
-    const relevantRequirements = lead.requirements.filter(req =>
-      req.sharedWith.some(share => share.user.toString() === userId.toString())
-    );
+  // Group requirements by lead
+  const grouped = {};
+  for (const req of requirements) {
+    const leadId = req.lead._id.toString();
+    if (!grouped[leadId]) {
+      grouped[leadId] = {
+        leadId,
+        customerName: req.lead.customerName,
+        mobileNumber: req.lead.mobileNumber,
+        email: req.lead.email,
+        state: req.lead.state,
+        city: req.lead.city,
+        requirements: [],
+      };
+    }
+    grouped[leadId].requirements.push(req);
+  }
 
-    return {
-      leadId: lead._id,
-      customerName: lead.customerName,
-      mobileNumber: lead.mobileNumber,
-      email: lead.email,
-      state: lead.state,
-      city: lead.city,
-      requirements: relevantRequirements,
-    };
-  }).filter(l => l.requirements.length > 0);
-
-  return sharedRequirements;
+  return Object.values(grouped);
 };
 
 const normalizeHeaders = (headers) => {

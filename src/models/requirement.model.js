@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import mongoosePaginate from 'mongoose-paginate-v2';
 
 const scpDataSchema = new mongoose.Schema({
     siteAddress: { type: String, default: '' },
@@ -31,12 +32,22 @@ const sharedWithSchema = new mongoose.Schema({
 }, { _id: false });
 
 export const fileSchema = new mongoose.Schema({
-    fileType: { type: String, required: true, enum: ['image', 'video', 'voiceMessage', 'sketch', 'pdf', 'document'] },
+    fileType: { type: String, required: true, enum: ['image', 'video', 'voiceMessage', 'sketch', 'pdf', 'document', 'layoutPlan', '2d drawing', '3d drawing'] },
     key: { type: String, required: true },
     uploadedAt: { type: Date, default: Date.now },
 }, { _id: false });
 
-export const requirementSchema = new mongoose.Schema({
+const requirementSchema = new mongoose.Schema({
+    lead: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'CustomerLead',
+        required: true,
+    },
+    project: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Project',
+    },
+    projectName: { type: String, default: '' },
     requirementType: { type: String, default: '' },
     otherRequirement: { type: String, default: '' },
     requirementDescription: { type: String, default: '' },
@@ -45,11 +56,8 @@ export const requirementSchema = new mongoose.Schema({
     scpData: { type: scpDataSchema, default: () => ({}) },
     files: [fileSchema],
     sharedWith: [sharedWithSchema],
-    project: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Project',
-    },
 }, {
+    timestamps: true,
     toJSON: { virtuals: true },
     toObject: { virtuals: true },
 });
@@ -59,4 +67,13 @@ requirementSchema.virtual('visits', {
     ref: 'SiteVisit',
     localField: '_id',
     foreignField: 'requirement',
-}); 
+});
+
+requirementSchema.plugin(mongoosePaginate);
+
+/**
+ * @typedef Requirement
+ */
+const Requirement = mongoose.model('Requirement', requirementSchema);
+
+export default Requirement; 

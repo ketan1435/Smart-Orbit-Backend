@@ -74,6 +74,22 @@ router
         siteVisitController.getSiteVisitDocuments
     );
 
+router
+    .route('/visits/:visitId/documents/:documentId/review')
+    .patch(
+        auth('manageSiteVisits'), // Or a more specific 'reviewDocuments' permission
+        validate(siteVisitValidation.reviewDocument),
+        siteVisitController.reviewDocument
+    );
+
+router
+    .route('/visits/:visitId/remarks')
+    .post(
+        auth('manageSiteVisits'), // Site engineer permission
+        validate(siteVisitValidation.addRemark),
+        siteVisitController.addRemark
+    );
+
 export default router;
 
 /**
@@ -490,6 +506,109 @@ export default router;
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/Requirement'
+ *       "401":
+ *         $ref: '#/components/responses/Unauthorized'
+ *       "403":
+ *         $ref: '#/components/responses/Forbidden'
+ *       "404":
+ *         $ref: '#/components/responses/NotFound'
+ */
+
+/**
+ * @swagger
+ * /visits/{visitId}/documents/{documentId}/review:
+ *   patch:
+ *     summary: Approve or reject a site visit document
+ *     description: Allows an admin to approve or reject a specific document collection uploaded by a site engineer. Feedback is required if the document is rejected.
+ *     tags: [SiteVisits]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: visitId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the site visit.
+ *       - in: path
+ *         name: documentId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the document entry to review.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - status
+ *             properties:
+ *               status:
+ *                 type: string
+ *                 enum: [Approved, Rejected]
+ *                 description: The new status for the document.
+ *               adminFeedback:
+ *                 type: string
+ *                 description: Required feedback if the status is 'Rejected'.
+ *             example:
+ *               status: "Rejected"
+ *               adminFeedback: "The measurements in this photo are unclear. Please re-upload."
+ *     responses:
+ *       "200":
+ *         description: OK
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SiteVisit'
+ *       "400":
+ *         $ref: '#/components/responses/BadRequest'
+ *       "401":
+ *         $ref: '#/components/responses/Unauthorized'
+ *       "403":
+ *         $ref: '#/components/responses/Forbidden'
+ *       "404":
+ *         $ref: '#/components/responses/NotFound'
+ */
+
+/**
+ * @swagger
+ * /visits/{visitId}/remarks:
+ *   post:
+ *     summary: Add a text remark to a site visit
+ *     description: Allows an assigned site engineer to add a text-only remark to a site visit. This creates a new entry in the visit's documents array without any files.
+ *     tags: [SiteVisits]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: visitId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the site visit.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - engineerFeedback
+ *             properties:
+ *               engineerFeedback:
+ *                 type: string
+ *                 description: The text remark from the site engineer.
+ *             example:
+ *               engineerFeedback: "Called the customer, they will be available at the site in 1 hour."
+ *     responses:
+ *       "200":
+ *         description: OK, returns the updated site visit object.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SiteVisit'
  *       "401":
  *         $ref: '#/components/responses/Unauthorized'
  *       "403":

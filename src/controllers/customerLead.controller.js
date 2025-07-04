@@ -152,10 +152,14 @@ export const exportCustomerLeadsController = catchAsync(async (req, res) => {
 export const shareRequirementForUserController = catchAsync(async (req, res) => {
   const { leadId, requirementId } = req.params;
   const { userIds } = req.body;
-  const adminId = req.user.id; // Assuming admin's ID is on req.user
+  const adminId = req.user.id;
 
-  const lead = await shareRequirementWithUsersService(leadId, requirementId, userIds, adminId);
-  res.status(httpStatus.OK).json({ status: 1, message: 'Requirement shared successfully.', data: lead });
+  const updatedRequirement = await shareRequirementWithUsersService(leadId, requirementId, userIds, adminId);
+  res.status(httpStatus.OK).json({
+    status: 1,
+    message: 'Requirement shared successfully.',
+    data: updatedRequirement,
+  });
 });
 
 export const getMySharedRequirementsController = catchAsync(async (req, res) => {

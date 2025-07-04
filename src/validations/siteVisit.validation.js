@@ -81,4 +81,28 @@ export const querySiteVisits = {
         limit: Joi.number().integer(),
         sortBy: Joi.string(),
     }),
+};
+
+export const addRemark = {
+    params: Joi.object().keys({
+        visitId: Joi.string().custom(objectId).required(),
+    }),
+    body: Joi.object().keys({
+        engineerFeedback: Joi.string().required(),
+    }),
+};
+
+export const reviewDocument = {
+    params: Joi.object().keys({
+        visitId: Joi.string().custom(objectId).required(),
+        documentId: Joi.string().custom(objectId).required(),
+    }),
+    body: Joi.object().keys({
+        status: Joi.string().required().valid('Approved', 'Rejected'),
+        adminFeedback: Joi.string().when('status', {
+            is: 'Rejected',
+            then: Joi.string().required(),
+            otherwise: Joi.string().allow('').optional(),
+        }),
+    }),
 }; 

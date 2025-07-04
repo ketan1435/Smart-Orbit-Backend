@@ -13,7 +13,7 @@ export const getSiteVisits = catchAsync(async (req, res) => {
 
 export const scheduleSiteVisit = catchAsync(async (req, res) => {
     const { requirementId } = req.params;
-    const visit = await siteVisitService.scheduleSiteVisit(requirementId, req.body);
+    const visit = await siteVisitService.scheduleSiteVisit(requirementId, req.body, req.user);
     res.status(httpStatus.CREATED).send(visit);
 });
 
@@ -62,4 +62,16 @@ export const getSiteVisitDocuments = catchAsync(async (req, res) => {
         message: 'Documents fetched successfully',
         data: result,
     });
+});
+
+export const reviewDocument = catchAsync(async (req, res) => {
+    const { visitId, documentId } = req.params;
+    const visit = await siteVisitService.reviewSiteVisitDocument(visitId, documentId, req.body, req.user);
+    res.send(visit);
+});
+
+export const addRemark = catchAsync(async (req, res) => {
+    const { visitId } = req.params;
+    const visit = await siteVisitService.addRemarkToSiteVisit(visitId, req.body, req.user);
+    res.send(visit);
 }); 
