@@ -8,6 +8,11 @@ import logger from '../config/logger.js';
 import { createCustomerLead, updateCustomerLead } from '../validations/customerLead.validation.js';
 import { createProject } from './project.service.js';
 import Requirement from '../models/requirement.model.js';
+import User from '../models/user.model.js';
+import SiteVisit from '../models/siteVisit.model.js';
+import Project from '../models/project.model.js';
+import { roles } from '../config/roles.js';
+import Roles from '../config/enums/roles.enum.js';
 
 
 export const createCustomerLeadService = async (req, session) => {
@@ -80,6 +85,46 @@ export const createCustomerLeadService = async (req, session) => {
     await Requirement.findByIdAndUpdate(requirementId, {
       project: project._id,
     }, { session });
+    reqData.siteEngineerId = reqData.scpData.siteEngineer;
+    reqData.visitDate = reqData.scpData.siteVisitDate;
+
+    // 5.1 If site visit details are provided, schedule it.
+    if (reqData.siteEngineerId && reqData.visitDate) {
+      // 5.1.1 Check if the site engineer is valid
+      const siteEngineer = await User.findById(reqData.siteEngineerId).session(session);
+      if (!siteEngineer || siteEngineer.role !== 'site-engineer') {
+        throw new ApiError(httpStatus.BAD_REQUEST, `Invalid site engineer ID: ${reqData.siteEngineerId}`);
+      }
+
+      // 5.1.2 Create the new visit
+      const [siteVisit] = await SiteVisit.create([
+        {
+          requirement: requirementId,
+          project: project._id,
+          siteEngineer: reqData.siteEngineerId,
+          visitDate: reqData.visitDate,
+          hasRequirementEditAccess: true, // It's the first and only visit for this new requirement
+        }
+      ], { session });
+
+      // 5.1.3 Push to project siteVisits
+      project.siteVisits.push(siteVisit._id);
+      await project.save({ session });
+
+      // 5.1.4 Add the site engineer to requirement.sharedWith if not already present
+      await Requirement.updateOne(
+        { _id: requirementId, 'sharedWith.user': { $ne: reqData.siteEngineerId } },
+        {
+          $push: {
+            sharedWith: {
+              user: reqData.siteEngineerId,
+              sharedBy: req.user.id,
+            },
+          },
+        },
+        { session }
+      );
+    }
   }
 
   // 6. Update the lead with the array of requirement references
@@ -220,13 +265,57 @@ export const shareRequirementWithUsersService = async (leadId, requirementId, us
 
   let updated = false;
 
-  userIds.forEach(userId => {
-    const alreadyShared = requirement.sharedWith.some(share => share.user.toString() === userId);
+  // Check if any of the users are procurement team members
+  const users = await User.find({ _id: { $in: userIds } }).select('_id role');
+  const procurementUsers = users.filter(user => user.role === Roles.PROCUREMENT);
+  const otherUsers = users.filter(user => user.role !== Roles.PROCUREMENT);
+
+  // Handle regular users (non-procurement)
+  otherUsers.forEach(user => {
+    const alreadyShared = requirement.sharedWith.some(share => share.user.toString() === user._id.toString());
     if (!alreadyShared) {
-      requirement.sharedWith.push({ user: userId, sharedBy: adminId });
+      requirement.sharedWith.push({
+        user: user._id,
+        sharedBy: adminId,
+        isSeen: false
+      });
       updated = true;
     }
   });
+
+  // Handle procurement team members specially
+  if (procurementUsers.length > 0) {
+    // Find the project associated with this requirement
+    const project = await Project.findOne({ requirement: requirementId });
+
+    if (project) {
+      // Check if there are any approved architect documents
+      const approvedDocuments = project.architectDocuments.filter(doc =>
+        doc.adminStatus === 'Approved' && doc.customerStatus === 'Approved'
+      );
+
+      if (approvedDocuments.length > 0) {
+        // Share requirement with procurement team only if there are approved documents
+        procurementUsers.forEach(user => {
+          const alreadyShared = requirement.sharedWith.some(share => share.user.toString() === user._id.toString());
+          if (!alreadyShared) {
+            requirement.sharedWith.push({
+              user: user._id,
+              sharedBy: adminId,
+              isSeen: false
+            });
+            updated = true;
+          }
+        });
+      } else {
+        // Log that procurement sharing was skipped due to no approved documents
+        logger.info(`Procurement sharing skipped for requirement ${requirementId}: No approved architect documents found`);
+      }
+    } else {
+      // Log that no project was found
+      logger.warn(`No project found for requirement ${requirementId} when sharing with procurement team`);
+    }
+  }
 
   if (updated) {
     await requirement.save();

@@ -124,4 +124,34 @@ export const getProjectsForCustomer = {
         limit: Joi.number().integer(),
         page: Joi.number().integer(),
     }),
+};
+
+export const sendDocumentToProcurement = {
+    params: Joi.object().keys({
+        projectId: Joi.string().custom(objectId).required(),
+        documentId: Joi.string().required(),
+    }),
+};
+
+export const getApprovedDocumentsForProcurement = {
+    query: Joi.object().keys({
+        projectName: Joi.string().allow(''),
+        sortBy: Joi.string(),
+        limit: Joi.number().integer(),
+        page: Joi.number().integer(),
+    }),
+};
+
+export const getProjectsForProcurement = {
+    query: Joi.object().keys({
+        sortBy: Joi.string(),
+        limit: Joi.number().integer(),
+        page: Joi.number().integer(),
+    }),
+};
+
+export const getProjectDocumentsForProcurement = {
+    params: Joi.object().keys({
+        projectId: Joi.string().custom(objectId).required(),
+    }),
 }; 

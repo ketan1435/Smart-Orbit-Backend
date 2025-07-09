@@ -59,6 +59,34 @@ router
         projectController.getArchitectDocumentsForCustomer
     );
 
+router
+    .route('/:projectId/architect-documents/:documentId/send-to-procurement')
+    .post(auth('manageProjects'), validate(projectValidation.sendDocumentToProcurement), projectController.sendDocumentToProcurement);
+
+router
+    .route('/approved-documents/procurement')
+    .get(
+        auth('getProjects'),
+        validate(projectValidation.getApprovedDocumentsForProcurement),
+        projectController.getApprovedDocumentsForProcurement
+    );
+
+router
+    .route('/procurement/my-projects')
+    .get(
+        auth('getProjects'),
+        validate(projectValidation.getProjectsForProcurement),
+        projectController.getProjectsForProcurement
+    );
+
+router
+    .route('/procurement/:projectId/documents')
+    .get(
+        auth('getProjects'),
+        validate(projectValidation.getProjectDocumentsForProcurement),
+        projectController.getProjectDocumentsForProcurement
+    );
+
 // Define project routes here later
 // For example:
 // router
@@ -492,6 +520,395 @@ export default router;
  *               type: array
  *               items:
  *                 $ref: '#/components/schemas/ArchitectDocument'
+ *       "401":
+ *         $ref: '#/components/responses/Unauthorized'
+ *       "403":
+ *         $ref: '#/components/responses/Forbidden'
+ *       "404":
+ *         $ref: '#/components/responses/NotFound'
+ */
+
+/**
+ * @swagger
+ * /projects/{projectId}/architect-documents/{documentId}/send-to-procurement:
+ *   post:
+ *     summary: Send approved architect document to procurement
+ *     description: |
+ *       Allows an admin to send an architect document that has been approved by both admin and customer to the procurement team.
+ *       The document must have both adminStatus and customerStatus as 'Approved' before it can be sent to procurement.
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the project.
+ *       - in: path
+ *         name: documentId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the architect document.
+ *     responses:
+ *       "200":
+ *         description: Document sent to procurement successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: "Document sent to procurement successfully."
+ *                 data:
+ *                   $ref: '#/components/schemas/Project'
+ *       "400":
+ *         description: Bad Request - Document not approved by admin and/or customer, or already sent to procurement
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       "401":
+ *         $ref: '#/components/responses/Unauthorized'
+ *       "403":
+ *         $ref: '#/components/responses/Forbidden'
+ *       "404":
+ *         $ref: '#/components/responses/NotFound'
+ */
+
+/**
+ * @swagger
+ * /projects/approved-documents/procurement:
+ *   get:
+ *     summary: Get approved architect documents for procurement team
+ *     description: |
+ *       Retrieve all architect documents that have been approved by both admin and customer and sent to procurement.
+ *       This endpoint is specifically for the procurement team to view documents ready for BOM creation and procurement activities.
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: projectName
+ *         schema:
+ *           type: string
+ *         description: Filter by project name (partial match)
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number for pagination
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Number of results per page
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *           example: procurementSentAt:desc
+ *         description: Sorting order (e.g., procurementSentAt:desc, projectName:asc)
+ *     responses:
+ *       "200":
+ *         description: Approved documents for procurement fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: "Approved documents for procurement fetched successfully."
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     results:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           _id:
+ *                             type: string
+ *                             description: Project ID
+ *                           projectName:
+ *                             type: string
+ *                           projectCode:
+ *                             type: string
+ *                           lead:
+ *                             type: object
+ *                             properties:
+ *                               _id:
+ *                                 type: string
+ *                               customerName:
+ *                                 type: string
+ *                               email:
+ *                                 type: string
+ *                               mobileNumber:
+ *                                 type: string
+ *                           architect:
+ *                             type: object
+ *                             properties:
+ *                               _id:
+ *                                 type: string
+ *                               name:
+ *                                 type: string
+ *                               email:
+ *                                 type: string
+ *                           requirement:
+ *                             type: object
+ *                             properties:
+ *                               _id:
+ *                                 type: string
+ *                               requirementType:
+ *                                 type: string
+ *                           document:
+ *                             type: object
+ *                             properties:
+ *                               _id:
+ *                                 type: string
+ *                               files:
+ *                                 type: array
+ *                                 items:
+ *                                   $ref: '#/components/schemas/FileSchema'
+ *                               notes:
+ *                                 type: string
+ *                               adminStatus:
+ *                                 type: string
+ *                                 enum: [Approved]
+ *                               customerStatus:
+ *                                 type: string
+ *                                 enum: [Approved]
+ *                               adminRemarks:
+ *                                 type: string
+ *                               customerRemarks:
+ *                                 type: string
+ *                               version:
+ *                                 type: number
+ *                               submittedAt:
+ *                                 type: string
+ *                                 format: date-time
+ *                               procurementSentAt:
+ *                                 type: string
+ *                                 format: date-time
+ *                               architect:
+ *                                 type: object
+ *                                 description: Document architect details
+ *                               sentToProcurementBy:
+ *                                 type: object
+ *                                 description: Admin who sent to procurement
+ *                     page:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     totalPages:
+ *                       type: integer
+ *                     totalResults:
+ *                       type: integer
+ *       "401":
+ *         $ref: '#/components/responses/Unauthorized'
+ *       "403":
+ *         $ref: '#/components/responses/Forbidden'
+ */
+
+/**
+ * @swagger
+ * /projects/procurement/my-projects:
+ *   get:
+ *     summary: Get projects for procurement team
+ *     description: |
+ *       Retrieve all projects that have been shared with the current procurement team member.
+ *       Only shows basic project information like name, code, status, customer details, and requirement type.
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number for pagination
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Number of results per page
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *           example: createdAt:desc
+ *         description: Sorting order (e.g., createdAt:desc, projectName:asc)
+ *     responses:
+ *       "200":
+ *         description: Projects for procurement fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: "Projects for procurement fetched successfully."
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     results:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           _id:
+ *                             type: string
+ *                           projectName:
+ *                             type: string
+ *                           projectCode:
+ *                             type: string
+ *                           status:
+ *                             type: string
+ *                             enum: [Draft, Pending, Active, OnHold, Completed, Cancelled]
+ *                           createdAt:
+ *                             type: string
+ *                             format: date-time
+ *                           lead:
+ *                             type: object
+ *                             properties:
+ *                               customerName:
+ *                                 type: string
+ *                               email:
+ *                                 type: string
+ *                               mobileNumber:
+ *                                 type: string
+ *                           requirement:
+ *                             type: object
+ *                             properties:
+ *                               requirementType:
+ *                                 type: string
+ *                     page:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     totalPages:
+ *                       type: integer
+ *                     totalResults:
+ *                       type: integer
+ *       "401":
+ *         $ref: '#/components/responses/Unauthorized'
+ *       "403":
+ *         $ref: '#/components/responses/Forbidden'
+ */
+
+/**
+ * @swagger
+ * /projects/procurement/{projectId}/documents:
+ *   get:
+ *     summary: Get architect documents for a specific project (procurement team)
+ *     description: |
+ *       Retrieve all approved architect documents for a specific project that the procurement team has access to.
+ *       Only shows documents that have been approved by both admin and customer.
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the project.
+ *     responses:
+ *       "200":
+ *         description: Project documents for procurement fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: "Project documents for procurement fetched successfully."
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     project:
+ *                       type: object
+ *                       properties:
+ *                         _id:
+ *                           type: string
+ *                         projectName:
+ *                           type: string
+ *                         projectCode:
+ *                           type: string
+ *                         status:
+ *                           type: string
+ *                         lead:
+ *                           type: object
+ *                           properties:
+ *                             customerName:
+ *                               type: string
+ *                             email:
+ *                               type: string
+ *                             mobileNumber:
+ *                               type: string
+ *                         requirement:
+ *                           type: object
+ *                           properties:
+ *                             requirementType:
+ *                               type: string
+ *                     documents:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           _id:
+ *                             type: string
+ *                           files:
+ *                             type: array
+ *                             items:
+ *                               $ref: '#/components/schemas/FileSchema'
+ *                           notes:
+ *                             type: string
+ *                           adminStatus:
+ *                             type: string
+ *                             enum: [Approved]
+ *                           customerStatus:
+ *                             type: string
+ *                             enum: [Approved]
+ *                           adminRemarks:
+ *                             type: string
+ *                           customerRemarks:
+ *                             type: string
+ *                           version:
+ *                             type: number
+ *                           submittedAt:
+ *                             type: string
+ *                             format: date-time
+ *                           architect:
+ *                             type: object
+ *                             properties:
+ *                               name:
+ *                                 type: string
+ *                               email:
+ *                                 type: string
  *       "401":
  *         $ref: '#/components/responses/Unauthorized'
  *       "403":

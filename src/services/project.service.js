@@ -458,3 +458,311 @@ export const getProjectsForCustomer = async (user, options) => {
     totalResults,
   };
 };
+
+/**
+ * Send approved architect document to procurement
+ * @param {string} projectId - The ID of the project
+ * @param {string} documentId - The ID of the document
+ * @param {Object} admin - The authenticated admin user
+ * @returns {Promise<Project>}
+ */
+export const sendDocumentToProcurement = async (projectId, documentId, admin) => {
+  const project = await Project.findById(projectId);
+  if (!project) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Project not found');
+  }
+
+  const documentIndex = project.architectDocuments.findIndex(
+    doc => doc._id.toString() === documentId
+  );
+
+  if (documentIndex === -1) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Document not found');
+  }
+
+  const document = project.architectDocuments[documentIndex];
+
+  // Check if document is approved by both admin and customer
+  if (document.adminStatus !== 'Approved') {
+    throw new ApiError(
+      httpStatus.BAD_REQUEST,
+      'Document must be approved by admin before sending to procurement'
+    );
+  }
+
+  if (document.customerStatus !== 'Approved') {
+    throw new ApiError(
+      httpStatus.BAD_REQUEST,
+      'Document must be approved by customer before sending to procurement'
+    );
+  }
+
+  // Check if already sent to procurement
+  if (document.sentToProcurement) {
+    throw new ApiError(
+      httpStatus.BAD_REQUEST,
+      'Document has already been sent to procurement'
+    );
+  }
+
+  // Mark document as sent to procurement
+  project.architectDocuments[documentIndex].sentToProcurement = true;
+  project.architectDocuments[documentIndex].procurementSentAt = new Date();
+  project.architectDocuments[documentIndex].sentToProcurementBy = admin._id;
+
+  await project.save();
+  return project;
+};
+
+/**
+ * Get approved architect documents for procurement team
+ * @param {Object} filter - Filter criteria
+ * @param {Object} options - Query options
+ * @returns {Promise<Object>}
+ */
+export const getApprovedDocumentsForProcurement = async (filter, options) => {
+  const { limit = 10, page = 1, sortBy } = options;
+  const sort = sortBy
+    ? { [sortBy.split(':')[0]]: sortBy.split(':')[1] === 'desc' ? -1 : 1 }
+    : { 'architectDocuments.procurementSentAt': -1 };
+
+  // Build the aggregation pipeline
+  const pipeline = [
+    {
+      $match: {
+        'architectDocuments.sentToProcurement': true,
+        'architectDocuments.adminStatus': 'Approved',
+        'architectDocuments.customerStatus': 'Approved'
+      }
+    },
+    {
+      $lookup: {
+        from: 'customerleads',
+        localField: 'lead',
+        foreignField: '_id',
+        as: 'lead'
+      }
+    },
+    {
+      $lookup: {
+        from: 'requirements',
+        localField: 'requirement',
+        foreignField: '_id',
+        as: 'requirement'
+      }
+    },
+    {
+      $lookup: {
+        from: 'users',
+        localField: 'architect',
+        foreignField: '_id',
+        as: 'architect'
+      }
+    },
+    {
+      $unwind: '$lead'
+    },
+    {
+      $unwind: '$requirement'
+    },
+    {
+      $unwind: '$architect'
+    },
+    {
+      $unwind: '$architectDocuments'
+    },
+    {
+      $match: {
+        'architectDocuments.sentToProcurement': true,
+        'architectDocuments.adminStatus': 'Approved',
+        'architectDocuments.customerStatus': 'Approved'
+      }
+    },
+    {
+      $lookup: {
+        from: 'users',
+        localField: 'architectDocuments.architect',
+        foreignField: '_id',
+        as: 'architectDocuments.architect'
+      }
+    },
+    {
+      $lookup: {
+        from: 'users',
+        localField: 'architectDocuments.sentToProcurementBy',
+        foreignField: '_id',
+        as: 'architectDocuments.sentToProcurementBy'
+      }
+    },
+    {
+      $unwind: '$architectDocuments.architect'
+    },
+    {
+      $unwind: {
+        path: '$architectDocuments.sentToProcurementBy',
+        preserveNullAndEmptyArrays: true
+      }
+    },
+    {
+      $project: {
+        _id: 1,
+        projectName: 1,
+        projectCode: 1,
+        lead: {
+          _id: 1,
+          customerName: 1,
+          email: 1,
+          mobileNumber: 1
+        },
+        architect: {
+          _id: 1,
+          name: 1,
+          email: 1
+        },
+        requirement: {
+          _id: 1,
+          requirementType: 1
+        },
+        document: {
+          _id: '$architectDocuments._id',
+          files: '$architectDocuments.files',
+          notes: '$architectDocuments.notes',
+          adminStatus: '$architectDocuments.adminStatus',
+          customerStatus: '$architectDocuments.customerStatus',
+          adminRemarks: '$architectDocuments.adminRemarks',
+          customerRemarks: '$architectDocuments.customerRemarks',
+          version: '$architectDocuments.version',
+          submittedAt: '$architectDocuments.submittedAt',
+          procurementSentAt: '$architectDocuments.procurementSentAt',
+          architect: '$architectDocuments.architect',
+          sentToProcurementBy: '$architectDocuments.sentToProcurementBy'
+        }
+      }
+    },
+    {
+      $sort: sort
+    }
+  ];
+
+  // Add project name filter if provided
+  if (filter.projectName) {
+    pipeline.unshift({
+      $match: {
+        projectName: { $regex: filter.projectName, $options: 'i' }
+      }
+    });
+  }
+
+  // Execute the aggregation
+  const results = await Project.aggregate([
+    ...pipeline,
+    { $skip: (page - 1) * limit },
+    { $limit: limit }
+  ]);
+
+  // Get total count
+  const totalResults = await Project.aggregate([
+    ...pipeline,
+    { $count: 'total' }
+  ]);
+
+  const total = totalResults.length > 0 ? totalResults[0].total : 0;
+
+  return {
+    results,
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit),
+    totalResults: total,
+  };
+};
+
+/**
+ * Get projects for procurement team (basic info only)
+ * @param {Object} user - The authenticated procurement user
+ * @param {Object} options - Query options
+ * @returns {Promise<Object>}
+ */
+export const getProjectsForProcurement = async (user, options) => {
+  const { limit = 10, page = 1, sortBy } = options;
+  const sort = sortBy
+    ? { [sortBy.split(':')[0]]: sortBy.split(':')[1] === 'desc' ? -1 : 1 }
+    : { createdAt: -1 };
+
+  // Find requirements shared with this procurement user
+  const sharedRequirements = await Requirement.find({
+    'sharedWith.user': user._id
+  }).select('_id project');
+
+  const projectIds = sharedRequirements.map(req => req.project).filter(Boolean);
+
+  if (projectIds.length === 0) {
+    return { results: [], page, limit, totalPages: 0, totalResults: 0 };
+  }
+
+  const projects = await Project.find({ _id: { $in: projectIds } })
+    .populate('lead', 'customerName email mobileNumber')
+    .populate('requirement', 'requirementType')
+    .select('_id projectName projectCode status createdAt')
+    .sort(sort)
+    .skip((page - 1) * limit)
+    .limit(limit)
+    .lean();
+
+  const totalResults = await Project.countDocuments({ _id: { $in: projectIds } });
+
+  return {
+    results: projects,
+    page,
+    limit,
+    totalPages: Math.ceil(totalResults / limit),
+    totalResults,
+  };
+};
+
+/**
+ * Get architect documents for a specific project (procurement team)
+ * @param {string} projectId - The ID of the project
+ * @param {Object} user - The authenticated procurement user
+ * @returns {Promise<Array>}
+ */
+export const getProjectDocumentsForProcurement = async (projectId, user) => {
+  // Check if the procurement user has access to this project
+  const sharedRequirement = await Requirement.findOne({
+    project: projectId,
+    'sharedWith.user': user._id
+  });
+
+  if (!sharedRequirement) {
+    throw new ApiError(httpStatus.FORBIDDEN, 'You do not have access to this project');
+  }
+
+  const project = await Project.findById(projectId)
+    .populate('lead', 'customerName email mobileNumber')
+    .populate('requirement', 'requirementType')
+    .populate({
+      path: 'architectDocuments.architect',
+      select: 'name email'
+    });
+
+  if (!project) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Project not found');
+  }
+
+  // Filter to only show approved documents
+  const approvedDocuments = project.architectDocuments.filter(doc =>
+    doc.adminStatus === 'Approved' && doc.customerStatus === 'Approved'
+  );
+
+  return {
+    project: {
+      _id: project._id,
+      projectName: project.projectName,
+      projectCode: project.projectCode,
+      status: project.status,
+      lead: project.lead,
+      requirement: project.requirement
+    },
+    documents: approvedDocuments
+  };
+}; 

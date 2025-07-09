@@ -227,6 +227,15 @@ const architectDocumentSchema = mongoose.Schema({
         type: Boolean,
         default: false,
     },
+    sentToProcurement: {
+        type: Boolean,
+        default: false,
+    },
+    procurementSentAt: Date,
+    sentToProcurementBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+    },
     submittedAt: {
         type: Date,
         default: Date.now,

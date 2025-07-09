@@ -1,8 +1,15 @@
 const Roles = Object.freeze({
-  SUPER_ADMIN: 'SuperAdmin',
+  PROCUREMENT: 'procurement-team',
+  ARCHITECT: 'architect',
+  FABRICATION_PLANNER: 'fabrication-planner',
+  SITE_ENGINEER: 'site-engineer',
+  WORKER: 'worker',
+  DISPATCH_INSTALLATION: 'dispatch-installation',
+  SALES_ADMIN: 'sales-admin',
+  USER: 'user',
   ADMIN: 'Admin',
-  SUPERVISOR: 'Supervisor',
-  WORKER: 'Worker',
+  WORKER: 'worker',
+  DISPATCH_INSTALLATION: 'dispatch-installation',
 });
 
 export default Roles;

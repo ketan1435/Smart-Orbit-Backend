@@ -29,6 +29,7 @@ const sharedWithSchema = new mongoose.Schema({
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     sharedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     sharedAt: { type: Date, default: Date.now },
+    isSeen: { type: Boolean, default: false },
 }, { _id: false });
 
 export const fileSchema = new mongoose.Schema({

@@ -9,6 +9,7 @@ import userRoute from './user.route.js';
 import authRoute from './auth.route.js';
 import siteVisitRoute from './siteVisit.route.js';
 import projectRoute from './project.route.js';
+import bomRoute from './bom.route.js';
 
 const router = express.Router();
 
@@ -44,6 +45,10 @@ const defaultRoutes = [
   {
     path: '/projects',
     route: projectRoute,
+  },
+  {
+    path: '/',
+    route: bomRoute,
   },
   // {
   //   path: '/income',

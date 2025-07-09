@@ -96,3 +96,46 @@ export const customerReviewDocument = catchAsync(async (req, res) => {
     );
     res.send(project);
 });
+
+export const sendDocumentToProcurement = catchAsync(async (req, res) => {
+    const project = await projectService.sendDocumentToProcurement(
+        req.params.projectId,
+        req.params.documentId,
+        req.user
+    );
+    res.status(httpStatus.OK).send({
+        status: 1,
+        message: 'Document sent to procurement successfully.',
+        data: project
+    });
+});
+
+export const getApprovedDocumentsForProcurement = catchAsync(async (req, res) => {
+    const filter = pick(req.query, ['projectName']);
+    const options = pick(req.query, ['sortBy', 'limit', 'page']);
+    const result = await projectService.getApprovedDocumentsForProcurement(filter, options);
+    res.status(httpStatus.OK).send({
+        status: 1,
+        message: 'Approved documents for procurement fetched successfully.',
+        data: result
+    });
+});
+
+export const getProjectsForProcurement = catchAsync(async (req, res) => {
+    const options = pick(req.query, ['sortBy', 'limit', 'page']);
+    const result = await projectService.getProjectsForProcurement(req.user, options);
+    res.status(httpStatus.OK).send({
+        status: 1,
+        message: 'Projects for procurement fetched successfully.',
+        data: result
+    });
+});
+
+export const getProjectDocumentsForProcurement = catchAsync(async (req, res) => {
+    const result = await projectService.getProjectDocumentsForProcurement(req.params.projectId, req.user);
+    res.status(httpStatus.OK).send({
+        status: 1,
+        message: 'Project documents for procurement fetched successfully.',
+        data: result
+    });
+});

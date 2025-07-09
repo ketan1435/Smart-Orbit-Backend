@@ -21,6 +21,7 @@ const scpDataSchema = Joi.object({
   financing: Joi.string().allow(''),
   roadWidth: Joi.string().allow(''),
   targetCompletionDate: Joi.string().allow(''),
+  siteEngineer: Joi.string().allow(null, ''),
   siteVisitDate: Joi.date().allow(null, ''),
   scpRemarks: Joi.string().allow(''),
 });
