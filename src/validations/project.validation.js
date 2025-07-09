@@ -126,6 +126,14 @@ export const getProjectsForCustomer = {
     }),
 };
 
+export const getProjectsForArchitect = {
+    query: Joi.object().keys({
+        sortBy: Joi.string(),
+        limit: Joi.number().integer(),
+        page: Joi.number().integer(),
+    }),
+};
+
 export const sendDocumentToProcurement = {
     params: Joi.object().keys({
         projectId: Joi.string().custom(objectId).required(),

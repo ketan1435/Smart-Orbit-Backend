@@ -460,6 +460,45 @@ export const getProjectsForCustomer = async (user, options) => {
 };
 
 /**
+ * Get projects for architect
+ * @param {Object} user - The authenticated user object (architect)
+ * @param {Object} options - Query options
+ * @param {string} [options.sortBy] - Sort option in the format: field:(desc|asc)
+ * @param {number} [options.limit] - Maximum number of results per page (default: 10)
+ * @param {number} [options.page] - Current page (default: 1)
+ * @returns {Promise<Object>}
+ */
+export const getProjectsForArchitect = async (user, options) => {
+  const { limit = 10, page = 1, sortBy } = options;
+  const sort = sortBy
+    ? { [sortBy.split(':')[0]]: sortBy.split(':')[1] === 'desc' ? -1 : 1 }
+    : { createdAt: -1 };
+
+  // Find projects where the architect is assigned to this user
+  const projectFilter = { architect: user._id };
+
+  const projects = await Project.find(projectFilter)
+    .populate('lead', 'customerName email mobileNumber')
+    .populate('requirement', 'requirementType')
+    .populate('architect', 'name email')
+    .select('_id projectName projectCode status createdAt startDate estimatedCompletionDate budget architectDocuments')
+    .sort(sort)
+    .skip((page - 1) * limit)
+    .limit(limit)
+    .lean();
+
+  const totalResults = await Project.countDocuments(projectFilter);
+
+  return {
+    results: projects,
+    page,
+    limit,
+    totalPages: Math.ceil(totalResults / limit),
+    totalResults,
+  };
+};
+
+/**
  * Send approved architect document to procurement
  * @param {string} projectId - The ID of the project
  * @param {string} documentId - The ID of the document

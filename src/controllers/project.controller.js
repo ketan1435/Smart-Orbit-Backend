@@ -64,6 +64,12 @@ export const getProjectsForCustomer = catchAsync(async (req, res) => {
     res.status(httpStatus.OK).send({ status: 1, message: 'Your projects fetched successfully.', data: result });
 });
 
+export const getProjectsForArchitect = catchAsync(async (req, res) => {
+    const options = pick(req.query, ['sortBy', 'limit', 'page']);
+    const result = await projectService.getProjectsForArchitect(req.user, options);
+    res.status(httpStatus.OK).send({ status: 1, message: 'Your projects fetched successfully.', data: result });
+});
+
 export const getArchitectDocumentsForCustomer = catchAsync(async (req, res) => {
     const documents = await projectService.getArchitectDocumentsForCustomer(req.params.projectId, req.user);
     res.status(httpStatus.OK).send(documents);

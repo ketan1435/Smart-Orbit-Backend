@@ -584,7 +584,7 @@ router
  */
 router
     .route('/projects/:projectId/boms/:bomId/submit')
-    .patch(auth('procurement'), validate(bomValidation.submitBOM), bomController.submitBOM);
+    .patch(auth('submitBOM'), validate(bomValidation.submitBOM), bomController.submitBOM);
 
 /**
  * @swagger

@@ -22,6 +22,14 @@ router
     );
 
 router
+    .route('/architect/my-projects')
+    .get(
+        auth('getProjects'),
+        validate(projectValidation.getProjectsForArchitect),
+        projectController.getProjectsForArchitect
+    );
+
+router
     .route('/:projectId/visits')
     .get(auth('getProjects'), validate(projectValidation.getProjectSiteVisits), projectController.getProjectSiteVisits);
 
@@ -220,7 +228,7 @@ export default router;
  *         description: Sorting order (e.g., createdAt:desc, projectName:asc)
  *     responses:
  *       200:
- *         description: List of projects for the customer
+ *         description: Customer projects fetched successfully
  *         content:
  *           application/json:
  *             schema:
@@ -248,9 +256,73 @@ export default router;
  *                     totalResults:
  *                       type: integer
  *       401:
- *         $ref: '#/components/responses/Unauthorized'
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
  */
 
+/**
+ * @swagger
+ * /projects/architect/my-projects:
+ *   get:
+ *     summary: Get projects for the logged-in architect
+ *     description: Fetch all projects assigned to the currently authenticated architect, with pagination and sorting.
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number for pagination
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Number of results per page
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *           example: createdAt:desc
+ *         description: Sorting order (e.g., createdAt:desc, projectName:asc)
+ *     responses:
+ *       200:
+ *         description: Architect projects fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: Your projects fetched successfully.
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     results:
+ *                       type: array
+ *                       items:
+ *                         $ref: '#/components/schemas/Project'
+ *                     page:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     totalPages:
+ *                       type: integer
+ *                     totalResults:
+ *                       type: integer
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ */
 
 /**
  * @swagger

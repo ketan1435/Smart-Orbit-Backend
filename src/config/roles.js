@@ -4,7 +4,7 @@ const allRoles = {
   'sales-admin': ['manageLeads', 'getProjects', 'getSiteVisits'],
   architect: ['manageDrawings', 'getProjects', 'manageProjects'],
   'fabrication-planner': ['manageBOM', 'getProjects'],
-  'procurement-team': ['manageVendors', 'getProjects', 'getReusableBOMs', 'createBoms', 'getBoms'],
+  'procurement-team': ['manageVendors', 'getProjects', 'getReusableBOMs', 'createBoms', 'getBoms', 'submitBOM'],
   'site-engineer': ['manageTasks', 'verifyWork', 'getProjects', 'manageSiteVisits', 'getSiteVisits'],
   worker: ['manageTasks', 'getProjects'],
   'dispatch-installation': ['manageDispatch', 'getProjects'],

@@ -328,7 +328,7 @@ export const addDocumentsToSiteVisit = async (visitId, body, user) => {
     );
   }
 
-  if (visit.siteEngineer.toString() !== user.id.toString()) {
+  if (visit.siteEngineer._id.toString() !== user._id.toString()) {
     throw new ApiError(
       httpStatus.FORBIDDEN,
       'You are not authorized to add documents to this site visit.'
