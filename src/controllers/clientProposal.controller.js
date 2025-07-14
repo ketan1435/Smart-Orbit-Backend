@@ -85,4 +85,53 @@ export const getMyClientProposals = catchAsync(async (req, res) => {
         message: 'My client proposals fetched successfully',
         data: result,
     });
-}); 
+});
+
+export const getClientProposalPDF = catchAsync(async (req, res) => {
+    const pdfBuffer = await clientProposalService.generateClientProposalPDFById(
+        req.params.clientProposalId,
+        req.user.id
+    );
+
+    res.set({
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="client-proposal-${req.params.clientProposalId}.pdf"`,
+        'Content-Length': pdfBuffer.length,
+    });
+
+    res.send(pdfBuffer);
+});
+
+export const sendToCustomer = catchAsync(async (req, res) => {
+    const clientProposal = await clientProposalService.sendToCustomer(
+        req.params.clientProposalId,
+        req.user.id
+    );
+    res.status(httpStatus.OK).send({
+        status: 1,
+        message: 'Client proposal sent to customer successfully',
+        data: clientProposal,
+    });
+});
+
+export const customerReview = catchAsync(async (req, res) => {
+    const clientProposal = await clientProposalService.customerReview(
+        req.params.clientProposalId,
+        req.body,
+        req.user.id
+    );
+    res.status(httpStatus.OK).send({
+        status: 1,
+        message: `Client proposal ${req.body.status} successfully`,
+        data: clientProposal,
+    });
+});
+
+export const getSentToMeProposals = catchAsync(async (req, res) => {
+    const result = await clientProposalService.getProposalsSentToUser(req.user.id, req.query);
+    res.status(httpStatus.OK).send({
+        status: 1,
+        message: 'Proposals sent to me fetched successfully',
+        data: result,
+    });
+});

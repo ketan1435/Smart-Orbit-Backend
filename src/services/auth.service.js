@@ -27,7 +27,7 @@ export const loginUserWithEmailAndPassword = async (email, password) => {
       throw new ApiError(httpStatus.UNAUTHORIZED, 'Incorrect email or password');
     }
   }
-
+  delete user.password;
   const tokens = await tokenService.generateAuthTokens(user);
   return { user, tokens };
 };

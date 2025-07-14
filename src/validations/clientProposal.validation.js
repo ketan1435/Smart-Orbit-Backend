@@ -121,6 +121,32 @@ const deleteClientProposal = {
     }),
 };
 
+const getClientProposalPDF = {
+    params: Joi.object().keys({
+        clientProposalId: Joi.string().custom(objectId).required(),
+    }),
+};
+
+const sendToCustomer = {
+    params: Joi.object().keys({
+        clientProposalId: Joi.string().custom(objectId).required(),
+    }),
+};
+
+const customerReview = {
+    params: Joi.object().keys({
+        clientProposalId: Joi.string().custom(objectId).required(),
+    }),
+    body: Joi.object().keys({
+        status: Joi.string().valid('approved', 'rejected').required(),
+        remarks: Joi.string().when('status', {
+            is: 'rejected',
+            then: Joi.required(),
+            otherwise: Joi.optional(),
+        }),
+    }),
+};
+
 export default {
     createClientProposal,
     getClientProposals,
@@ -129,4 +155,7 @@ export default {
     updateClientProposalStatus,
     createNewVersion,
     deleteClientProposal,
+    getClientProposalPDF,
+    sendToCustomer,
+    customerReview,
 }; 

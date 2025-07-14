@@ -433,6 +433,61 @@ const router = express.Router();
 
 /**
  * @swagger
+ * /client-proposals/sent-to-me:
+ *   get:
+ *     summary: Get proposals sent to the current user for approval
+ *     description: Retrieve all client proposals that have been sent to the currently authenticated user (customer) for approval. Supports pagination and sorting.
+ *     tags: [Client Proposals]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *         description: Sort field and direction (e.g., createdAt:desc, status:asc)
+ *         example: "createdAt:desc"
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: number
+ *           minimum: 1
+ *           maximum: 100
+ *           default: 10
+ *         description: Number of items per page
+ *         example: 10
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: number
+ *           minimum: 1
+ *           default: 1
+ *         description: Page number
+ *         example: 1
+ *     responses:
+ *       "200":
+ *         description: Proposals sent to the user fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: number
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: "Proposals sent to me fetched successfully"
+ *                 data:
+ *                   $ref: '#/components/schemas/ClientProposalList'
+ *       "401":
+ *         $ref: '#/components/responses/Unauthorized'
+ *       "403":
+ *         $ref: '#/components/responses/Forbidden'
+ */
+
+/**
+ * @swagger
  * /client-proposals/{clientProposalId}:
  *   get:
  *     summary: Get a specific client proposal
@@ -486,6 +541,209 @@ const router = express.Router();
  *                   example: null
  */
 
+/**
+ * @swagger
+ * /client-proposals/{clientProposalId}/pdf:
+ *   get:
+ *     summary: Generate PDF for a client proposal
+ *     description: Generate and download a PDF version of a specific client proposal. The PDF includes all proposal details, customer information, and formatted content sections.
+ *     tags: [Client Proposals]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: clientProposalId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Client proposal ID
+ *         example: "507f1f77bcf86cd799439011"
+ *     responses:
+ *       "200":
+ *         description: PDF generated successfully
+ *         content:
+ *           application/pdf:
+ *             schema:
+ *               type: string
+ *               format: binary
+ *             example: "PDF binary data"
+ *         headers:
+ *           Content-Disposition:
+ *             description: Filename for download
+ *             schema:
+ *               type: string
+ *               example: "attachment; filename=client-proposal-507f1f77bcf86cd799439011.pdf"
+ *       "401":
+ *         $ref: '#/components/responses/Unauthorized'
+ *       "403":
+ *         $ref: '#/components/responses/Forbidden'
+ *       "404":
+ *         description: Client proposal not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: number
+ *                   example: 0
+ *                 message:
+ *                   type: string
+ *                   example: "Client proposal not found"
+ *                 data:
+ *                   type: null
+ *                   example: null
+ *       "500":
+ *         description: PDF generation failed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: number
+ *                   example: 0
+ *                 message:
+ *                   type: string
+ *                   example: "PDF generation failed: Internal server error"
+ *                 data:
+ *                   type: null
+ *                   example: null
+ */
+
+/**
+ * @swagger
+ * /client-proposals/{clientProposalId}/send-to-customer:
+ *   post:
+ *     summary: Send client proposal to customer
+ *     description: Send an approved client proposal to the customer for review. This changes the proposal status to 'sent' and marks it as sent to customer.
+ *     tags: [Client Proposals]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: clientProposalId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Client proposal ID
+ *         example: "507f1f77bcf86cd799439011"
+ *     responses:
+ *       "200":
+ *         description: Client proposal sent to customer successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: number
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: "Client proposal sent to customer successfully"
+ *                 data:
+ *                   $ref: '#/components/schemas/ClientProposal'
+ *       "400":
+ *         description: Only approved proposals can be sent to customers
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: number
+ *                   example: 0
+ *                 message:
+ *                   type: string
+ *                   example: "Only approved proposals can be sent to customers"
+ *                 data:
+ *                   type: null
+ *                   example: null
+ *       "401":
+ *         $ref: '#/components/responses/Unauthorized'
+ *       "403":
+ *         $ref: '#/components/responses/Forbidden'
+ *       "404":
+ *         $ref: '#/components/responses/NotFound'
+ *
+ * @swagger
+ * /client-proposals/{clientProposalId}/customer-review:
+ *   patch:
+ *     summary: Customer review of client proposal
+ *     description: Allow customers to review and approve/reject a client proposal that has been sent to them.
+ *     tags: [Client Proposals]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: clientProposalId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Client proposal ID
+ *         example: "507f1f77bcf86cd799439011"
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - status
+ *             properties:
+ *               status:
+ *                 type: string
+ *                 enum: [approved, rejected]
+ *                 description: Customer's decision on the proposal
+ *                 example: "approved"
+ *               remarks:
+ *                 type: string
+ *                 description: Customer's remarks (required if status is rejected)
+ *                 example: "The proposal looks good, but we need some modifications to the payment terms."
+ *           example:
+ *             status: "approved"
+ *             remarks: "The proposal looks good, but we need some modifications to the payment terms."
+ *     responses:
+ *       "200":
+ *         description: Customer review submitted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: number
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: "Client proposal approved successfully"
+ *                 data:
+ *                   $ref: '#/components/schemas/ClientProposal'
+ *       "400":
+ *         description: Proposal has not been sent to customer or remarks required for rejection
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: number
+ *                   example: 0
+ *                 message:
+ *                   type: string
+ *                   example: "Proposal has not been sent to customer"
+ *                 data:
+ *                   type: null
+ *                   example: null
+ *       "401":
+ *         $ref: '#/components/responses/Unauthorized'
+ *       "403":
+ *         $ref: '#/components/responses/Forbidden'
+ *       "404":
+ *         $ref: '#/components/responses/NotFound'
+ */
+
 router
     .route('/')
     .post(
@@ -504,6 +762,13 @@ router
     .get(
         auth(),
         clientProposalController.getMyClientProposals
+    );
+
+router
+    .route('/sent-to-me')
+    .get(
+        auth(),
+        clientProposalController.getSentToMeProposals
     );
 
 router
@@ -538,6 +803,30 @@ router
         auth(),
         validate(clientProposalValidation.createNewVersion),
         clientProposalController.createNewVersion
+    );
+
+router
+    .route('/:clientProposalId/pdf')
+    .get(
+        auth(),
+        validate(clientProposalValidation.getClientProposalPDF),
+        clientProposalController.getClientProposalPDF
+    );
+
+router
+    .route('/:clientProposalId/send-to-customer')
+    .post(
+        auth(),
+        validate(clientProposalValidation.sendToCustomer),
+        clientProposalController.sendToCustomer
+    );
+
+router
+    .route('/:clientProposalId/customer-review')
+    .patch(
+        auth(),
+        validate(clientProposalValidation.customerReview),
+        clientProposalController.customerReview
     );
 
 export default router;

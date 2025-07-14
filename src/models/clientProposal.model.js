@@ -33,6 +33,20 @@ const ClientProposalSchema = new Schema(
             enum: ['draft', 'sent', 'approved', 'rejected', 'archived'],
             default: 'draft',
         },
+        // Customer approval workflow
+        sentToCustomer: {
+            type: Boolean,
+            default: false,
+        },
+        sentToCustomerAt: {
+            type: Date,
+        },
+        customerRemarks: {
+            type: String,
+        },
+        customerReviewedAt: {
+            type: Date,
+        },
         version: {
             type: Number,
             default: 1,
@@ -41,11 +55,19 @@ const ClientProposalSchema = new Schema(
         // Metadata
         createdBy: {
             type: Schema.Types.ObjectId,
-            ref: 'User',
+            refpath: 'createdByModel',
+        },
+        createdByModel: {
+            type: String,
+            enum: ['User', 'Admin'],
         },
         updatedBy: {
             type: Schema.Types.ObjectId,
-            ref: 'User',
+            refpath: 'updatedByModel',
+        },
+        updatedByModel: {
+            type: String,
+            enum: ['User', 'Admin'],
         },
     },
     {
