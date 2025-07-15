@@ -804,4 +804,15 @@ export const getProjectDocumentsForProcurement = async (projectId, user) => {
     },
     documents: approvedDocuments
   };
+};
+
+export const getProjectById = async (projectId) => {
+  const project = await Project.findById(projectId)
+    .populate('lead')
+    .populate('architect')
+    .populate('requirement');
+  if (!project) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Project not found');
+  }
+  return project;
 }; 

@@ -30,6 +30,10 @@ router
     );
 
 router
+    .route('/:projectId')
+    .get(auth('getProjects'), projectController.getProjectById);
+
+router
     .route('/:projectId/visits')
     .get(auth('getProjects'), validate(projectValidation.getProjectSiteVisits), projectController.getProjectSiteVisits);
 
@@ -322,6 +326,46 @@ export default router;
  *         description: Unauthorized
  *       403:
  *         description: Forbidden
+ */
+
+/**
+ * @swagger
+ * /projects/{projectId}:
+ *   get:
+ *     summary: Get a project by its ID
+ *     description: Fetch a single project by its unique ID, including populated lead, architect, and requirement fields.
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the project to fetch.
+ *     responses:
+ *       200:
+ *         description: Project fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: Project fetched successfully.
+ *                 data:
+ *                   $ref: '#/components/schemas/Project'
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Project not found
  */
 
 /**

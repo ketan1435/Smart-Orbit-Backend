@@ -145,3 +145,8 @@ export const getProjectDocumentsForProcurement = catchAsync(async (req, res) => 
         data: result
     });
 });
+
+export const getProjectById = catchAsync(async (req, res) => {
+    const project = await projectService.getProjectById(req.params.projectId);
+    res.status(httpStatus.OK).send({ status: 1, message: 'Project fetched successfully.', data: project });
+});
