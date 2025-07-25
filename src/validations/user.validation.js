@@ -78,3 +78,34 @@ export const searchUsers = {
     page: Joi.number().integer(),
   }),
 };
+
+export const createWorkerOrFabricatorSchema = Joi.object({
+  name: Joi.string().required(),
+  mobileNumber: Joi.string().optional(),
+  role: Joi.string().valid('worker', 'fabricator').required(),
+  phoneNumber: Joi.string().optional(),
+  city: Joi.string().optional(),
+  region: Joi.string().optional(),
+  address: Joi.string().optional(),
+  education: Joi.string().optional(),
+  experience: Joi.string().optional(),
+});
+
+export const updateWorkerBySiteEngineer = {
+  params: Joi.object().keys({
+    id: Joi.string().custom(objectId).required(),
+  }),
+  body: Joi.object().keys({
+    name: Joi.string().optional(),
+    email: Joi.string().email().optional(),
+    mobileNumber: Joi.string().optional(),
+    role: Joi.string().valid('worker', 'fabricator').optional(),
+    isActive: Joi.boolean().optional(),
+  }),
+};
+
+export const deleteWorkerBySiteEngineer = {
+  params: Joi.object().keys({
+    id: Joi.string().custom(objectId).required(),
+  }),
+};

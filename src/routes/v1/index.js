@@ -11,6 +11,9 @@ import siteVisitRoute from './siteVisit.route.js';
 import projectRoute from './project.route.js';
 import bomRoute from './bom.route.js';
 import clientProposalRoute from './clientProposal.route.js';
+import vendorRoute from './vendor.route.js';
+import poRoute from './po.route.js';
+import siteworkRoute from './sitework.route.js';
 
 const router = express.Router();
 
@@ -55,6 +58,18 @@ const defaultRoutes = [
     path: '/client-proposals',
     route: clientProposalRoute,
   },
+  {
+    path: '/vendors',
+    route: vendorRoute,
+  },
+  {
+    path: '/pos',
+    route: poRoute,
+  },
+  {
+    path: '/siteworks',
+    route: siteworkRoute,
+  },
   // {
   //   path: '/income',
   //   route: incomeRoute,
@@ -66,10 +81,6 @@ const defaultRoutes = [
   // {
   //   path: '/daily-entries',
   //   route: dailyEntriesRoute,
-  // },
-  // {
-  //   path: '/vendors',
-  //   route: vendorRoute,
   // },
   // {
   //   path: '/subscription-plans',

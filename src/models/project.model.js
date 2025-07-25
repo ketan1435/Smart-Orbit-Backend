@@ -182,7 +182,7 @@ const architectProposalSchema = mongoose.Schema({
     remarks: String,
     status: {
         type: String,
-        enum: ['Pending', 'Responded', 'Withdrawn', 'Expired', 'Accepted', 'Rejected'],
+        enum: ['Pending', 'Open', 'Responded', 'Withdrawn', 'Expired', 'Accepted', 'Rejected', 'Archived'],
         default: 'Pending',
     },
     submittedAt: {
@@ -283,6 +283,10 @@ const projectSchema = new mongoose.Schema(
         startDate: {
             type: Date,
         },
+        assignedSiteEngineer: [{
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User',
+        }],
         estimatedCompletionDate: {
             type: Date,
         },

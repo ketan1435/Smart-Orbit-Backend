@@ -521,4 +521,305 @@ router.patch('/:userId/activate', auth('manageUsers'), validate(userValidation.g
  */
 router.patch('/:userId/deactivate', auth('manageUsers'), validate(userValidation.getUser), userController.deactivateUserController);
 
+/**
+ * @swagger
+ * /users/site-engineer/workers:
+ *   post:
+ *     summary: Create a worker or fabricator (Site Engineer only)
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - name
+ *               - email
+ *               - mobileNumber
+ *               - role
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 description: Full name of the worker/fabricator
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 description: Email address
+ *               mobileNumber:
+ *                 type: string
+ *                 description: Mobile number
+ *               role:
+ *                 type: string
+ *                 enum: [worker, fabricator]
+ *                 description: Role of the user
+ *               password:
+ *                 type: string
+ *                 description: Password (optional, will be auto-generated if not provided)
+ *           example:
+ *             name: "John Worker"
+ *             email: "john.worker@example.com"
+ *             mobileNumber: "+1234567890"
+ *             role: "worker"
+ *     responses:
+ *       201:
+ *         description: Worker created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: Worker created successfully
+ *                 data:
+ *                   type: object
+ *       403:
+ *         description: Only site engineers can create workers
+ *       400:
+ *         description: Invalid role or data
+ */
+router.post('/site-engineer/workers', auth('manageWorkers'), validate(userValidation.createWorkerBySiteEngineer), userController.createWorker);
+
+/**
+ * @swagger
+ * /users/site-engineer/workers:
+ *   get:
+ *     summary: Get workers and fabricators created by the authenticated site engineer
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Number of items per page
+ *       - in: query
+ *         name: role
+ *         schema:
+ *           type: string
+ *           enum: [worker, fabricator]
+ *         description: Filter by role
+ *       - in: query
+ *         name: name
+ *         schema:
+ *           type: string
+ *         description: Filter by name
+ *       - in: query
+ *         name: email
+ *         schema:
+ *           type: string
+ *         description: Filter by email
+ *       - in: query
+ *         name: mobileNumber
+ *         schema:
+ *           type: string
+ *         description: Filter by mobile number
+ *       - in: query
+ *         name: isActive
+ *         schema:
+ *           type: boolean
+ *         description: Filter by active status
+ *     responses:
+ *       200:
+ *         description: Workers retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: My workers retrieved successfully
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       _id:
+ *                         type: string
+ *                       name:
+ *                         type: string
+ *                       email:
+ *                         type: string
+ *                       mobileNumber:
+ *                         type: string
+ *                       role:
+ *                         type: string
+ *                       isActive:
+ *                         type: boolean
+ *                       createdAt:
+ *                         type: string
+ *                         format: date-time
+ *                 page:
+ *                   type: integer
+ *                 limit:
+ *                   type: integer
+ *                 total:
+ *                   type: integer
+ *                 totalPages:
+ *                   type: integer
+ */
+router.get('/site-engineer/workers', auth('getWorkers'), userController.getMyWorkers);
+
+/**
+ * @swagger
+ * /users/site-engineer/workers/{id}:
+ *   put:
+ *     summary: Update a worker or fabricator (Site Engineer only)
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Worker ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 description: Full name of the worker/fabricator
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 description: Email address
+ *               mobileNumber:
+ *                 type: string
+ *                 description: Mobile number
+ *               role:
+ *                 type: string
+ *                 enum: [worker, fabricator]
+ *                 description: Role of the user
+ *               isActive:
+ *                 type: boolean
+ *                 description: Active status
+ *           example:
+ *             name: "John Worker Updated"
+ *             email: "john.updated@example.com"
+ *             mobileNumber: "+1234567890"
+ *             role: "fabricator"
+ *             isActive: true
+ *     responses:
+ *       200:
+ *         description: Worker updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: Worker updated successfully
+ *                 data:
+ *                   type: object
+ *       403:
+ *         description: Only site engineers can update workers or worker not found
+ *       404:
+ *         description: Worker not found
+ */
+router.put('/site-engineer/workers/:id', auth('manageWorkers'), validate(userValidation.updateWorkerBySiteEngineer), userController.updateWorker);
+
+/**
+ * @swagger
+ * /users/site-engineer/workers/{id}/activate:
+ *   patch:
+ *     summary: Activate a worker or fabricator (Site Engineer only)
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Worker ID
+ *     responses:
+ *       200:
+ *         description: Worker activated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: Worker activated successfully
+ *                 data:
+ *                   type: object
+ *       403:
+ *         description: Only site engineers can activate workers or worker not found
+ *       404:
+ *         description: Worker not found
+ */
+router.patch('/site-engineer/workers/:id/activate', auth('manageWorkers'), userController.activateWorker);
+
+/**
+ * @swagger
+ * /users/site-engineer/workers/{id}/deactivate:
+ *   patch:
+ *     summary: Deactivate a worker or fabricator (Site Engineer only)
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Worker ID
+ *     responses:
+ *       200:
+ *         description: Worker deactivated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: Worker deactivated successfully
+ *                 data:
+ *                   type: object
+ *       403:
+ *         description: Only site engineers can deactivate workers or worker not found
+ *       404:
+ *         description: Worker not found
+ */
+router.patch('/site-engineer/workers/:id/deactivate', auth('manageWorkers'), userController.deactivateWorker);
+
 export default router; 

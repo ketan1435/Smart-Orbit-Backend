@@ -1,6 +1,12 @@
 import Joi from 'joi';
 import { objectId } from './custom.validation.js';
 
+const siteVisitSchema = Joi.object({
+  siteEngineer: Joi.string().custom(objectId).required(),
+  visitDate: Joi.date().required(),
+  hasRequirementEditAccess: Joi.boolean().default(false),
+});
+
 const scpDataSchema = Joi.object({
   siteAddress: Joi.string().allow(''),
   googleLocationLink: Joi.string().uri({ allowRelative: false }).allow(''),
@@ -21,8 +27,9 @@ const scpDataSchema = Joi.object({
   financing: Joi.string().allow(''),
   roadWidth: Joi.string().allow(''),
   targetCompletionDate: Joi.string().allow(''),
-  siteEngineer: Joi.string().allow(null, ''),
-  siteVisitDate: Joi.date().allow(null, ''),
+  siteEngineer: Joi.string().allow(null, ''), // Keep for backward compatibility
+  siteVisitDate: Joi.date().allow(null, ''), // Keep for backward compatibility
+  siteVisits: Joi.array().items(siteVisitSchema), // New field for multiple site visits
   scpRemarks: Joi.string().allow(''),
 });
 

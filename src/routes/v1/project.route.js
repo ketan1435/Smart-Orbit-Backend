@@ -29,6 +29,82 @@ router
         projectController.getProjectsForArchitect
     );
 
+
+
+/**
+ * @swagger
+ * /projects/my-sitework-projects:
+ *   get:
+ *     summary: Get projects where the authenticated user is assigned in any sitework
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Number of items per page
+ *     responses:
+ *       200:
+ *         description: My sitework projects retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: My sitework projects retrieved successfully
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       _id:
+ *                         type: string
+ *                       projectName:
+ *                         type: string
+ *                       projectCode:
+ *                         type: string
+ *                       status:
+ *                         type: string
+ *                       startDate:
+ *                         type: string
+ *                         format: date-time
+ *                       estimatedCompletionDate:
+ *                         type: string
+ *                         format: date-time
+ *                       budget:
+ *                         type: string
+ *                       lead:
+ *                         type: object
+ *                         properties:
+ *                           customerName:
+ *                             type: string
+ *                           mobileNumber:
+ *                             type: string
+ *                 page:
+ *                   type: integer
+ *                 limit:
+ *                   type: integer
+ *                 total:
+ *                   type: integer
+ *                 totalPages:
+ *                   type: integer
+ */
+router.get('/my-sitework-projects', auth(), projectController.getMySiteworkProjects);
+
 router
     .route('/:projectId')
     .get(auth('getProjects'), projectController.getProjectById);
@@ -98,6 +174,195 @@ router
         validate(projectValidation.getProjectDocumentsForProcurement),
         projectController.getProjectDocumentsForProcurement
     );
+
+// Add these routes before the export statement
+
+/**
+ * @swagger
+ * /projects/{projectId}/assign-site-engineers:
+ *   post:
+ *     summary: Assign site engineers to a project
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The project ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - siteEngineerIds
+ *             properties:
+ *               siteEngineerIds:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: Array of site engineer user IDs
+ *           example:
+ *             siteEngineerIds: ["64f31a7b7e5d6e001f7e1234", "64f31a7b7e5d6e001f7e5678"]
+ *     responses:
+ *       200:
+ *         description: Site engineers assigned successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: Site engineers assigned successfully
+ *                 data:
+ *                   type: object
+ *       404:
+ *         description: Project not found
+ */
+router
+    .route('/:projectId/assign-site-engineers')
+    .post(auth('manageProjects'), projectController.assignSiteEngineers);
+
+/**
+ * @swagger
+ * /projects/{projectId}/assigned-site-engineers:
+ *   get:
+ *     summary: Get assigned site engineers for a project
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The project ID
+ *     responses:
+ *       200:
+ *         description: Assigned site engineers retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: Assigned site engineers retrieved successfully
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       _id:
+ *                         type: string
+ *                       name:
+ *                         type: string
+ *                       email:
+ *                         type: string
+ *                       role:
+ *                         type: string
+ *       404:
+ *         description: Project not found
+ */
+router
+    .route('/:projectId/assigned-site-engineers')
+    .get(auth('getProjects'), projectController.getAssignedSiteEngineers);
+
+// Add this route after the existing routes
+
+/**
+ * @swagger
+ * /projects/site-engineer/my-assigned-projects:
+ *   get:
+ *     summary: Get assigned projects for the authenticated site engineer
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Number of items per page
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [Draft, Pending, Active, OnHold, Completed, Cancelled]
+ *         description: Filter by project status
+ *     responses:
+ *       200:
+ *         description: Assigned projects retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: My assigned projects retrieved successfully
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       _id:
+ *                         type: string
+ *                       projectName:
+ *                         type: string
+ *                       projectCode:
+ *                         type: string
+ *                       status:
+ *                         type: string
+ *                       startDate:
+ *                         type: string
+ *                         format: date-time
+ *                       estimatedCompletionDate:
+ *                         type: string
+ *                         format: date-time
+ *                       budget:
+ *                         type: string
+ *                       lead:
+ *                         type: object
+ *                         properties:
+ *                           customerName:
+ *                             type: string
+ *                           mobileNumber:
+ *                             type: string
+ *                 page:
+ *                   type: integer
+ *                 limit:
+ *                   type: integer
+ *                 total:
+ *                   type: integer
+ *                 totalPages:
+ *                   type: integer
+ */
+router
+    .route('/site-engineer/my-assigned-projects')
+    .get(auth('getProjects'), projectController.getMyAssignedProjects);
 
 // Define project routes here later
 // For example:

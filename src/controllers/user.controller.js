@@ -3,6 +3,7 @@ import pick from '../utils/pick.js';
 import ApiError from '../utils/ApiError.js';
 import catchAsync from '../utils/catchAsync.js';
 import { userService } from '../services/index.js';
+import { createWorkerBySiteEngineerService, getWorkersBySiteEngineerService, updateWorkerBySiteEngineerService, activateWorkerBySiteEngineerService, deactivateWorkerBySiteEngineerService } from '../services/user.service.js';
 
 const createUser = catchAsync(async (req, res) => {
   const user = await userService.createUser(req.body);
@@ -110,6 +111,60 @@ const getSiteEngineers = catchAsync(async (req, res) => {
   // a site engineer should be active to be assigned a task
   const result = await userService.queryUsers({ ...filter, role: 'site-engineer', isActive: true }, options);
   res.send({ status: 1, ...result });
+});
+
+export const createWorker = catchAsync(async (req, res) => {
+  const worker = await createWorkerBySiteEngineerService(req.body, req.user.id);
+  res.status(httpStatus.CREATED).json({
+    status: 1,
+    message: 'User created successfully',
+    data: worker
+  });
+});
+
+export const getMyWorkers = catchAsync(async (req, res) => {
+  const result = await getWorkersBySiteEngineerService(req.user.id, req.query);
+  res.status(httpStatus.OK).json({
+    status: 1,
+    message: 'My workers retrieved successfully',
+    ...result
+  });
+});
+
+export const updateWorker = catchAsync(async (req, res) => {
+  const worker = await updateWorkerBySiteEngineerService(req.params.id, req.user.id, req.body);
+  if (!worker) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Worker not found');
+  }
+  res.status(httpStatus.OK).json({
+    status: 1,
+    message: 'Worker updated successfully',
+    data: worker
+  });
+});
+
+export const activateWorker = catchAsync(async (req, res) => {
+  const worker = await activateWorkerBySiteEngineerService(req.params.id, req.user.id);
+  if (!worker) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Worker not found');
+  }
+  res.status(httpStatus.OK).json({
+    status: 1,
+    message: 'Worker activated successfully',
+    data: worker
+  });
+});
+
+export const deactivateWorker = catchAsync(async (req, res) => {
+  const worker = await deactivateWorkerBySiteEngineerService(req.params.id, req.user.id);
+  if (!worker) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Worker not found');
+  }
+  res.status(httpStatus.OK).json({
+    status: 1,
+    message: 'Worker deactivated successfully',
+    data: worker
+  });
 });
 
 export {

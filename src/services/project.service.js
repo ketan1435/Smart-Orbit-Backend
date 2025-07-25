@@ -5,6 +5,7 @@ import { mongoose } from 'mongoose';
 import Requirement from '../models/requirement.model.js';
 import httpStatus from 'http-status';
 import storage from '../factory/storage.factory.js';
+import Sitework from '../models/sitework.model.js';
 
 /**
  * Generates a unique project code.
@@ -815,4 +816,80 @@ export const getProjectById = async (projectId) => {
     throw new ApiError(httpStatus.NOT_FOUND, 'Project not found');
   }
   return project;
+};
+
+export const assignSiteEngineersService = async (projectId, siteEngineerIds) => {
+  return Project.findByIdAndUpdate(
+    projectId,
+    { assignedSiteEngineer: siteEngineerIds }, // Now an array
+    { new: true }
+  ).populate('assignedSiteEngineer', 'name email role');
+};
+
+export const getAssignedSiteEngineersService = async (projectId) => {
+  const project = await Project.findById(projectId)
+    .populate('assignedSiteEngineer', 'name email role')
+    .select('assignedSiteEngineer');
+
+  return project ? project.assignedSiteEngineer : [];
+};
+
+export const getAssignedProjectsForSiteEngineerService = async (siteEngineerId, query) => {
+  const { page = 1, limit = 10, status } = query;
+  const filter = {
+    assignedSiteEngineer: siteEngineerId
+  };
+
+  if (status) {
+    filter.status = status;
+  }
+
+  const skip = (parseInt(page) - 1) * parseInt(limit);
+  const [projects, total] = await Promise.all([
+    Project.find(filter)
+      .select('projectName projectCode status startDate estimatedCompletionDate budget')
+      .populate('lead', 'customerName mobileNumber')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit)),
+    Project.countDocuments(filter)
+  ]);
+
+  return {
+    data: projects,
+    page: parseInt(page),
+    limit: parseInt(limit),
+    total,
+    totalPages: Math.ceil(total / parseInt(limit)),
+  };
+};
+
+export const getProjectsForUserAssignedInSiteworkService = async (userId, query) => {
+  // 1. Find all siteworks where user is assigned
+  const siteworks = await Sitework.find({ assignedUsers: userId }).select('project');
+  const projectIds = [...new Set(siteworks.map(sw => sw.project.toString()))];
+  if (projectIds.length === 0) {
+    return { data: [], page: 1, limit: 10, total: 0, totalPages: 0 };
+  }
+
+  // 2. Paginate and fetch projects
+  const { page = 1, limit = 10 } = query;
+  const skip = (parseInt(page) - 1) * parseInt(limit);
+  const [projects, total] = await Promise.all([
+    Project.find({ _id: { $in: projectIds } })
+      .select('projectName projectCode status startDate estimatedCompletionDate budget')
+      .populate('lead', 'customerName mobileNumber')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit)),
+    Project.countDocuments({ _id: { $in: projectIds } })
+  ]);
+
+  return {
+    data: projects,
+    page: parseInt(page),
+    limit: parseInt(limit),
+    total,
+    totalPages: Math.ceil(total / parseInt(limit)),
+  };
 }; 

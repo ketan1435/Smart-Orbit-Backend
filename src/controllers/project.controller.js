@@ -3,6 +3,8 @@ import catchAsync from '../utils/catchAsync.js';
 import * as projectService from '../services/project.service.js';
 import * as siteVisitService from '../services/siteVisit.service.js';
 import pick from '../utils/pick.js';
+import { assignSiteEngineersService, getAssignedSiteEngineersService, getAssignedProjectsForSiteEngineerService, getProjectsForUserAssignedInSiteworkService } from '../services/project.service.js';
+import ApiError from '../utils/ApiError.js';
 
 // Controller methods for Project will be added here.
 // For example:
@@ -149,4 +151,47 @@ export const getProjectDocumentsForProcurement = catchAsync(async (req, res) => 
 export const getProjectById = catchAsync(async (req, res) => {
     const project = await projectService.getProjectById(req.params.projectId);
     res.status(httpStatus.OK).send({ status: 1, message: 'Project fetched successfully.', data: project });
+});
+
+export const assignSiteEngineers = catchAsync(async (req, res) => {
+    const { siteEngineerIds } = req.body;
+    const project = await assignSiteEngineersService(req.params.projectId, siteEngineerIds);
+
+    if (!project) {
+        throw new ApiError(httpStatus.NOT_FOUND, 'Project not found');
+    }
+
+    res.status(httpStatus.OK).json({
+        status: 1,
+        message: 'Site engineers assigned successfully',
+        data: project
+    });
+});
+
+export const getAssignedSiteEngineers = catchAsync(async (req, res) => {
+    const siteEngineers = await getAssignedSiteEngineersService(req.params.projectId);
+
+    res.status(httpStatus.OK).json({
+        status: 1,
+        message: 'Assigned site engineers retrieved successfully',
+        data: siteEngineers
+    });
+});
+
+export const getMyAssignedProjects = catchAsync(async (req, res) => {
+    const result = await getAssignedProjectsForSiteEngineerService(req.user.id, req.query);
+    res.status(httpStatus.OK).json({
+        status: 1,
+        message: 'My assigned projects retrieved successfully',
+        ...result
+    });
+});
+
+export const getMySiteworkProjects = catchAsync(async (req, res) => {
+    const result = await getProjectsForUserAssignedInSiteworkService(req.user.id, req.query);
+    res.status(httpStatus.OK).json({
+        status: 1,
+        message: 'My sitework projects retrieved successfully',
+        ...result
+    });
 });

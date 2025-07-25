@@ -79,7 +79,7 @@ export const queryUsers = async (filter, options) => {
 
   const sortOption = sortBy ? { [sortBy.split(':')[0]]: sortBy.split(':')[1] === 'desc' ? -1 : 1 } : { createdAt: -1 };
 
-  const users = await User.find(query).sort(sortOption).skip(skip).limit(limit);
+  const users = await User.find(query).sort(sortOption).skip(skip).limit(limit).populate('createdBy', 'name email role').select('name email role createdBy isActive experience education phoneNumber city region address profilePicture ');
   const totalResults = await User.countDocuments(query);
 
   return {
@@ -276,4 +276,107 @@ export const exportUsersService = async (filter = {}) => {
 
 
   return xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+};
+
+export const createWorkerBySiteEngineerService = async (data, siteEngineerId) => {
+  // Validate that the creator is a site engineer
+  const siteEngineer = await User.findById(siteEngineerId);
+  if (!siteEngineer || siteEngineer.role !== 'site-engineer') {
+    throw new ApiError(httpStatus.FORBIDDEN, 'Only site engineers can create workers');
+  }
+
+  // Ensure the user being created has worker or fabricator role
+  if (!['worker', 'fabricator'].includes(data.role)) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Site engineers can only create workers or fabricators');
+  }
+
+  // Set the createdBy field to the site engineer
+  data.createdBy = siteEngineerId;
+
+  return User.create(data);
+};
+
+export const getWorkersBySiteEngineerService = async (siteEngineerId, query) => {
+  const { page = 1, limit = 10, role, name, email, mobileNumber, isActive } = query;
+  const filter = {
+    createdBy: siteEngineerId,
+    role: { $in: ['worker', 'fabricator'] }
+  };
+
+  // if (role) filter.role = role;
+  if (name) filter.name = { $regex: name, $options: 'i' };
+  if (email) filter.email = { $regex: email, $options: 'i' };
+  if (mobileNumber) filter.mobileNumber = { $regex: mobileNumber, $options: 'i' };
+  if (isActive !== undefined) filter.isActive = isActive === 'true' || isActive === true;
+
+  const skip = (parseInt(page) - 1) * parseInt(limit);
+  const [users, total] = await Promise.all([
+    User.find(filter)
+      .select('name email mobileNumber role isActive createdAt')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit)),
+    User.countDocuments(filter)
+  ]);
+
+  return {
+    data: users,
+    page: parseInt(page),
+    limit: parseInt(limit),
+    total,
+    totalPages: Math.ceil(total / parseInt(limit)),
+  };
+};
+
+export const updateWorkerBySiteEngineerService = async (workerId, siteEngineerId, data) => {
+  // Validate that the updater is a site engineer
+  const siteEngineer = await User.findById(siteEngineerId);
+  if (!siteEngineer || siteEngineer.role !== 'site-engineer') {
+    throw new ApiError(httpStatus.FORBIDDEN, 'Only site engineers can update workers');
+  }
+
+  // Check if the worker was created by this site engineer
+  const worker = await User.findById(workerId);
+  if (!worker || worker.createdBy.toString() !== siteEngineerId) {
+    throw new ApiError(httpStatus.FORBIDDEN, 'You can only update workers you created');
+  }
+
+  // Ensure the role remains worker or fabricator
+  if (data.role && !['worker', 'fabricator'].includes(data.role)) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Site engineers can only assign worker or fabricator roles');
+  }
+
+  return User.findByIdAndUpdate(workerId, data, { new: true });
+};
+
+export const activateWorkerBySiteEngineerService = async (workerId, siteEngineerId) => {
+  // Validate that the activator is a site engineer
+  const siteEngineer = await User.findById(siteEngineerId);
+  if (!siteEngineer || siteEngineer.role !== 'site-engineer') {
+    throw new ApiError(httpStatus.FORBIDDEN, 'Only site engineers can activate workers');
+  }
+
+  // Check if the worker was created by this site engineer
+  const worker = await User.findById(workerId);
+  if (!worker || worker.createdBy.toString() !== siteEngineerId) {
+    throw new ApiError(httpStatus.FORBIDDEN, 'You can only activate workers you created');
+  }
+
+  return User.findByIdAndUpdate(workerId, { isActive: true }, { new: true });
+};
+
+export const deactivateWorkerBySiteEngineerService = async (workerId, siteEngineerId) => {
+  // Validate that the deactivator is a site engineer
+  const siteEngineer = await User.findById(siteEngineerId);
+  if (!siteEngineer || siteEngineer.role !== 'site-engineer') {
+    throw new ApiError(httpStatus.FORBIDDEN, 'Only site engineers can deactivate workers');
+  }
+
+  // Check if the worker was created by this site engineer
+  const worker = await User.findById(workerId);
+  if (!worker || worker.createdBy.toString() !== siteEngineerId) {
+    throw new ApiError(httpStatus.FORBIDDEN, 'You can only deactivate workers you created');
+  }
+
+  return User.findByIdAndUpdate(workerId, { isActive: false }, { new: true });
 };

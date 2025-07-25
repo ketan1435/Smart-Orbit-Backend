@@ -144,6 +144,9 @@ export const customerReview = async (clientProposalId, reviewData, userId) => {
 
     // Update proposal based on customer review
     clientProposal.status = reviewData.status;
+    if (reviewData.status === 'approved') {
+        await Project.findByIdAndUpdate(clientProposal.project._id, { status: 'Open' });
+    }
     clientProposal.customerRemarks = reviewData.remarks;
     clientProposal.customerReviewedAt = new Date();
     clientProposal.updatedBy = userId;
@@ -283,6 +286,13 @@ export const updateClientProposalStatus = async (clientProposalId, status, userI
     clientProposal.status = status;
     clientProposal.updatedBy = userId;
     clientProposal.updatedByModel = userType;
+    if (status === 'sent') {
+        clientProposal.sentToCustomer = true;
+        clientProposal.sentToCustomerAt = new Date();
+    }
+    if (status === 'approved') {
+        await Project.findByIdAndUpdate(clientProposal.project._id, { status: 'Open' });
+    }
     await clientProposal.save();
 
     return clientProposal.populate(['project', 'createdBy', 'updatedBy']);
@@ -389,11 +399,6 @@ export const getProposalsSentToUser = async (userId, options) => {
 
     const filter = {
         sentToCustomer: true,
-        $or: [
-            { status: 'sent' },
-            { status: 'approved' },
-            { status: 'rejected' },
-        ],
         'customerInfo.email': user.email,
     };
 

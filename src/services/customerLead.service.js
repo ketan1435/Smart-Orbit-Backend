@@ -85,45 +85,77 @@ export const createCustomerLeadService = async (req, session) => {
     await Requirement.findByIdAndUpdate(requirementId, {
       project: project._id,
     }, { session });
-    reqData.siteEngineerId = reqData.scpData.siteEngineer;
-    reqData.visitDate = reqData.scpData.siteVisitDate;
 
-    // 5.1 If site visit details are provided, schedule it.
-    if (reqData.siteEngineerId && reqData.visitDate) {
-      // 5.1.1 Check if the site engineer is valid
-      const siteEngineer = await User.findById(reqData.siteEngineerId).session(session);
-      if (!siteEngineer || siteEngineer.role !== 'site-engineer') {
-        throw new ApiError(httpStatus.BAD_REQUEST, `Invalid site engineer ID: ${reqData.siteEngineerId}`);
-      }
+    // 5.1 Handle multiple site visits
+    const siteVisitsToCreate = [];
+    const siteEngineersToShare = new Set();
 
-      // 5.1.2 Create the new visit
-      const [siteVisit] = await SiteVisit.create([
-        {
+    // Check for new multiple site visits format
+    if (reqData.scpData.siteVisits && Array.isArray(reqData.scpData.siteVisits)) {
+      // Process multiple site visits
+      for (const siteVisitData of reqData.scpData.siteVisits) {
+        // Validate site engineer
+        const siteEngineer = await User.findById(siteVisitData.siteEngineer).session(session);
+        if (!siteEngineer || siteEngineer.role !== 'site-engineer') {
+          throw new ApiError(httpStatus.BAD_REQUEST, `Invalid site engineer ID: ${siteVisitData.siteEngineer}`);
+        }
+
+        siteVisitsToCreate.push({
           requirement: requirementId,
           project: project._id,
-          siteEngineer: reqData.siteEngineerId,
-          visitDate: reqData.visitDate,
-          hasRequirementEditAccess: true, // It's the first and only visit for this new requirement
-        }
-      ], { session });
+          siteEngineer: siteVisitData.siteEngineer,
+          visitDate: siteVisitData.visitDate,
+          hasRequirementEditAccess: siteVisitData.hasRequirementEditAccess || false,
+        });
 
-      // 5.1.3 Push to project siteVisits
-      project.siteVisits.push(siteVisit._id);
+        // Add to set for sharing if they have edit access
+        if (siteVisitData.hasRequirementEditAccess) {
+          siteEngineersToShare.add(siteVisitData.siteEngineer);
+        }
+      }
+    } else if (reqData.scpData.siteEngineer && reqData.scpData.siteVisitDate) {
+      // Backward compatibility: single site visit
+      const siteEngineer = await User.findById(reqData.scpData.siteEngineer).session(session);
+      if (!siteEngineer || siteEngineer.role !== 'site-engineer') {
+        throw new ApiError(httpStatus.BAD_REQUEST, `Invalid site engineer ID: ${reqData.scpData.siteEngineer}`);
+      }
+
+      siteVisitsToCreate.push({
+        requirement: requirementId,
+        project: project._id,
+        siteEngineer: reqData.scpData.siteEngineer,
+        visitDate: reqData.scpData.siteVisitDate,
+        hasRequirementEditAccess: true, // Default to true for backward compatibility
+      });
+
+      siteEngineersToShare.add(reqData.scpData.siteEngineer);
+    }
+
+    // 5.2 Create all site visits
+    if (siteVisitsToCreate.length > 0) {
+      const createdSiteVisits = await SiteVisit.create(siteVisitsToCreate, { session });
+
+      // 5.3 Push all site visits to project
+      for (const siteVisit of createdSiteVisits) {
+        project.siteVisits.push(siteVisit._id);
+      }
       await project.save({ session });
 
-      // 5.1.4 Add the site engineer to requirement.sharedWith if not already present
-      await Requirement.updateOne(
-        { _id: requirementId, 'sharedWith.user': { $ne: reqData.siteEngineerId } },
-        {
-          $push: {
-            sharedWith: {
-              user: reqData.siteEngineerId,
-              sharedBy: req.user.id,
+      // 5.4 Add site engineers with edit access to requirement.sharedWith
+      for (const siteEngineerId of siteEngineersToShare) {
+        await Requirement.updateOne(
+          { _id: requirementId, 'sharedWith.user': { $ne: siteEngineerId } },
+          {
+            $push: {
+              sharedWith: {
+                user: siteEngineerId,
+                sharedBy: req.user.id,
+              },
             },
           },
-        },
-        { session }
-      );
+          { session }
+        );
+      }
     }
   }
 
