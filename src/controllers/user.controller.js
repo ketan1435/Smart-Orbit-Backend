@@ -167,6 +167,51 @@ export const deactivateWorker = catchAsync(async (req, res) => {
   });
 });
 
+export const updateUserById = catchAsync(async (req, res) => {
+  const { user } = req;
+  const { userId } = req.params;
+  const updateBody = req.body;
+
+  // Only admin/sales-admin can update any user
+  // Site engineer can update only workers/fabricators they created
+  if (user.role === 'site-engineer') {
+    const targetUser = await userService.getUserById(userId);
+    if (!targetUser || !['worker', 'fabricator'].includes(targetUser.role) || String(targetUser.createdBy) !== String(user._id)) {
+      throw new ApiError(httpStatus.FORBIDDEN, 'Not authorized to update this user');
+    }
+  } else if (!['Admin', 'sales-admin'].includes(user.role)) {
+    throw new ApiError(httpStatus.FORBIDDEN, 'Not authorized to update users');
+  }
+
+  // Prevent password update here
+  if ('password' in updateBody) {
+    delete updateBody.password;
+  }
+
+  const updatedUser = await userService.updateUserById(userId, updateBody);
+  res.send({ status: 1, user: updatedUser });
+});
+
+export const resetUserPasswordById = catchAsync(async (req, res) => {
+  const { user } = req;
+  const { userId } = req.params;
+  const { password } = req.body;
+
+  // Only admin/sales-admin can reset any user
+  // Site engineer can reset only workers/fabricators they created
+  if (user.role === 'site-engineer') {
+    const targetUser = await userService.getUserById(userId);
+    if (!targetUser || !['worker', 'fabricator'].includes(targetUser.role) || String(targetUser.createdBy) !== String(user._id)) {
+      throw new ApiError(httpStatus.FORBIDDEN, 'Not authorized to reset password for this user');
+    }
+  } else if (!['Admin', 'sales-admin'].includes(user.role)) {
+    throw new ApiError(httpStatus.FORBIDDEN, 'Not authorized to reset passwords');
+  }
+
+  const updatedUser = await userService.resetUserPasswordById(userId, password);
+  res.send({ status: 1, user: updatedUser });
+});
+
 export {
   createUser,
   getUsers,

@@ -822,4 +822,111 @@ router.patch('/site-engineer/workers/:id/activate', auth('manageWorkers'), userC
  */
 router.patch('/site-engineer/workers/:id/deactivate', auth('manageWorkers'), userController.deactivateWorker);
 
+/**
+ * @swagger
+ * /users/{userId}:
+ *   patch:
+ *     summary: Update a user
+ *     description: >-
+ *       Admin and Sales Admin can update any user. Site Engineer can update only workers/fabricators they created. Workers/fabricators cannot use this API.
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The user ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/User'
+ *           example:
+ *             name: "John Doe"
+ *             email: "john@example.com"
+ *             phoneNumber: "1234567890"
+ *             city: "New York"
+ *             region: "NY"
+ *             address: "123 Main St"
+ *             education: "Masters in Architecture"
+ *             experience: "5 years"
+ *             profilePictureKey: "uploads/tmp/user-avatars/some-uuid.jpg"
+ *             isActive: true
+ *     responses:
+ *       "200":
+ *         description: User updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/User'
+ *       "400":
+ *         $ref: '#/components/responses/BadRequest'
+ *       "401":
+ *         $ref: '#/components/responses/Unauthorized'
+ *       "403":
+ *         $ref: '#/components/responses/Forbidden'
+ *       "404":
+ *         $ref: '#/components/responses/NotFound'
+ *
+ * /users/{userId}/password:
+ *   patch:
+ *     summary: Reset a user's password
+ *     description: >-
+ *       Admin and Sales Admin can reset password for any user. Site Engineer can reset password for workers/fabricators they created. Workers/fabricators cannot use this API. This is a forced reset (no old password required).
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The user ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               password:
+ *                 type: string
+ *                 description: New password (must meet password rules)
+ *           example:
+ *             password: "newPassword123"
+ *     responses:
+ *       "200":
+ *         description: Password reset successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/User'
+ *       "400":
+ *         $ref: '#/components/responses/BadRequest'
+ *       "401":
+ *         $ref: '#/components/responses/Unauthorized'
+ *       "403":
+ *         $ref: '#/components/responses/Forbidden'
+ *       "404":
+ *         $ref: '#/components/responses/NotFound'
+ */
+router.patch(
+  '/:userId',
+  auth('manageUsers'),
+  validate(userValidation.updateUser),
+  userController.updateUserById
+);
+
+router.patch(
+  '/:userId/password',
+  auth('manageUsers'),
+  validate(userValidation.resetUserPassword),
+  userController.resetUserPasswordById
+);
+
 export default router; 

@@ -46,6 +46,7 @@ export const updateUser = {
   body: Joi.object()
     .keys({
       email: Joi.string().email(),
+      role: Joi.string().valid(...roles),
       password: Joi.string().custom(password),
       name: Joi.string(),
       phoneNumber: Joi.string(),
@@ -107,5 +108,14 @@ export const updateWorkerBySiteEngineer = {
 export const deleteWorkerBySiteEngineer = {
   params: Joi.object().keys({
     id: Joi.string().custom(objectId).required(),
+  }),
+};
+
+export const resetUserPassword = {
+  params: Joi.object().keys({
+    userId: Joi.required().custom(objectId),
+  }),
+  body: Joi.object().keys({
+    password: Joi.string().required().custom(password),
   }),
 };

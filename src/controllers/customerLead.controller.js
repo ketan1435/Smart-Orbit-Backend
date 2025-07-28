@@ -61,11 +61,11 @@ export const getCustomerLeadController = catchAsync(async (req, res) => {
   res.status(200).json({ status: 1, data: lead });
 });
 
-export const updateCustomerLeadController = catchAsync(async (req, res) => {
-  const { id } = req.params;
-  const lead = await updateCustomerLeadService(id, req.body);
-  res.status(200).json({ status: 1, message: 'Customer lead updated successfully', data: lead });
-});
+// export const updateCustomerLeadController = async (req, res) => {
+//   const { id } = req.params;
+//   const lead = await updateCustomerLeadService(id, req.body);
+//   res.status(200).json({ status: 1, message: 'Customer lead updated successfully', data: lead });
+// };
 
 export const activateCustomerLeadController = catchAsync(async (req, res) => {
   const { id } = req.params;

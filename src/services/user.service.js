@@ -380,3 +380,13 @@ export const deactivateWorkerBySiteEngineerService = async (workerId, siteEngine
 
   return User.findByIdAndUpdate(workerId, { isActive: false }, { new: true });
 };
+
+export const resetUserPasswordById = async (userId, newPassword) => {
+  const user = await getUserById(userId);
+  if (!user) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
+  }
+  user.password = newPassword;
+  await user.save();
+  return user;
+};

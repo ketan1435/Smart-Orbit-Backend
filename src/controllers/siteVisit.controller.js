@@ -36,6 +36,15 @@ export const updateSiteVisit = catchAsync(async (req, res) => {
     res.send(visit);
 });
 
+export const savePermanentSiteVisit = catchAsync(async (req, res) => {
+    const result = await siteVisitService.savePermanentSiteVisit(req.params.visitId, req.body);
+    res.send({
+        status: 1,
+        message: 'Site visit data saved permanently to requirement',
+        data: result
+    });
+});
+
 export const completeSiteVisit = catchAsync(async (req, res) => {
     const visit = await siteVisitService.completeSiteVisit(req.params.visitId);
     res.send(visit);

@@ -95,9 +95,9 @@ export const updateCustomerLead = {
       preferredLanguage: Joi.string().allow(''),
       state: Joi.string().allow(''),
       city: Joi.string().allow(''),
-      googleLocationLink: Joi.string().uri({ allowRelative: false }).allow(''),
-      requirements: Joi.array().items(requirementSchema),
       isActive: Joi.boolean(),
+      requirements: Joi.forbidden(),
+      googleLocationLink: Joi.forbidden(),
     })
     .min(1),
 };

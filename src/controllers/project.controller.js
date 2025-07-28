@@ -72,6 +72,22 @@ export const getProjectsForArchitect = catchAsync(async (req, res) => {
     res.status(httpStatus.OK).send({ status: 1, message: 'Your projects fetched successfully.', data: result });
 });
 
+export const getMyProposals = catchAsync(async (req, res) => {
+    const options = pick(req.query, ['sortBy', 'limit', 'page', 'status', 'projectName', 'startDate', 'endDate']);
+    const result = await projectService.getMyProposals(req.user, options);
+    res.status(httpStatus.OK).send({ status: 1, message: 'Your proposals fetched successfully.', data: result });
+});
+
+export const deleteMyProposal = catchAsync(async (req, res) => {
+    const result = await projectService.deleteMyProposal(req.params.proposalId, req.user);
+    res.status(httpStatus.OK).send({ status: 1, message: 'Proposal deleted successfully.', data: result });
+});
+
+export const rejectProposal = catchAsync(async (req, res) => {
+    const result = await projectService.rejectProposal(req.params.proposalId, req.user, req.body);
+    res.status(httpStatus.OK).send({ status: 1, message: 'Proposal rejected successfully.', data: result });
+});
+
 export const getArchitectDocumentsForCustomer = catchAsync(async (req, res) => {
     const documents = await projectService.getArchitectDocumentsForCustomer(req.params.projectId, req.user);
     res.status(httpStatus.OK).send(documents);

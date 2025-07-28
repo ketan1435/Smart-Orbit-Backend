@@ -230,6 +230,7 @@ export const updateSiteVisit = async (visitId, updateBody) => {
  * @returns {Promise<SiteVisit>}
  */
 export const completeSiteVisit = async (visitId) => {
+  throw new ApiError(httpStatus.BAD_REQUEST, 'Site visit cannot be completed by site engineer');
   const visit = await getSiteVisitById(visitId);
   if (!['Scheduled', 'InProgress'].includes(visit.status)) {
     throw new ApiError(httpStatus.BAD_REQUEST, `Visit cannot be completed as it is in '${visit.status}' state.`);
@@ -515,4 +516,77 @@ export const addRemarkToSiteVisit = async (visitId, remarkBody, user) => {
 
   await visit.save();
   return visit;
+};
+
+/**
+ * Save site visit data permanently to requirement (by site engineer)
+ * @param {string} visitId
+ * @param {Object} updateBody
+ * @returns {Promise<Object>}
+ */
+export const savePermanentSiteVisit = async (visitId, updateBody) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const visit = await getSiteVisitById(visitId);
+    if (!visit) {
+      throw new ApiError(httpStatus.NOT_FOUND, 'Site visit not found');
+    }
+
+    if (['Completed', 'Approved', 'Cancelled'].includes(visit.status)) {
+      throw new ApiError(httpStatus.BAD_REQUEST, `Visit cannot be updated in '${visit.status}' state.`);
+    }
+
+    // Check if there's any updatedData in the site visit
+    if (!visit.updatedData || Object.keys(visit.updatedData).length === 0) {
+      throw new ApiError(
+        httpStatus.BAD_REQUEST,
+        'No changes found to save permanently. Please save some changes first using the regular save endpoint.'
+      );
+    }
+
+    const { remarks } = updateBody;
+
+    // Get the requirement to update
+    const requirement = await Requirement.findById(visit.requirement).session(session);
+    if (!requirement) {
+      throw new ApiError(httpStatus.NOT_FOUND, 'Requirement not found');
+    }
+
+    // Update the requirement's scpData with the visit's updatedData
+    if (visit.updatedData.scpData) {
+      requirement.scpData = {
+        ...requirement.scpData,
+        ...visit.updatedData.scpData
+      };
+    }
+
+    // Update requirement files if any
+    if (visit.updatedData.files && visit.updatedData.files.length > 0) {
+      requirement.files = requirement.files || [];
+      requirement.files.push(...visit.updatedData.files);
+    }
+
+    // Save both requirement and visit
+    await requirement.save({ session });
+    await visit.save({ session });
+
+    await session.commitTransaction();
+
+    return {
+      visit,
+      requirement: {
+        _id: requirement._id,
+        scpData: requirement.scpData,
+        files: requirement.files
+      }
+    };
+
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    session.endSession();
+  }
 };

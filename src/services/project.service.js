@@ -6,6 +6,7 @@ import Requirement from '../models/requirement.model.js';
 import httpStatus from 'http-status';
 import storage from '../factory/storage.factory.js';
 import Sitework from '../models/sitework.model.js';
+import Roles from '../config/enums/roles.enum.js';
 
 /**
  * Generates a unique project code.
@@ -85,6 +86,13 @@ export const queryProjects = async (filter, options) => {
   const projects = await Project.find(projectFilter)
     .populate('lead')
     .populate('requirement') // optional: populate requirement if needed
+    .populate({
+      path: 'siteVisits',
+      populate: {
+        path: 'siteEngineer',
+        select: 'name email role'
+      }
+    })
     .sort(sort)
     .skip((page - 1) * limit)
     .limit(limit)
@@ -283,13 +291,37 @@ export const getArchitectDocuments = async (projectId) => {
     .populate({
       path: 'architectDocuments.architect',
       select: 'name email phone role',
+    })
+    .populate({
+      path: 'requirement',
+      select: 'sharedWith',
+      populate: {
+        path: 'sharedWith.user',
+        select: 'role'
+      }
     });
 
   if (!project) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Project not found');
   }
 
-  return project.architectDocuments;
+  // Check if any procurement team members are in the sharedWith list
+  const isSharedWithAnyProcurementTeam = project.requirement?.sharedWith?.some(share =>
+    share.user?.role === Roles.PROCUREMENT
+  ) || false;
+
+  const requirementId = project.requirement._id;
+  const customerLeadId = project.lead;
+
+  // Add the isSharedWithAnyProcurementTeam flag to each architect document
+  const architectDocumentsWithFlag = project.architectDocuments.map(doc => ({
+    ...doc.toObject(),
+    isSharedWithAnyProcurementTeam,
+    requirementId,
+    customerLeadId
+  }));
+
+  return architectDocumentsWithFlag;
 };
 
 /**
@@ -412,7 +444,7 @@ export const getArchitectDocumentsForCustomer = async (projectId, user) => {
   }
 
   return project.architectDocuments.filter(
-    (doc) => doc.sentToCustomer && doc.customerStatus === 'Pending'
+    (doc) => doc.sentToCustomer
   );
 };
 
@@ -475,27 +507,245 @@ export const getProjectsForArchitect = async (user, options) => {
     ? { [sortBy.split(':')[0]]: sortBy.split(':')[1] === 'desc' ? -1 : 1 }
     : { createdAt: -1 };
 
-  // Find projects where the architect is assigned to this user
-  const projectFilter = { architect: user._id };
-
-  const projects = await Project.find(projectFilter)
-    .populate('lead', 'customerName email mobileNumber')
-    .populate('requirement', 'requirementType')
-    .populate('architect', 'name email')
-    .select('_id projectName projectCode status createdAt startDate estimatedCompletionDate budget architectDocuments')
+  const projects = await Project.find({ architect: user._id })
+    .populate('lead', 'customerName mobileNumber email state city')
+    .populate('requirement', 'requirementType projectName')
+    .populate({
+      path: 'proposals',
+      match: { architect: user._id },
+      populate: {
+        path: 'architect',
+        select: 'name email'
+      }
+    })
+    .populate({
+      path: 'architectDocuments',
+      match: { architect: user._id },
+      populate: {
+        path: 'architect',
+        select: 'name email'
+      }
+    })
     .sort(sort)
     .skip((page - 1) * limit)
     .limit(limit)
     .lean();
 
-  const totalResults = await Project.countDocuments(projectFilter);
+  const totalResults = await Project.countDocuments({ architect: user._id });
+  const totalPages = Math.ceil(totalResults / limit);
 
   return {
     results: projects,
     page,
     limit,
-    totalPages: Math.ceil(totalResults / limit),
+    totalPages,
     totalResults,
+  };
+};
+
+/**
+ * Get proposals submitted by the authenticated architect
+ * @param {Object} user - The authenticated architect user
+ * @param {Object} options - Query options
+ * @param {string} [options.sortBy] - Sort option in the format: field:(desc|asc)
+ * @param {number} [options.limit] - Maximum number of results per page (default: 10)
+ * @param {number} [options.page] - Current page (default: 1)
+ * @param {string} [options.status] - Filter by proposal status
+ * @param {string} [options.projectName] - Filter by project name
+ * @param {string} [options.startDate] - Filter by start date (ISO string)
+ * @param {string} [options.endDate] - Filter by end date (ISO string)
+ * @returns {Promise<Object>}
+ */
+export const getMyProposals = async (user, options) => {
+  const { limit = 10, page = 1, sortBy, status, projectName, startDate, endDate } = options;
+  const sort = sortBy
+    ? { [sortBy.split(':')[0]]: sortBy.split(':')[1] === 'desc' ? -1 : 1 }
+    : { 'proposals.submittedAt': -1 };
+
+  // Build filter for proposals
+  const proposalFilter = { architect: user._id };
+  if (status) {
+    proposalFilter.status = status;
+  }
+
+  // Build date filter
+  const dateFilter = {};
+  if (startDate) {
+    dateFilter.$gte = new Date(startDate);
+  }
+  if (endDate) {
+    dateFilter.$lte = new Date(endDate);
+  }
+  if (Object.keys(dateFilter).length > 0) {
+    proposalFilter.submittedAt = dateFilter;
+  }
+
+  // Find projects that have proposals from this architect
+  const projects = await Project.find({
+    'proposals.architect': user._id
+  })
+    .populate('lead', 'customerName mobileNumber email state city')
+    .populate('requirement', 'requirementType projectName')
+    .populate({
+      path: 'proposals',
+      match: proposalFilter,
+      populate: {
+        path: 'architect',
+        select: 'name email'
+      }
+    })
+    .sort(sort)
+    .skip((page - 1) * limit)
+    .limit(limit)
+    .lean();
+
+  // Transform the data to focus on proposals
+  const proposals = [];
+  for (const project of projects) {
+    // Filter by project name if specified
+    if (projectName && !project.projectName.toLowerCase().includes(projectName.toLowerCase())) {
+      continue;
+    }
+
+    for (const proposal of project.proposals) {
+      proposals.push({
+        _id: proposal._id,
+        project: {
+          _id: project._id,
+          projectName: project.projectName,
+          projectCode: project.projectCode,
+          status: project.status,
+          lead: project.lead,
+          requirement: project.requirement
+        },
+        architect: proposal.architect,
+        email: proposal.email,
+        proposedCharges: proposal.proposedCharges,
+        deliveryTimelineDays: proposal.deliveryTimelineDays,
+        portfolioLink: proposal.portfolioLink,
+        remarks: proposal.remarks,
+        status: proposal.status,
+        submittedAt: proposal.submittedAt,
+        acceptedAt: proposal.acceptedAt,
+        rejectedAt: proposal.rejectedAt,
+        withdrawnAt: proposal.withdrawnAt
+      });
+    }
+  }
+
+  // Apply pagination to filtered results
+  const totalResults = proposals.length;
+  const totalPages = Math.ceil(totalResults / limit);
+  const startIndex = (page - 1) * limit;
+  const endIndex = startIndex + limit;
+  const paginatedProposals = proposals.slice(startIndex, endIndex);
+
+  return {
+    results: paginatedProposals,
+    page,
+    limit,
+    totalPages,
+    totalResults,
+  };
+};
+
+/**
+ * Delete a proposal submitted by the authenticated architect (only if status is Pending)
+ * @param {string} proposalId - The ID of the proposal to delete
+ * @param {Object} user - The authenticated architect user
+ * @returns {Promise<Object>}
+ */
+export const deleteMyProposal = async (proposalId, user) => {
+  // Find the project that contains this proposal
+  const project = await Project.findOne({
+    'proposals._id': proposalId,
+    'proposals.architect': user._id
+  });
+
+  if (!project) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Proposal not found or you do not have permission to delete it');
+  }
+
+  // Find the specific proposal
+  const proposal = project.proposals.find(p => p._id.toString() === proposalId);
+
+  if (!proposal) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Proposal not found');
+  }
+
+  // Check if the proposal status is Pending
+  if (proposal.status !== 'Pending') {
+    throw new ApiError(
+      httpStatus.BAD_REQUEST,
+      `Cannot delete proposal with status '${proposal.status}'. Only pending proposals can be deleted.`
+    );
+  }
+
+  // Remove the proposal from the project
+  project.proposals = project.proposals.filter(p => p._id.toString() !== proposalId);
+  await project.save();
+
+  return {
+    deletedProposalId: proposalId,
+    projectId: project._id,
+    projectName: project.projectName
+  };
+};
+
+/**
+ * Reject a proposal by admin
+ * @param {string} proposalId - The ID of the proposal to reject
+ * @param {Object} adminUser - The authenticated admin user
+ * @param {Object} rejectData - Rejection data including remarks
+ * @returns {Promise<Object>}
+ */
+export const rejectProposal = async (proposalId, adminUser, rejectData) => {
+  // Find the project that contains this proposal
+  const project = await Project.findOne({
+    'proposals._id': proposalId
+  });
+
+  if (!project) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Proposal not found');
+  }
+
+  // Find the specific proposal
+  const proposal = project.proposals.find(p => p._id.toString() === proposalId);
+
+  if (!proposal) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Proposal not found');
+  }
+
+  // Check if the proposal can be rejected
+  if (proposal.status === 'Rejected') {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Proposal is already rejected');
+  }
+
+  if (proposal.status === 'Accepted') {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Cannot reject an accepted proposal');
+  }
+
+  if (proposal.status === 'Withdrawn') {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Cannot reject a withdrawn proposal');
+  }
+
+  // Update the proposal status
+  proposal.status = 'Rejected';
+  proposal.rejectedAt = new Date();
+  proposal.rejectedBy = adminUser._id;
+  proposal.adminRemarks = rejectData.remarks || '';
+
+  await project.save();
+
+  return {
+    proposalId: proposalId,
+    projectId: project._id,
+    projectName: project.projectName,
+    architect: proposal.architect,
+    status: proposal.status,
+    rejectedAt: proposal.rejectedAt,
+    rejectedBy: adminUser._id,
+    adminRemarks: proposal.adminRemarks
   };
 };
 
@@ -811,7 +1061,22 @@ export const getProjectById = async (projectId) => {
   const project = await Project.findById(projectId)
     .populate('lead')
     .populate('architect')
-    .populate('requirement');
+    .populate('siteVisits')
+    .populate({
+      path: 'siteVisits',
+      populate: {
+        path: 'siteEngineer',
+        select: 'name email role'
+      }
+    })
+    .populate('assignedSiteEngineer')
+    .populate({
+      path: 'requirement',
+      populate: {
+        path: 'sharedWith.user sharedWith.sharedBy',
+        select: 'name email role'
+      }
+    });
   if (!project) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Project not found');
   }

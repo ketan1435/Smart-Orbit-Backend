@@ -9,12 +9,12 @@ import {
   deactivateCustomerLeadController,
   importCustomerLeadsController,
   exportCustomerLeadsController,
-  updateCustomerLeadController,
+  // updateCustomerLeadController,
   shareRequirementForUserController,
   getSharedRequirementsForUserController,
   getMySharedRequirementsController,
 } from '../../controllers/customerLead.controller.js';
-import { createCustomerLeadService } from '../../services/customerLead.service.js';
+import { createCustomerLeadService, updateCustomerLeadService } from '../../services/customerLead.service.js';
 import auth from '../../middlewares/auth.js';
 import { transactional } from '../../utils/transactional.js';
 import * as customerLeadValidation from '../../validations/customerLead.validation.js';
@@ -486,7 +486,7 @@ router.put(
   '/:id',
   auth(),
   validate(customerLeadValidation.updateCustomerLead),
-  transactional(updateCustomerLeadController)
+  transactional(updateCustomerLeadService)
 );
 
 /**

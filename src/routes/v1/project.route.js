@@ -29,6 +29,29 @@ router
         projectController.getProjectsForArchitect
     );
 
+router
+    .route('/architect/my-proposals')
+    .get(
+        auth('getProjects'),
+        validate(projectValidation.getMyProposals),
+        projectController.getMyProposals
+    );
+
+router
+    .route('/architect/proposals/:proposalId')
+    .delete(
+        auth('getProjects'),
+        validate(projectValidation.deleteMyProposal),
+        projectController.deleteMyProposal
+    );
+
+router
+    .route('/proposals/:proposalId/reject')
+    .patch(
+        auth('manageProjects'),
+        validate(projectValidation.rejectProposal),
+        projectController.rejectProposal
+    );
 
 
 /**
@@ -534,8 +557,8 @@ export default router;
  * @swagger
  * /projects/architect/my-projects:
  *   get:
- *     summary: Get projects for the logged-in architect
- *     description: Fetch all projects assigned to the currently authenticated architect, with pagination and sorting.
+ *     summary: Get projects assigned to the authenticated architect
+ *     description: Retrieves all projects where the authenticated user is assigned as the architect
  *     tags: [Projects]
  *     security:
  *       - bearerAuth: []
@@ -545,22 +568,21 @@ export default router;
  *         schema:
  *           type: integer
  *           default: 1
- *         description: Page number for pagination
+ *         description: Page number
  *       - in: query
  *         name: limit
  *         schema:
  *           type: integer
  *           default: 10
- *         description: Number of results per page
+ *         description: Number of items per page
  *       - in: query
  *         name: sortBy
  *         schema:
  *           type: string
- *           example: createdAt:desc
- *         description: Sorting order (e.g., createdAt:desc, projectName:asc)
+ *         description: "Sort option in the format: field:(desc|asc)"
  *     responses:
  *       200:
- *         description: Architect projects fetched successfully
+ *         description: Architect projects retrieved successfully
  *         content:
  *           application/json:
  *             schema:
@@ -571,7 +593,7 @@ export default router;
  *                   example: 1
  *                 message:
  *                   type: string
- *                   example: Your projects fetched successfully.
+ *                   example: Your projects fetched successfully
  *                 data:
  *                   type: object
  *                   properties:
@@ -587,6 +609,169 @@ export default router;
  *                       type: integer
  *                     totalResults:
  *                       type: integer
+ */
+
+/**
+ * @swagger
+ * /projects/architect/my-proposals:
+ *   get:
+ *     summary: Get proposals submitted by the authenticated architect
+ *     description: Retrieves all proposals submitted by the authenticated architect across all projects with filtering and pagination
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Number of items per page
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *         description: "Sort option in the format: field:(desc|asc)"
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [Pending, Open, Responded, Withdrawn, Expired, Accepted, Rejected, Archived]
+ *         description: Filter by proposal status
+ *       - in: query
+ *         name: projectName
+ *         schema:
+ *           type: string
+ *         description: Filter by project name (case-insensitive search)
+ *       - in: query
+ *         name: startDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: Filter proposals submitted from this date (ISO format)
+ *       - in: query
+ *         name: endDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: Filter proposals submitted until this date (ISO format)
+ *     responses:
+ *       200:
+ *         description: Architect proposals retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: Your proposals fetched successfully
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     results:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           _id:
+ *                             type: string
+ *                             description: Proposal ID
+ *                           project:
+ *                             type: object
+ *                             properties:
+ *                               _id:
+ *                                 type: string
+ *                               projectName:
+ *                                 type: string
+ *                               projectCode:
+ *                                 type: string
+ *                               status:
+ *                                 type: string
+ *                               lead:
+ *                                 type: object
+ *                                 properties:
+ *                                   customerName:
+ *                                     type: string
+ *                                   mobileNumber:
+ *                                     type: string
+ *                                   email:
+ *                                     type: string
+ *                                   state:
+ *                                     type: string
+ *                                   city:
+ *                                     type: string
+ *                               requirement:
+ *                                 type: object
+ *                                 properties:
+ *                                   requirementType:
+ *                                     type: string
+ *                                   projectName:
+ *                                     type: string
+ *                           architect:
+ *                             type: object
+ *                             properties:
+ *                               _id:
+ *                                 type: string
+ *                               name:
+ *                                 type: string
+ *                               email:
+ *                                 type: string
+ *                           email:
+ *                             type: string
+ *                           proposedCharges:
+ *                             type: number
+ *                           deliveryTimelineDays:
+ *                             type: number
+ *                           portfolioLink:
+ *                             type: string
+ *                           remarks:
+ *                             type: string
+ *                           status:
+ *                             type: string
+ *                             enum: [Pending, Open, Responded, Withdrawn, Expired, Accepted, Rejected, Archived]
+ *                           submittedAt:
+ *                             type: string
+ *                             format: date-time
+ *                           acceptedAt:
+ *                             type: string
+ *                             format: date-time
+ *                           rejectedAt:
+ *                             type: string
+ *                             format: date-time
+ *                           withdrawnAt:
+ *                             type: string
+ *                             format: date-time
+ *                     page:
+ *                       type: integer
+ *                     limit:
+ *                       type: integer
+ *                     totalPages:
+ *                       type: integer
+ *                     totalResults:
+ *                       type: integer
+ *       400:
+ *         description: Bad Request - Invalid filter parameters
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 0
+ *                 message:
+ *                   type: string
+ *                   example: Invalid filter parameters
  *       401:
  *         description: Unauthorized
  *       403:
@@ -900,7 +1085,72 @@ export default router;
  *             schema:
  *               type: array
  *               items:
- *                 $ref: '#/components/schemas/ArchitectDocument'
+ *                 type: object
+ *                 properties:
+ *                   _id:
+ *                     type: string
+ *                     description: Document ID
+ *                   architect:
+ *                     type: object
+ *                     properties:
+ *                       _id:
+ *                         type: string
+ *                       name:
+ *                         type: string
+ *                       email:
+ *                         type: string
+ *                       phone:
+ *                         type: string
+ *                       role:
+ *                         type: string
+ *                   files:
+ *                     type: array
+ *                     items:
+ *                       type: object
+ *                       properties:
+ *                         fileType:
+ *                           type: string
+ *                         key:
+ *                           type: string
+ *                         uploadedAt:
+ *                           type: string
+ *                           format: date-time
+ *                   notes:
+ *                     type: string
+ *                   adminStatus:
+ *                     type: string
+ *                     enum: [Pending, Approved, Rejected]
+ *                   customerStatus:
+ *                     type: string
+ *                     enum: [Pending, Approved, Rejected]
+ *                   adminRemarks:
+ *                     type: string
+ *                   customerRemarks:
+ *                     type: string
+ *                   sentToCustomer:
+ *                     type: boolean
+ *                   sentToProcurement:
+ *                     type: boolean
+ *                   procurementSentAt:
+ *                     type: string
+ *                     format: date-time
+ *                   sentToProcurementBy:
+ *                     type: string
+ *                   submittedAt:
+ *                     type: string
+ *                     format: date-time
+ *                   adminReviewedAt:
+ *                     type: string
+ *                     format: date-time
+ *                   customerReviewedAt:
+ *                     type: string
+ *                     format: date-time
+ *                   version:
+ *                     type: number
+ *                   isSharedWithAnyProcurementTeam:
+ *                     type: boolean
+ *                     description: Indicates if the document has been shared with any procurement team
+ *                     example: true
  *       "401":
  *         $ref: '#/components/responses/Unauthorized'
  *       "403":
@@ -1296,4 +1546,180 @@ export default router;
  *         $ref: '#/components/responses/Forbidden'
  *       "404":
  *         $ref: '#/components/responses/NotFound'
+ */
+
+/**
+ * @swagger
+ * /projects/architect/proposals/{proposalId}:
+ *   delete:
+ *     summary: Delete a proposal submitted by the authenticated architect
+ *     description: Allows an architect to delete their own proposal, but only if the proposal status is 'Pending'
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: proposalId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the proposal to delete
+ *     responses:
+ *       200:
+ *         description: Proposal deleted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: Proposal deleted successfully
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     deletedProposalId:
+ *                       type: string
+ *                       description: The ID of the deleted proposal
+ *                     projectId:
+ *                       type: string
+ *                       description: The ID of the project that contained the proposal
+ *                     projectName:
+ *                       type: string
+ *                       description: The name of the project
+ *       400:
+ *         description: Bad Request - Cannot delete proposal with current status
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 0
+ *                 message:
+ *                   type: string
+ *                   example: "Cannot delete proposal with status 'Accepted'. Only pending proposals can be deleted."
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Not Found - Proposal not found or no permission
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 0
+ *                 message:
+ *                   type: string
+ *                   example: "Proposal not found or you do not have permission to delete it"
+ */
+
+/**
+ * @swagger
+ * /projects/proposals/{proposalId}/reject:
+ *   patch:
+ *     summary: Reject a proposal by admin
+ *     description: Allows an admin to reject an architect proposal with optional remarks
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: proposalId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the proposal to reject
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               remarks:
+ *                 type: string
+ *                 description: Optional remarks for the rejection
+ *             example:
+ *               remarks: "Proposal does not meet the project requirements"
+ *     responses:
+ *       200:
+ *         description: Proposal rejected successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: Proposal rejected successfully
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     proposalId:
+ *                       type: string
+ *                       description: The ID of the rejected proposal
+ *                     projectId:
+ *                       type: string
+ *                       description: The ID of the project
+ *                     projectName:
+ *                       type: string
+ *                       description: The name of the project
+ *                     architect:
+ *                       type: string
+ *                       description: The ID of the architect who submitted the proposal
+ *                     status:
+ *                       type: string
+ *                       example: Rejected
+ *                     rejectedAt:
+ *                       type: string
+ *                       format: date-time
+ *                       description: When the proposal was rejected
+ *                     rejectedBy:
+ *                       type: string
+ *                       description: The ID of the admin who rejected the proposal
+ *                     adminRemarks:
+ *                       type: string
+ *                       description: Remarks provided by the admin
+ *       400:
+ *         description: Bad Request - Cannot reject proposal with current status
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 0
+ *                 message:
+ *                   type: string
+ *                   example: "Cannot reject an accepted proposal"
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Not Found - Proposal not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 0
+ *                 message:
+ *                   type: string
+ *                   example: "Proposal not found"
  */

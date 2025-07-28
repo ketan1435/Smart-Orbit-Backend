@@ -8,6 +8,7 @@ export const scheduleSiteVisit = {
     body: Joi.object().keys({
         siteEngineerId: Joi.string().custom(objectId).required(),
         visitDate: Joi.date().required(),
+        hasRequirementEditAccess: Joi.boolean().optional(),
     }),
 };
 
@@ -47,6 +48,15 @@ export const updateSiteVisit = {
         updatedData: Joi.object(),
         remarks: Joi.string().allow('').optional(),
     }).min(1),
+};
+
+export const savePermanentSiteVisit = {
+    params: Joi.object().keys({
+        visitId: Joi.string().custom(objectId).required(),
+    }),
+    body: Joi.object().keys({
+        remarks: Joi.string().allow('').optional(),
+    }),
 };
 
 export const addDocuments = {

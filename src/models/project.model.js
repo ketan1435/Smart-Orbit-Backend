@@ -273,7 +273,7 @@ const projectSchema = new mongoose.Schema(
         requirement: { type: mongoose.Schema.Types.ObjectId, ref: 'Requirement' },
         status: {
             type: String,
-            enum: ['Draft', 'Pending', 'Active', 'OnHold', 'Completed', 'Cancelled'],
+            enum: ['Draft', 'Pending', 'Open', 'OnHold', 'Completed', 'Cancelled'],
             default: 'Draft',
         },
         siteVisits: {

@@ -134,6 +134,33 @@ export const getProjectsForArchitect = {
     }),
 };
 
+export const getMyProposals = {
+    query: Joi.object().keys({
+        sortBy: Joi.string(),
+        limit: Joi.number().integer(),
+        page: Joi.number().integer(),
+        status: Joi.string().valid('Pending', 'Open', 'Responded', 'Withdrawn', 'Expired', 'Accepted', 'Rejected', 'Archived'),
+        projectName: Joi.string().allow(''),
+        startDate: Joi.string().isoDate(),
+        endDate: Joi.string().isoDate(),
+    }),
+};
+
+export const deleteMyProposal = {
+    params: Joi.object().keys({
+        proposalId: Joi.string().custom(objectId).required(),
+    }),
+};
+
+export const rejectProposal = {
+    params: Joi.object().keys({
+        proposalId: Joi.string().custom(objectId).required(),
+    }),
+    body: Joi.object().keys({
+        remarks: Joi.string().optional().allow(''),
+    }),
+};
+
 export const sendDocumentToProcurement = {
     params: Joi.object().keys({
         projectId: Joi.string().custom(objectId).required(),

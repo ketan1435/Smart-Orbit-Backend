@@ -133,7 +133,7 @@ export const createCustomerLeadService = async (req, session) => {
 
     // 5.2 Create all site visits
     if (siteVisitsToCreate.length > 0) {
-      const createdSiteVisits = await SiteVisit.create(siteVisitsToCreate, { session });
+      const createdSiteVisits = await SiteVisit.create(siteVisitsToCreate, { session, ordered: true });
 
       // 5.3 Push all site visits to project
       for (const siteVisit of createdSiteVisits) {
@@ -216,31 +216,43 @@ export const getCustomerLeadByIdService = async (id) => {
     });
 };
 
-export const updateCustomerLeadService = async (id, updateBody) => {
+export const updateCustomerLeadService = async (req, session) => {
+  const { id } = req.params;
+  const { body: updateBody } = req;
   const lead = await getCustomerLeadByIdService(id);
   if (!lead) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Customer lead not found');
   }
 
-  const { requirementsToUpdate, ...leadUpdates } = updateBody;
+  // Only allow updating basic fields
+  const allowedFields = [
+    'leadSource',
+    'customerName',
+    'mobileNumber',
+    'alternateContactNumber',
+    'whatsappNumber',
+    'email',
+    'preferredLanguage',
+    'state',
+    'city',
+    'isActive',
+  ];
 
-  // Update lead fields
-  Object.assign(lead, leadUpdates);
-  await lead.save();
-
-  // Update individual requirements if provided
-  if (Array.isArray(requirementsToUpdate)) {
-    for (const reqUpdate of requirementsToUpdate) {
-      if (!reqUpdate._id) continue;
-      await Requirement.findOneAndUpdate(
-        { _id: reqUpdate._id, lead: lead._id },
-        reqUpdate,
-        { new: true }
-      );
+  for (const key of Object.keys(updateBody)) {
+    if (allowedFields.includes(key)) {
+      lead[key] = updateBody[key];
     }
   }
 
-  return lead;
+  await lead.save({ session });
+  return {
+    status: httpStatus.OK,
+    body: {
+      status: 1,
+      message: 'Customer lead updated successfully',
+      data: lead,
+    },
+  };
 };
 
 
@@ -358,7 +370,15 @@ export const shareRequirementWithUsersService = async (leadId, requirementId, us
 
 export const getSharedRequirementsForUserService = async (userId) => {
   const requirements = await Requirement.find({ 'sharedWith.user': userId })
-    .populate('lead', 'customerName mobileNumber email state city') // populate only necessary lead fields
+    .populate('lead', 'customerName') // populate only necessary lead fields
+    .populate({
+      path: 'visits',
+      select: 'documents',
+      populate: {
+        path: 'siteEngineer',
+        select: 'name email'
+      }
+    })
     .lean();
 
   // Group requirements by lead
@@ -376,7 +396,14 @@ export const getSharedRequirementsForUserService = async (userId) => {
         requirements: [],
       };
     }
-    grouped[leadId].requirements.push(req);
+
+    // Add site visits data to the requirement
+    const requirementWithVisits = {
+      ...req,
+      siteVisits: req.visits || []
+    };
+
+    grouped[leadId].requirements.push(requirementWithVisits);
   }
 
   return Object.values(grouped);

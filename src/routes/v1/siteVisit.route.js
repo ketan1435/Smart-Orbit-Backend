@@ -46,6 +46,14 @@ router
     );
 
 router
+    .route('/visits/:visitId/save-permanent')
+    .patch(
+        auth('manageSiteVisits'), // Site Engineers should have this right
+        validate(siteVisitValidation.savePermanentSiteVisit),
+        siteVisitController.savePermanentSiteVisit
+    );
+
+router
     .route('/visits/:visitId/complete')
     .put(
         auth('manageSiteVisits'), // Site Engineers should have this right
@@ -305,6 +313,83 @@ export default router;
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/SiteVisit'
+ *       "401":
+ *         $ref: '#/components/responses/Unauthorized'
+ *       "403":
+ *         $ref: '#/components/responses/Forbidden'
+ *       "404":
+ *         $ref: '#/components/responses/NotFound'
+ */
+
+/**
+ * @swagger
+ * /visits/{visitId}/save-permanent:
+ *   patch:
+ *     summary: Save site visit data permanently to requirement (for site engineers)
+ *     description: Allows a site engineer to save their progress permanently to the requirement. This updates the requirement's SCP data with the data already saved in the site visit and marks the visit as completed.
+ *     tags: [SiteVisits]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: visitId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the site visit to save permanently
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               remarks:
+ *                 type: string
+ *                 description: Any remarks or notes from the visit
+ *             example:
+ *               remarks: "Site visit completed successfully"
+ *     responses:
+ *       "200":
+ *         description: OK
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: "Site visit data saved permanently to requirement"
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     visit:
+ *                       $ref: '#/components/schemas/SiteVisit'
+ *                     requirement:
+ *                       type: object
+ *                       properties:
+ *                         _id:
+ *                           type: string
+ *                         scpData:
+ *                           type: object
+ *                         files:
+ *                           type: array
+ *       "400":
+ *         description: Bad Request - No changes found to save permanently
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 0
+ *                 message:
+ *                   type: string
+ *                   example: "No changes found to save permanently. Please save some changes first using the regular save endpoint."
  *       "401":
  *         $ref: '#/components/responses/Unauthorized'
  *       "403":

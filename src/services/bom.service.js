@@ -271,7 +271,7 @@ export const getSubmittedBOMs = async (filter = {}, options) => {
         : { updatedAt: -1 };
 
     // Build filter object with status and optional createdBy
-    const mongoFilter = { status: 'submitted' };
+    const mongoFilter = { status: { $in: ['submitted', 'approved', 'rejected', 'pending'] } };
     if (filter.createdBy) {
         mongoFilter.createdBy = filter.createdBy;
     }
