@@ -32,7 +32,7 @@ const swaggerDef = {
       description: "Local Server",
     },
     {
-      url: `https://vsm-backend-i6ad.onrender.com/v1`,
+      url: `https://smart-orbit-backend.onrender.com/v1`,
       description: "Render Server",
     },
   ],
