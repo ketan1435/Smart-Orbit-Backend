@@ -785,4 +785,88 @@ router
     .route('/boms/procurement-team')
     .get(auth('getProcurementTeam'), validate(bomValidation.getProcurementTeam), bomController.getProcurementTeam);
 
+/**
+ * @swagger
+ * /boms:
+ *   get:
+ *     summary: Get all BOMs
+ *     description: Retrieve all BOMs with optional filtering and pagination.
+ *     tags: [BOM]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           default: 1
+ *         description: Page number
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 100
+ *           default: 50
+ *         description: Maximum number of BOMs
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *         description: Sort by query in the form of field:desc/asc (ex. createdAt:desc)
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [draft, submitted, pending, approved, rejected]
+ *         description: Filter by BOM status
+ *       - in: query
+ *         name: projectId
+ *         schema:
+ *           type: string
+ *         description: Filter by project ID
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search in BOM title or description
+ *     responses:
+ *       "200":
+ *         description: BOMs fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: number
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: "BOMs fetched successfully"
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     results:
+ *                       type: array
+ *                       items:
+ *                         $ref: '#/components/schemas/BOM'
+ *                     page:
+ *                       type: number
+ *                     limit:
+ *                       type: number
+ *                     totalPages:
+ *                       type: number
+ *                     totalResults:
+ *                       type: number
+ *       "401":
+ *         $ref: '#/components/responses/Unauthorized'
+ *       "400":
+ *         $ref: '#/components/responses/BadRequest'
+ */
+router
+    .route('/boms')
+    .get(auth('getBoms'), validate(bomValidation.getAllBOMs), bomController.getAllBOMs);
+
 export default router; 

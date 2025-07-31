@@ -9,7 +9,11 @@ export const createSitework = {
         startDate: Joi.date().optional(),
         endDate: Joi.date().optional(),
         status: Joi.string().valid('not-started', 'in-progress', 'completed', 'cancelled').optional(),
-        assignedUsers: Joi.array().items(Joi.string().custom(objectId)).optional(),
+        assignedUsers: Joi.array().items(Joi.object().keys({
+            user: Joi.string().custom(objectId).required(),
+            assignmentAmount: Joi.number().required(),
+            perDayAmount: Joi.number().required()
+        })).required(),
     }),
 };
 
@@ -20,7 +24,11 @@ export const updateSitework = {
     body: Joi.object().keys({
         name: Joi.string().required(),
         description: Joi.string().allow(''),
-        assignedUsers: Joi.array().items(Joi.string().custom(objectId)),
+        assignedUsers: Joi.array().items(Joi.object().keys({
+            user: Joi.string().custom(objectId).required(),
+            assignmentAmount: Joi.number().required(),
+            perDayAmount: Joi.number().required()
+        })),
         startDate: Joi.date(),
         endDate: Joi.date(),
         status: Joi.string().valid('not-started', 'in-progress', 'completed', 'cancelled'),

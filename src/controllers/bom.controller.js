@@ -125,6 +125,20 @@ export const reviewBOM = catchAsync(async (req, res) => {
 });
 
 /**
+ * Get all BOMs (general listing)
+ */
+export const getAllBOMs = catchAsync(async (req, res) => {
+    const filter = pick(req.query, ['status', 'projectId', 'search']);
+    const options = pick(req.query, ['sortBy', 'limit', 'page']);
+    const result = await bomService.getAllBOMs(filter, options);
+    res.status(httpStatus.OK).send({
+        status: 1,
+        message: 'BOMs fetched successfully',
+        data: result,
+    });
+});
+
+/**
  * Get procurement team members
  */
 export const getProcurementTeam = catchAsync(async (req, res) => {

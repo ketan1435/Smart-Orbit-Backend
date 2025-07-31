@@ -13,6 +13,8 @@ import SiteVisit from '../models/siteVisit.model.js';
 import Project from '../models/project.model.js';
 import { roles } from '../config/roles.js';
 import Roles from '../config/enums/roles.enum.js';
+import { createUser } from './user.service.js';
+import ProjectAssignmentPayment from '../models/projectAssignmentPaymant.model.js';
 
 
 export const createCustomerLeadService = async (req, session) => {
@@ -100,13 +102,27 @@ export const createCustomerLeadService = async (req, session) => {
           throw new ApiError(httpStatus.BAD_REQUEST, `Invalid site engineer ID: ${siteVisitData.siteEngineer}`);
         }
 
-        siteVisitsToCreate.push({
+        const siteVisitToCreate = {
           requirement: requirementId,
           project: project._id,
           siteEngineer: siteVisitData.siteEngineer,
-          visitDate: siteVisitData.visitDate,
           hasRequirementEditAccess: siteVisitData.hasRequirementEditAccess || false,
-        });
+        };
+
+        // Handle date range or single date
+        if (siteVisitData.visitStartDate && siteVisitData.visitEndDate) {
+          // Date range scheduling
+          siteVisitToCreate.visitStartDate = siteVisitData.visitStartDate;
+          siteVisitToCreate.visitEndDate = siteVisitData.visitEndDate;
+          siteVisitToCreate.visitDate = siteVisitData.visitStartDate; // For backward compatibility
+        } else if (siteVisitData.visitDate) {
+          // Single date scheduling (backward compatibility)
+          siteVisitToCreate.visitDate = siteVisitData.visitDate;
+        } else {
+          throw new ApiError(httpStatus.BAD_REQUEST, 'Either visitDate or both visitStartDate and visitEndDate must be provided for site visits');
+        }
+
+        siteVisitsToCreate.push(siteVisitToCreate);
 
         // Add to set for sharing if they have edit access
         if (siteVisitData.hasRequirementEditAccess) {
@@ -156,12 +172,45 @@ export const createCustomerLeadService = async (req, session) => {
           { session }
         );
       }
+
+      // 5.5 Create project assignment payments (mandatory for all site visits)
+      for (const siteVisitData of reqData.scpData.siteVisits || []) {
+        if (!siteVisitData.assignmentAmount || siteVisitData.assignmentAmount <= 0) {
+          throw new ApiError(httpStatus.BAD_REQUEST, 'Assignment amount is required for all site visits');
+        }
+
+        const existingPayment = await ProjectAssignmentPayment.findOne({
+          project: project._id,
+          user: siteVisitData.siteEngineer
+        }).session(session);
+
+        if (!existingPayment) {
+          await ProjectAssignmentPayment.create([{
+            project: project._id,
+            createdBy: req.user.id,
+            createdByModel: req.user.constructor.modelName,
+            assignedAmount: siteVisitData.assignmentAmount,
+            perDayAmount: siteVisitData.assignmentAmount / (siteVisitData.visitEndDate - siteVisitData.visitStartDate) === 0 || siteVisitData.assignmentAmount / (siteVisitData.visitEndDate - siteVisitData.visitStartDate) === Infinity || siteVisitData.assignmentAmount / (siteVisitData.visitEndDate - siteVisitData.visitStartDate) === undefined ? 1 : siteVisitData.assignmentAmount / (siteVisitData.visitEndDate - siteVisitData.visitStartDate),
+            note: "Site visit assignment amount",
+            user: siteVisitData.siteEngineer
+          }], { session });
+        }
+      }
     }
   }
 
   // 6. Update the lead with the array of requirement references
   lead.requirements = requirementIds;
   await lead.save({ session });
+
+  // create user if password is provided
+  if (leadData.password) {
+    await createUser({
+      name: leadData.customerName,
+      email: leadData.email,
+      password: leadData.password,
+    });
+  }
 
   // 7. Clean up temp S3 files after commit
   Promise.all(tempFileKeysToDelete.map(key => storage.deleteFile(key))).catch(err => {

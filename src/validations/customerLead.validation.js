@@ -53,6 +53,7 @@ export const createCustomerLead = {
     customerName: Joi.string().required(),
     mobileNumber: Joi.string().required(),
     alternateContactNumber: Joi.string().allow(''),
+    password: Joi.string().allow(''),
     whatsappNumber: Joi.string().allow(''),
     email: Joi.string().email().allow(''),
     preferredLanguage: Joi.string().allow(''),
@@ -60,6 +61,7 @@ export const createCustomerLead = {
     city: Joi.string().allow(''),
     googleLocationLink: Joi.string().uri({ allowRelative: false }).allow(''),
     requirements: Joi.array().items(requirementSchema).min(1).required(),
+    isActive: Joi.boolean().default(true),
   }),
 };
 

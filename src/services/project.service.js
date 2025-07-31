@@ -7,6 +7,7 @@ import httpStatus from 'http-status';
 import storage from '../factory/storage.factory.js';
 import Sitework from '../models/sitework.model.js';
 import Roles from '../config/enums/roles.enum.js';
+import ProjectAssignmentPayment from '../models/projectAssignmentPaymant.model.js';
 
 /**
  * Generates a unique project code.
@@ -167,13 +168,19 @@ export const acceptArchitectProposal = async (projectId, proposalId, adminUser) 
   proposalToAccept.acceptedAt = new Date();
   project.architect = proposalToAccept.architect; // Assign architect to the project
 
-  // Reject all other pending proposals
-  project.proposals.forEach((p) => {
-    if (p.id !== proposalId && (p.status === 'Pending' || p.status === 'Responded')) {
-      p.status = 'Rejected';
-      p.rejectedAt = new Date();
-    }
+  await ProjectAssignmentPayment.create({
+    user: proposalToAccept.architect,
+    project: project._id,
+    assignedAmount: proposalToAccept.proposedCharges,
   });
+
+  // Reject all other pending proposals
+  // project.proposals.forEach((p) => {
+  //   if (p.id !== proposalId && (p.status === 'Pending' || p.status === 'Responded')) {
+  //     p.status = 'Rejected';
+  //     p.rejectedAt = new Date();
+  //   }
+  // });
 
   await project.save();
   return project;
@@ -1102,7 +1109,8 @@ export const getAssignedSiteEngineersService = async (projectId) => {
 export const getAssignedProjectsForSiteEngineerService = async (siteEngineerId, query) => {
   const { page = 1, limit = 10, status } = query;
   const filter = {
-    assignedSiteEngineer: siteEngineerId
+    assignedSiteEngineer: siteEngineerId,
+    status: 'Open'
   };
 
   if (status) {

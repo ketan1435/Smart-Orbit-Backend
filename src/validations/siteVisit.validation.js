@@ -7,8 +7,29 @@ export const scheduleSiteVisit = {
     }),
     body: Joi.object().keys({
         siteEngineerId: Joi.string().custom(objectId).required(),
-        visitDate: Joi.date().required(),
+        visitDate: Joi.date().optional(), // Single date (for backward compatibility)
+        visitStartDate: Joi.date().optional(), // Start date for range
+        visitEndDate: Joi.date().optional(), // End date for range
         hasRequirementEditAccess: Joi.boolean().optional(),
+        assignmentAmount: Joi.number().positive().required(), // Assignment amount for payment (mandatory)
+    }).custom((value, helpers) => {
+        // Validate that either visitDate OR (visitStartDate AND visitEndDate) is provided
+        const hasSingleDate = value.visitDate;
+        const hasDateRange = value.visitStartDate && value.visitEndDate;
+
+        if (!hasSingleDate && !hasDateRange) {
+            return helpers.error('any.invalid', {
+                message: 'Either visitDate or both visitStartDate and visitEndDate must be provided'
+            });
+        }
+
+        if (hasDateRange && value.visitStartDate >= value.visitEndDate) {
+            return helpers.error('any.invalid', {
+                message: 'visitStartDate must be before visitEndDate'
+            });
+        }
+
+        return value;
     }),
 };
 
