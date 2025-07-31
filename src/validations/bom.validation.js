@@ -116,6 +116,7 @@ export const getSubmittedBOMs = {
         sortBy: Joi.string(),
         limit: Joi.number().integer(),
         page: Joi.number().integer(),
+        projectId: Joi.string().custom(objectId).optional(),
     }),
 };
 

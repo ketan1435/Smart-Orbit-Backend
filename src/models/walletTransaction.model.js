@@ -72,13 +72,11 @@ const walletTransactionSchema = new mongoose.Schema({
     createdBy: {
         type: mongoose.Schema.Types.ObjectId,
         refPath: 'createdByModel',
-        required: true
     },
 
     createdByModel: {
         type: String,
         enum: ['Admin', 'User'],
-        required: true
     },
 }, {
     timestamps: true,

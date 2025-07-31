@@ -1090,13 +1090,50 @@ export const getProjectById = async (projectId) => {
   return project;
 };
 
-export const assignSiteEngineersService = async (projectId, siteEngineerIds) => {
-  return Project.findByIdAndUpdate(
-    projectId,
-    { assignedSiteEngineer: siteEngineerIds }, // Now an array
-    { new: true }
-  ).populate('assignedSiteEngineer', 'name email role');
+export const assignSiteEngineersService = async (projectId, siteEngineers) => {
+  try {
+    // Step 1: Get current assigned site engineers
+    const project = await Project.findById(projectId).select('assignedSiteEngineer');
+    if (!project) throw new Error('Project not found');
+
+    const existingEngineerIds = project.assignedSiteEngineer.map(id => id.toString());
+
+    // Step 2: Filter out engineers already assigned
+    const newEngineers = siteEngineers.filter(
+      eng => !existingEngineerIds.includes(eng.userId.toString())
+    );
+
+    if (newEngineers.length === 0) {
+      // No new engineers to add; return the fully populated project
+      return await Project.findById(projectId).populate('assignedSiteEngineer', 'name email role');
+    }
+
+    const newEngineerIds = newEngineers.map(eng => eng.userId);
+
+    // Step 3: Add only new engineers to the project (merge)
+    const updatedProject = await Project.findByIdAndUpdate(
+      projectId,
+      { $addToSet: { assignedSiteEngineer: { $each: newEngineerIds } } },
+      { new: true }
+    ).populate('assignedSiteEngineer', 'name email role');
+
+    // Step 4: Create project assignment payments only for newly added engineers
+    await Promise.all(newEngineers.map(engineer =>
+      ProjectAssignmentPayment.create({
+        project: projectId,
+        siteEngineer: engineer.userId,
+        assignedAmount: engineer.assignmentAmount,
+        perDayAmount: engineer.perDayAmount,
+      })
+    ));
+
+    return updatedProject;
+  } catch (error) {
+    console.error('Error assigning site engineers:', error);
+    throw error;
+  }
 };
+
 
 export const getAssignedSiteEngineersService = async (projectId) => {
   const project = await Project.findById(projectId)

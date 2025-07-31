@@ -275,7 +275,9 @@ export const getSubmittedBOMs = async (filter = {}, options) => {
     if (filter.createdBy) {
         mongoFilter.createdBy = filter.createdBy;
     }
-
+    if (filter.projectId) {
+        mongoFilter.projectId = filter.projectId;
+    }
     const boms = await BOM.find(mongoFilter)
         .populate('createdBy', 'name email')
         .populate('projectId', 'projectName projectCode')

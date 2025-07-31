@@ -102,7 +102,7 @@ export const submitBOM = catchAsync(async (req, res) => {
  * Get submitted BOMs for admin review
  */
 export const getSubmittedBOMs = catchAsync(async (req, res) => {
-    const filter = pick(req.query, ['createdBy']);
+    const filter = pick(req.query, ['createdBy', 'projectId']);
     const options = pick(req.query, ['sortBy', 'limit', 'page']);
     const result = await bomService.getSubmittedBOMs(filter, options);
     res.status(httpStatus.OK).send({
