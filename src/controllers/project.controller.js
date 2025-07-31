@@ -170,8 +170,8 @@ export const getProjectById = catchAsync(async (req, res) => {
 });
 
 export const assignSiteEngineers = catchAsync(async (req, res) => {
-    const { siteEngineerIds } = req.body;
-    const project = await assignSiteEngineersService(req.params.projectId, siteEngineerIds);
+    const { siteEngineers } = req.body;
+    const project = await assignSiteEngineersService(req.params.projectId, siteEngineers);
 
     if (!project) {
         throw new ApiError(httpStatus.NOT_FOUND, 'Project not found');

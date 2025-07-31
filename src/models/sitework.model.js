@@ -63,7 +63,13 @@ const siteworkSchema = new mongoose.Schema({
         type: [documentSchema],
         default: [],
     },
-    assignedUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    assignedUsers: [{
+        user: {
+            type: mongoose.Schema.Types.ObjectId, ref: 'User'
+        },
+        assignmentAmount: { type: Number, default: 0 },
+        perDayAmount: { type: Number, default: 0 }
+    }],
     createdBy: { type: mongoose.Schema.Types.ObjectId, refPath: 'createdByModel', required: true },
     createdByModel: {
         type: String,

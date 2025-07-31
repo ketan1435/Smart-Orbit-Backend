@@ -5,8 +5,12 @@ import storage from '../factory/storage.factory.js';
 import { v4 as uuidv4 } from 'uuid';
 import Admin from '../models/admin.model.js';
 import User from '../models/user.model.js';
+import ProjectAssignmentPaymant from '../models/projectAssignmentPaymant.model.js';
+import Project from '../models/project.model.js';
+
 
 export const createSiteworkService = async (data, user) => {
+    // Create the Sitework entry
     const sitework = await Sitework.create({
         name: data.name,
         description: data.description,
@@ -19,6 +23,24 @@ export const createSiteworkService = async (data, user) => {
         createdByModel: user.role === 'Admin' ? 'Admin' : 'User',
         isActive: true,
     });
+
+    // Create payment records for each assigned user
+    await Promise.all(data.assignedUsers.map(async (assigned) => {
+        const existing = await ProjectAssignmentPaymant.findOne({
+            user: assigned.user,
+            project: data.project,
+        });
+
+        if (!existing) {
+            await ProjectAssignmentPaymant.create({
+                user: assigned.user,
+                project: data.project,
+                assignedAmount: assigned.assignmentAmount,
+                perDayAmount: assigned.perDayAmount,
+            });
+        }
+    }));
+
     return sitework;
 };
 
@@ -26,11 +48,25 @@ export const updateSiteworkService = async (id, data, user) => {
     const sitework = await Sitework.findById(id);
     if (!sitework) throw new ApiError(httpStatus.NOT_FOUND, 'Sitework not found');
 
-    // Only update allowed fields
+    // Update fields if provided
     if (data.description !== undefined) sitework.description = data.description;
     if (data.assignedUsers !== undefined) sitework.assignedUsers = data.assignedUsers;
     if (data.endDate !== undefined) sitework.endDate = data.endDate;
     if (data.status !== undefined) sitework.status = data.status;
+
+    // Update assignment payment details
+    if (data.assignedUsers && data.assignedUsers.length > 0) {
+        await Promise.all(data.assignedUsers.map(async (assigned) => {
+            await ProjectAssignmentPaymant.findOneAndUpdate(
+                { user: assigned.user, project: sitework.project },
+                {
+                    assignedAmount: assigned.assignmentAmount,
+                    perDayAmount: assigned.perDayAmount,
+                },
+                { new: true, upsert: true } // upsert ensures a record exists if missing
+            );
+        }));
+    }
 
     await sitework.save();
     return sitework;

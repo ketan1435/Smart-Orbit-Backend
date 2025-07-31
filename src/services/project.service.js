@@ -7,6 +7,7 @@ import httpStatus from 'http-status';
 import storage from '../factory/storage.factory.js';
 import Sitework from '../models/sitework.model.js';
 import Roles from '../config/enums/roles.enum.js';
+import ProjectAssignmentPayment from '../models/projectAssignmentPaymant.model.js';
 
 /**
  * Generates a unique project code.
@@ -167,13 +168,19 @@ export const acceptArchitectProposal = async (projectId, proposalId, adminUser) 
   proposalToAccept.acceptedAt = new Date();
   project.architect = proposalToAccept.architect; // Assign architect to the project
 
-  // Reject all other pending proposals
-  project.proposals.forEach((p) => {
-    if (p.id !== proposalId && (p.status === 'Pending' || p.status === 'Responded')) {
-      p.status = 'Rejected';
-      p.rejectedAt = new Date();
-    }
+  await ProjectAssignmentPayment.create({
+    user: proposalToAccept.architect,
+    project: project._id,
+    assignedAmount: proposalToAccept.proposedCharges,
   });
+
+  // Reject all other pending proposals
+  // project.proposals.forEach((p) => {
+  //   if (p.id !== proposalId && (p.status === 'Pending' || p.status === 'Responded')) {
+  //     p.status = 'Rejected';
+  //     p.rejectedAt = new Date();
+  //   }
+  // });
 
   await project.save();
   return project;
@@ -1083,13 +1090,50 @@ export const getProjectById = async (projectId) => {
   return project;
 };
 
-export const assignSiteEngineersService = async (projectId, siteEngineerIds) => {
-  return Project.findByIdAndUpdate(
-    projectId,
-    { assignedSiteEngineer: siteEngineerIds }, // Now an array
-    { new: true }
-  ).populate('assignedSiteEngineer', 'name email role');
+export const assignSiteEngineersService = async (projectId, siteEngineers) => {
+  try {
+    // Step 1: Get current assigned site engineers
+    const project = await Project.findById(projectId).select('assignedSiteEngineer');
+    if (!project) throw new Error('Project not found');
+
+    const existingEngineerIds = project.assignedSiteEngineer.map(id => id.toString());
+
+    // Step 2: Filter out engineers already assigned
+    const newEngineers = siteEngineers.filter(
+      eng => !existingEngineerIds.includes(eng.userId.toString())
+    );
+
+    if (newEngineers.length === 0) {
+      // No new engineers to add; return the fully populated project
+      return await Project.findById(projectId).populate('assignedSiteEngineer', 'name email role');
+    }
+
+    const newEngineerIds = newEngineers.map(eng => eng.userId);
+
+    // Step 3: Add only new engineers to the project (merge)
+    const updatedProject = await Project.findByIdAndUpdate(
+      projectId,
+      { $addToSet: { assignedSiteEngineer: { $each: newEngineerIds } } },
+      { new: true }
+    ).populate('assignedSiteEngineer', 'name email role');
+
+    // Step 4: Create project assignment payments only for newly added engineers
+    await Promise.all(newEngineers.map(engineer =>
+      ProjectAssignmentPayment.create({
+        project: projectId,
+        siteEngineer: engineer.userId,
+        assignedAmount: engineer.assignmentAmount,
+        perDayAmount: engineer.perDayAmount,
+      })
+    ));
+
+    return updatedProject;
+  } catch (error) {
+    console.error('Error assigning site engineers:', error);
+    throw error;
+  }
 };
+
 
 export const getAssignedSiteEngineersService = async (projectId) => {
   const project = await Project.findById(projectId)
@@ -1102,7 +1146,8 @@ export const getAssignedSiteEngineersService = async (projectId) => {
 export const getAssignedProjectsForSiteEngineerService = async (siteEngineerId, query) => {
   const { page = 1, limit = 10, status } = query;
   const filter = {
-    assignedSiteEngineer: siteEngineerId
+    assignedSiteEngineer: siteEngineerId,
+    status: 'Open'
   };
 
   if (status) {

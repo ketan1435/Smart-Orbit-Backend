@@ -116,6 +116,7 @@ export const getSubmittedBOMs = {
         sortBy: Joi.string(),
         limit: Joi.number().integer(),
         page: Joi.number().integer(),
+        projectId: Joi.string().custom(objectId).optional(),
     }),
 };
 
@@ -134,6 +135,18 @@ export const reviewBOM = {
 // New validation for getting procurement team members
 export const getProcurementTeam = {
     query: Joi.object().keys({
+        sortBy: Joi.string(),
+        limit: Joi.number().integer().min(1).max(100).default(50),
+        page: Joi.number().integer().min(1).default(1),
+    }),
+};
+
+// New validation for getting all BOMs (general listing)
+export const getAllBOMs = {
+    query: Joi.object().keys({
+        status: Joi.string().valid('draft', 'submitted', 'pending', 'approved', 'rejected'),
+        projectId: Joi.string().custom(objectId),
+        search: Joi.string().optional(),
         sortBy: Joi.string(),
         limit: Joi.number().integer().min(1).max(100).default(50),
         page: Joi.number().integer().min(1).default(1),

@@ -169,6 +169,10 @@ export default router;
  * /requirements/{requirementId}/visits:
  *   post:
  *     summary: Schedule a new site visit for a requirement
+ *     description: |
+ *       Schedule a site visit with either a single date or a date range.
+ *       - For single date: provide `visitDate`
+ *       - For date range: provide both `visitStartDate` and `visitEndDate`
  *     tags: [SiteVisits]
  *     security:
  *       - bearerAuth: []
@@ -187,7 +191,6 @@ export default router;
  *             type: object
  *             required:
  *               - siteEngineerId
- *               - visitDate
  *             properties:
  *               siteEngineerId:
  *                 type: string
@@ -195,14 +198,38 @@ export default router;
  *               visitDate:
  *                 type: string
  *                 format: date-time
- *                 description: The scheduled date for the visit
+ *                 description: The scheduled date for the visit (for single date scheduling)
+ *               visitStartDate:
+ *                 type: string
+ *                 format: date-time
+ *                 description: The start date for the visit range
+ *               visitEndDate:
+ *                 type: string
+ *                 format: date-time
+ *                 description: The end date for the visit range
  *               hasRequirementEditAccess:
  *                 type: boolean
  *                 description: Whether the site engineer has edit access to the requirement
- *             example:
- *               siteEngineerId: '60d0fe4f5311236168a109ca'
- *               visitDate: '2024-08-15T10:00:00.000Z'
- *               hasRequirementEditAccess: true
+ *               assignmentAmount:
+ *                 type: number
+ *                 description: Amount to be paid to the site engineer for this assignment (required)
+ *                 required: true
+ *             examples:
+ *               singleDate:
+ *                 summary: Single date scheduling
+ *                 value:
+ *                   siteEngineerId: '60d0fe4f5311236168a109ca'
+ *                   visitDate: '2024-08-15T10:00:00.000Z'
+ *                   hasRequirementEditAccess: true
+ *                   assignmentAmount: 5000
+ *               dateRange:
+ *                 summary: Date range scheduling
+ *                 value:
+ *                   siteEngineerId: '60d0fe4f5311236168a109ca'
+ *                   visitStartDate: '2024-08-15T10:00:00.000Z'
+ *                   visitEndDate: '2024-08-17T18:00:00.000Z'
+ *                   hasRequirementEditAccess: true
+ *                   assignmentAmount: 7500
  *     responses:
  *       "201":
  *         description: Created
@@ -210,6 +237,19 @@ export default router;
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/SiteVisit'
+ *       "400":
+ *         description: Bad Request - Invalid date parameters
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 0
+ *                 message:
+ *                   type: string
+ *                   example: "Either visitDate or both visitStartDate and visitEndDate must be provided"
  *       "401":
  *         $ref: '#/components/responses/Unauthorized'
  *       "403":

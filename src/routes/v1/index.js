@@ -14,6 +14,10 @@ import clientProposalRoute from './clientProposal.route.js';
 import vendorRoute from './vendor.route.js';
 import poRoute from './po.route.js';
 import siteworkRoute from './sitework.route.js';
+import projectAssignmentPaymentRoute from './projectAssignmentPayment.route.js';
+import walletTransactionRoute from './walletTransaction.route.js';
+import messageRoute from './message.route.js';
+import socketRoute from './socket.route.js';
 
 const router = express.Router();
 
@@ -69,6 +73,22 @@ const defaultRoutes = [
   {
     path: '/siteworks',
     route: siteworkRoute,
+  },
+  {
+    path: '/project-assignment-payments',
+    route: projectAssignmentPaymentRoute,
+  },
+  {
+    path: '/wallet-transactions',
+    route: walletTransactionRoute,
+  },
+  {
+    path: '/messages',
+    route: messageRoute,
+  },
+  {
+    path: '/socket',
+    route: socketRoute,
   },
   // {
   //   path: '/income',

@@ -275,7 +275,9 @@ export const getSubmittedBOMs = async (filter = {}, options) => {
     if (filter.createdBy) {
         mongoFilter.createdBy = filter.createdBy;
     }
-
+    if (filter.projectId) {
+        mongoFilter.projectId = filter.projectId;
+    }
     const boms = await BOM.find(mongoFilter)
         .populate('createdBy', 'name email')
         .populate('projectId', 'projectName projectCode')
@@ -322,6 +324,59 @@ export const reviewBOM = async (projectId, bomId, reviewData, user) => {
     await bom.save();
 
     return bom.populate(['createdBy', 'projectId', 'items.addedBy']);
+};
+
+/**
+ * Get all BOMs (general listing)
+ * @param {Object} filter - Filter options (status, projectId, search)
+ * @param {Object} options - Query options (sortBy, limit, page)
+ * @returns {Promise<Object>}
+ */
+export const getAllBOMs = async (filter = {}, options) => {
+    const { limit = 50, page = 1, sortBy } = options;
+    const sort = sortBy
+        ? { [sortBy.split(':')[0]]: sortBy.split(':')[1] === 'desc' ? -1 : 1 }
+        : { createdAt: -1 };
+
+    // Build filter object
+    const mongoFilter = {};
+
+    // Filter by status if provided
+    if (filter.status) {
+        mongoFilter.status = filter.status;
+    }
+
+    // Filter by project ID if provided
+    if (filter.projectId) {
+        mongoFilter.projectId = filter.projectId;
+    }
+
+    // Search in title and description if provided
+    if (filter.search) {
+        mongoFilter.$or = [
+            { title: { $regex: filter.search, $options: 'i' } },
+            { description: { $regex: filter.search, $options: 'i' } }
+        ];
+    }
+
+    const boms = await BOM.find(mongoFilter)
+        .populate('createdBy', 'name email')
+        .populate('projectId', 'projectName projectCode')
+        .populate('items.addedBy', 'name email')
+        .sort(sort)
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean();
+
+    const totalResults = await BOM.countDocuments(mongoFilter);
+
+    return {
+        results: boms,
+        page,
+        limit,
+        totalPages: Math.ceil(totalResults / limit),
+        totalResults,
+    };
 };
 
 /**

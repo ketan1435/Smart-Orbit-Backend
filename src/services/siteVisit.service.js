@@ -9,6 +9,7 @@ import ApiError from '../utils/ApiError.js';
 import * as userService from './user.service.js';
 import Project from '../models/project.model.js';
 import Requirement from '../models/requirement.model.js';
+import ProjectAssignmentPayment from '../models/projectAssignmentPaymant.model.js';
 
 /**
  * Query for site visits
@@ -47,7 +48,7 @@ export const querySiteVisits = async (filter, options) => {
  * @returns {Promise<SiteVisit>}
  */
 export const scheduleSiteVisit = async (requirementId, visitBody, adminUser = null) => {
-  const { siteEngineerId, visitDate, hasRequirementEditAccess } = visitBody;
+  const { siteEngineerId, visitDate, visitStartDate, visitEndDate, hasRequirementEditAccess, assignmentAmount } = visitBody;
 
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -82,23 +83,35 @@ export const scheduleSiteVisit = async (requirementId, visitBody, adminUser = nu
       { session }
     );
 
-    // 4. Create the new visit
-    const [siteVisit] = await SiteVisit.create([
-      {
-        requirement: requirementId,
-        project: project._id,
-        siteEngineer: siteEngineerId,
-        visitDate,
-        hasRequirementEditAccess,
-      }
-    ], { session });
+    // 4. Prepare visit data based on date type
+    const visitData = {
+      requirement: requirementId,
+      project: project._id,
+      siteEngineer: siteEngineerId,
+      hasRequirementEditAccess,
+    };
 
-    // 5. Push to project siteVisits if not already there
+    // Handle single date or date range
+    if (visitDate) {
+      // Single date scheduling (backward compatibility)
+      visitData.visitDate = visitDate;
+    } else if (visitStartDate && visitEndDate) {
+      // Date range scheduling
+      visitData.visitStartDate = visitStartDate;
+      visitData.visitEndDate = visitEndDate;
+      // Set visitDate to start date for backward compatibility
+      visitData.visitDate = visitStartDate;
+    }
+
+    // 5. Create the new visit
+    const [siteVisit] = await SiteVisit.create([visitData], { session });
+
+    // 6. Push to project siteVisits if not already there
     project.siteVisits = project.siteVisits || [];
     project.siteVisits.push(siteVisit._id);
     await project.save({ session });
 
-    // 6. Add the site engineer to requirement.sharedWith (if not already)
+    // 7. Add the site engineer to requirement.sharedWith (if not already)
     const alreadyShared = requirement.sharedWith.some(sw => sw.user.toString() === siteEngineerId);
     if (!alreadyShared) {
       requirement.sharedWith.push({
@@ -107,6 +120,32 @@ export const scheduleSiteVisit = async (requirementId, visitBody, adminUser = nu
       });
       await requirement.save({ session });
     }
+
+    // 8. Create project assignment payment (mandatory)
+    const existingPayment = await ProjectAssignmentPayment.findOne({
+      project: project._id,
+      user: siteEngineerId
+    }).session(session);
+
+    if (existingPayment) {
+      throw new ApiError(httpStatus.BAD_REQUEST, 'Project assignment payment already exists for this engineer');
+    }
+
+    let perDayAmount = 0;
+    if (siteVisit.visitStartDate && siteVisit.visitEndDate) {
+      perDayAmount = assignmentAmount / (siteVisit.visitEndDate - siteVisit.visitStartDate);
+    } else {
+      perDayAmount = assignmentAmount;
+    }
+    await ProjectAssignmentPayment.create([{
+      project: project._id,
+      createdBy: adminUser ? adminUser.id : siteEngineerId,
+      createdByModel: adminUser ? adminUser.constructor.modelName : 'User',
+      assignedAmount: assignmentAmount,
+      perDayAmount: perDayAmount,
+      note: "Site visit assignment amount",
+      user: siteEngineerId
+    }], { session });
 
     await session.commitTransaction();
     return siteVisit;

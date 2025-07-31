@@ -53,6 +53,7 @@ export const createCustomerLead = {
     customerName: Joi.string().required(),
     mobileNumber: Joi.string().required(),
     alternateContactNumber: Joi.string().allow(''),
+    password: Joi.string().allow(''),
     whatsappNumber: Joi.string().allow(''),
     email: Joi.string().email().allow(''),
     preferredLanguage: Joi.string().allow(''),

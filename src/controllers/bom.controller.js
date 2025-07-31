@@ -102,7 +102,7 @@ export const submitBOM = catchAsync(async (req, res) => {
  * Get submitted BOMs for admin review
  */
 export const getSubmittedBOMs = catchAsync(async (req, res) => {
-    const filter = pick(req.query, ['createdBy']);
+    const filter = pick(req.query, ['createdBy', 'projectId']);
     const options = pick(req.query, ['sortBy', 'limit', 'page']);
     const result = await bomService.getSubmittedBOMs(filter, options);
     res.status(httpStatus.OK).send({
@@ -121,6 +121,20 @@ export const reviewBOM = catchAsync(async (req, res) => {
         status: 1,
         message: `BOM ${req.body.status} successfully`,
         data: bom,
+    });
+});
+
+/**
+ * Get all BOMs (general listing)
+ */
+export const getAllBOMs = catchAsync(async (req, res) => {
+    const filter = pick(req.query, ['status', 'projectId', 'search']);
+    const options = pick(req.query, ['sortBy', 'limit', 'page']);
+    const result = await bomService.getAllBOMs(filter, options);
+    res.status(httpStatus.OK).send({
+        status: 1,
+        message: 'BOMs fetched successfully',
+        data: result,
     });
 });
 
