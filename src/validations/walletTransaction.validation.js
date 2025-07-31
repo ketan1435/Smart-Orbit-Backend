@@ -36,8 +36,8 @@ export const createWalletTransaction = {
         requirement: Joi.string().custom(objectId).optional(),
         description: Joi.string().required().trim(),
         notes: Joi.string().allow('').trim(),
-        createdBy: Joi.string().custom(objectId).required(),
-        createdByModel: Joi.string().valid('Admin', 'User').required(),
+        createdBy: Joi.string().custom(objectId).optional(),
+        createdByModel: Joi.string().valid('Admin', 'User').optional(),
     }),
 };
 

@@ -38,6 +38,7 @@ export const createBOM = {
         }),
         status: Joi.string().valid('draft', 'submitted').optional().default('draft'),
         remarks: Joi.string().optional(),
+        projectId: Joi.string().custom(objectId).optional(),
         items: Joi.array().items(bomItemSchema).min(1).required(),
     }),
 };

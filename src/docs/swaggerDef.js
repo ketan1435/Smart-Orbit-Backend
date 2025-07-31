@@ -23,7 +23,7 @@ const { version } = pkg;
 const swaggerDef = {
   openapi: '3.0.0',
   info: {
-    title: 'VSM API documentation',
+    title: 'Smart Orbiter API documentation',
     version,
   },
   servers: [
