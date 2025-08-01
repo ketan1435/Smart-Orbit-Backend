@@ -204,7 +204,7 @@ export const getMyAssignedProjects = catchAsync(async (req, res) => {
 });
 
 export const getMySiteworkProjects = catchAsync(async (req, res) => {
-    const result = await getProjectsForUserAssignedInSiteworkService(req.user.id, req.query);
+    const result = await getProjectsForUserAssignedInSiteworkService(req.user._id, req.query);
     res.status(httpStatus.OK).json({
         status: 1,
         message: 'My sitework projects retrieved successfully',

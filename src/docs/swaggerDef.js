@@ -23,7 +23,7 @@ const { version } = pkg;
 const swaggerDef = {
   openapi: '3.0.0',
   info: {
-    title: 'VSM API documentation',
+    title: 'Smart Orbiter API documentation',
     version,
   },
   servers: [
@@ -32,7 +32,7 @@ const swaggerDef = {
       description: "Local Server",
     },
     {
-      url: `https://vsm-backend-i6ad.onrender.com/v1`,
+      url: `https://smart-orbit-backend.onrender.com/v1`,
       description: "Render Server",
     },
   ],

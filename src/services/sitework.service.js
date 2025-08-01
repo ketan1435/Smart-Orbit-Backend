@@ -76,7 +76,7 @@ export const getSiteworksByProjectService = async (projectId, user) => {
     const filter = { project: projectId };
     // If not admin or site engineer, restrict to assignedUsers
     if (user.role !== 'Admin' && user.role !== 'site-engineer') {
-        filter.assignedUsers = user.id;
+        filter["assignedUsers.user"] = user._id;
     }
     const siteworks = await Sitework.find(filter)
         .sort({ sequence: 1, createdAt: 1 })
@@ -101,7 +101,7 @@ export const addSiteworkDocumentService = async (siteworkId, data, user) => {
     // Check permission: admin, sales-admin, site engineer, or assigned user
     const isAdmin = user.role === 'Admin' || user.role === 'sales-admin';
     const isSiteEngineer = user.role === 'site-engineer';
-    const isAssignedUser = sitework.assignedUsers.map(id => id.toString()).includes(user.id);
+    const isAssignedUser = sitework.assignedUsers.map(id => id.user.toString()).includes(user._id.toString());
     if (!isAdmin && !isSiteEngineer && !isAssignedUser) {
         throw new ApiError(httpStatus.FORBIDDEN, 'Not authorized to add documents');
     }

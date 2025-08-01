@@ -1176,7 +1176,7 @@ export const getAssignedProjectsForSiteEngineerService = async (siteEngineerId, 
 
 export const getProjectsForUserAssignedInSiteworkService = async (userId, query) => {
   // 1. Find all siteworks where user is assigned
-  const siteworks = await Sitework.find({ assignedUsers: userId }).select('project');
+  const siteworks = await Sitework.find({ "assignedUsers.user": userId }).select('project');
   const projectIds = [...new Set(siteworks.map(sw => sw.project.toString()))];
   if (projectIds.length === 0) {
     return { data: [], page: 1, limit: 10, total: 0, totalPages: 0 };

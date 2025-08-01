@@ -3,8 +3,14 @@ import { objectId } from './custom.validation.js';
 
 const siteVisitSchema = Joi.object({
   siteEngineer: Joi.string().custom(objectId).required(),
-  visitDate: Joi.date().required(),
+  visitDate: Joi.alternatives().try(Joi.date(), Joi.string().isoDate()).optional(),
+  visitStartDate: Joi.alternatives().try(Joi.date(), Joi.string().isoDate()).optional(),
+  visitEndDate: Joi.alternatives().try(Joi.date(), Joi.string().isoDate()).optional(),
   hasRequirementEditAccess: Joi.boolean().default(false),
+  assignmentAmount: Joi.alternatives().try(
+    Joi.number().positive(),
+    Joi.string().pattern(/^\d+(\.\d+)?$/).message('Assignment amount must be a valid number')
+  ).optional(),
 });
 
 const scpDataSchema = Joi.object({
@@ -28,7 +34,13 @@ const scpDataSchema = Joi.object({
   roadWidth: Joi.string().allow(''),
   targetCompletionDate: Joi.string().allow(''),
   siteEngineer: Joi.string().allow(null, ''), // Keep for backward compatibility
-  siteVisitDate: Joi.date().allow(null, ''), // Keep for backward compatibility
+  siteVisitDate: Joi.alternatives().try(Joi.date(), Joi.string().isoDate()).allow(null, ''), // Keep for backward compatibility
+  siteVisitStartDate: Joi.alternatives().try(Joi.date(), Joi.string().isoDate()).allow(null, ''), // New field
+  siteVisitEndDate: Joi.alternatives().try(Joi.date(), Joi.string().isoDate()).allow(null, ''), // New field
+  assignmentAmount: Joi.alternatives().try(
+    Joi.number().positive(),
+    Joi.string().pattern(/^\d+(\.\d+)?$/).message('Assignment amount must be a valid number')
+  ).allow(null, ''), // New field
   siteVisits: Joi.array().items(siteVisitSchema), // New field for multiple site visits
   scpRemarks: Joi.string().allow(''),
 });
