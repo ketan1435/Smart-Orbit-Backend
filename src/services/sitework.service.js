@@ -26,12 +26,12 @@ export const createSiteworkService = async (data, user) => {
 
     // Create payment records for each assigned user
     await Promise.all(data.assignedUsers.map(async (assigned) => {
-        const existing = await ProjectAssignmentPaymant.findOne({
-            user: assigned.user,
-            project: data.project,
-        });
+        // const existing = await ProjectAssignmentPaymant.findOne({
+        //     user: assigned.user,
+        //     project: data.project,
+        // });
 
-        if (!existing) {
+        if (true) {
             await ProjectAssignmentPaymant.create({
                 user: assigned.user,
                 project: data.project,
