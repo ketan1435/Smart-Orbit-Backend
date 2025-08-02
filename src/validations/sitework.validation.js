@@ -65,4 +65,30 @@ export const approveOrRejectSiteworkDocument = {
         status: Joi.string().valid('Approved', 'Rejected').required(),
         feedback: Joi.string().allow(''),
     }),
+};
+
+export const getSiteworkDocumentsForCustomer = {
+    params: Joi.object().keys({
+        projectId: Joi.string().custom(objectId).required(),
+    }),
+};
+
+export const customerReviewSiteworkDocument = {
+    params: Joi.object().keys({
+        projectId: Joi.string().custom(objectId).required(),
+        siteworkId: Joi.string().custom(objectId).required(),
+        docId: Joi.string().custom(objectId).required(),
+    }),
+    body: Joi.object().keys({
+        status: Joi.string().valid('Approved', 'Rejected').required(),
+        feedback: Joi.string().allow(''),
+    }),
+};
+
+export const sendSiteworkDocumentToCustomer = {
+    params: Joi.object().keys({
+        projectId: Joi.string().custom(objectId).required(),
+        siteworkId: Joi.string().custom(objectId).required(),
+        docId: Joi.string().custom(objectId).required(),
+    }),
 }; 

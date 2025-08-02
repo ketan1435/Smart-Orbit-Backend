@@ -1202,4 +1202,46 @@ export const getProjectsForUserAssignedInSiteworkService = async (userId, query)
     total,
     totalPages: Math.ceil(total / parseInt(limit)),
   };
+};
+
+/**
+ * Update project status manually (Admin only)
+ * @param {string} projectId
+ * @param {string} newStatus
+ * @param {Object} user
+ * @returns {Promise<Project>}
+ */
+export const updateProjectStatusService = async (projectId, newStatus, user) => {
+  // Verify user is admin
+  if (user.role !== 'Admin' && user.role !== 'sales-admin') {
+    throw new ApiError(httpStatus.FORBIDDEN, 'Only admins can update project status');
+  }
+
+  // Validate status
+  const validStatuses = ['Draft', 'Pending', 'Open', 'OnHold', 'Completed', 'Cancelled'];
+  if (!validStatuses.includes(newStatus)) {
+    throw new ApiError(httpStatus.BAD_REQUEST, `Invalid status. Must be one of: ${validStatuses.join(', ')}`);
+  }
+
+  // Find and update the project
+  const project = await Project.findByIdAndUpdate(
+    projectId,
+    {
+      status: newStatus,
+      updatedAt: new Date()
+    },
+    {
+      new: true,
+      runValidators: true
+    }
+  ).populate('lead')
+    .populate('requirement')
+    .populate('architect')
+    .populate('assignedSiteEngineer');
+
+  if (!project) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Project not found');
+  }
+
+  return project;
 }; 

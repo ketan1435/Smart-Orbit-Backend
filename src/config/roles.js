@@ -1,7 +1,7 @@
 const allRoles = {
-  user: ['getProjects'], // A customer who can see their project status
-  admin: ['getUsers', 'manageUsers', 'getProjects', 'exportLeads', 'manageProjects', 'manageArchitects', 'manageLeads', 'manageSiteVisits', 'getSiteVisits', 'getBoms', 'getProcurementTeam', 'reviewBOM', 'getSiteworks', 'manageSiteworks', 'getWorkers', 'manageWorkers', 'getSiteworkDocuments', 'manageSiteworkDocuments', 'getUsers'],
-  'sales-admin': ['manageLeads', 'getProjects', 'getSiteVisits'],
+  user: ['getProjects', 'getSiteworkDocumentsForCustomer', 'customerReviewSiteworkDocument', 'getSiteworks', 'manageSiteworkDocuments'], // A customer who can see their project status
+  admin: ['getUsers', 'manageUsers', 'getProjects', 'exportLeads', 'manageProjects', 'manageArchitects', 'manageLeads', 'manageSiteVisits', 'getSiteVisits', 'getBoms', 'getProcurementTeam', 'reviewBOM', 'getSiteworks', 'manageSiteworks', 'getWorkers', 'manageWorkers', 'getSiteworkDocuments', 'manageSiteworkDocuments', 'sendSiteworkDocumentToCustomer', 'getUsers', 'updateProjectStatus'],
+  'sales-admin': ['manageLeads', 'getProjects', 'getSiteVisits', 'sendSiteworkDocumentToCustomer', 'updateProjectStatus'],
   architect: ['manageDrawings', 'getProjects', 'manageProjects'],
   'fabricator': ['manageBOM', 'getProjects', 'getSiteworks', 'manageSiteworks', 'getWorkers', 'manageWorkers', 'getSiteworkDocuments', 'manageSiteworkDocuments', 'getUsers'],
   'procurement-team': ['manageVendors', 'getProjects', 'getReusableBOMs', 'createBoms', 'getBoms', 'submitBOM'],

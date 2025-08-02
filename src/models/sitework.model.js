@@ -12,6 +12,11 @@ const documentSchema = new mongoose.Schema({
         enum: ['Pending', 'Approved', 'Rejected'],
         default: 'Pending',
     },
+    customerStatus: {
+        type: String,
+        enum: ['Pending', 'Approved', 'Rejected'],
+        default: 'Pending',
+    },
     files: {
         type: [fileSchema],
         default: [],
@@ -39,6 +44,32 @@ const documentSchema = new mongoose.Schema({
     siteengineerFeedbackBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
+    },
+    customerFeedback: {
+        type: String,
+        trim: true,
+    },
+    customerFeedbackBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+    },
+    customerReviewedAt: {
+        type: Date,
+    },
+    sentToCustomer: {
+        type: Boolean,
+        default: false,
+    },
+    sentToCustomerAt: {
+        type: Date,
+    },
+    sentToCustomerBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        refPath: 'sentToCustomerByModel',
+    },
+    sentToCustomerByModel: {
+        type: String,
+        enum: ['User', 'Admin'],
     },
     createdByUser: { type: mongoose.Schema.Types.ObjectId, refPath: 'createdByUserModel', required: true },
     createdByUserModel: {

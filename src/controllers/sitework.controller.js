@@ -1,6 +1,6 @@
 import httpStatus from 'http-status';
 import catchAsync from '../utils/catchAsync.js';
-import { createSiteworkService, updateSiteworkService, getSiteworksByProjectService, addSiteworkDocumentService, approveOrRejectSiteworkDocumentService, getSiteworkDocumentsService } from '../services/sitework.service.js';
+import { createSiteworkService, updateSiteworkService, getSiteworksByProjectService, addSiteworkDocumentService, approveOrRejectSiteworkDocumentService, getSiteworkDocumentsService, getSiteworkDocumentsForCustomerService, customerReviewSiteworkDocumentService, sendSiteworkDocumentToCustomerService } from '../services/sitework.service.js';
 import ApiError from '../utils/ApiError.js';
 
 export const createSitework = catchAsync(async (req, res) => {
@@ -58,4 +58,37 @@ export const getSiteworkDocuments = catchAsync(async (req, res) => {
     const user = req.user;
     const documents = await getSiteworkDocumentsService(siteworkId, user);
     res.status(200).json({ status: 1, message: 'Sitework documents fetched successfully', data: documents });
+});
+
+export const getSiteworkDocumentsForCustomer = catchAsync(async (req, res) => {
+    const { projectId } = req.params;
+    const user = req.user;
+    const documents = await getSiteworkDocumentsForCustomerService(projectId, user);
+    res.status(200).json({
+        status: 1,
+        message: 'Sitework documents for customer fetched successfully',
+        data: documents
+    });
+});
+
+export const customerReviewSiteworkDocument = catchAsync(async (req, res) => {
+    const { projectId, siteworkId, docId } = req.params;
+    const user = req.user;
+    const document = await customerReviewSiteworkDocumentService(projectId, siteworkId, docId, req.body, user);
+    res.status(200).json({
+        status: 1,
+        message: 'Sitework document reviewed successfully',
+        data: document
+    });
+});
+
+export const sendSiteworkDocumentToCustomer = catchAsync(async (req, res) => {
+    const { projectId, siteworkId, docId } = req.params;
+    const user = req.user;
+    const document = await sendSiteworkDocumentToCustomerService(projectId, siteworkId, docId, user);
+    res.status(200).json({
+        status: 1,
+        message: 'Sitework document sent to customer successfully',
+        data: document
+    });
 }); 
