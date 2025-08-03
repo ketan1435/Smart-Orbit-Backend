@@ -312,9 +312,311 @@ router.patch('/:siteworkId/documents/:docId/review', auth('manageSiteworkDocumen
 
 /**
  * @swagger
+ * /siteworks/project/{projectId}/documents/customer:
+ *   get:
+ *     summary: Get sitework documents for customer
+ *     tags: [Sitework]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Project ID
+ *     responses:
+ *       200:
+ *         description: Sitework documents for customer fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: number
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: Sitework documents for customer fetched successfully
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       _id:
+ *                         type: string
+ *                       files:
+ *                         type: array
+ *                         items:
+ *                           type: object
+ *                           properties:
+ *                             fileType:
+ *                               type: string
+ *                             key:
+ *                               type: string
+ *                             uploadedAt:
+ *                               type: string
+ *                             format: date-time
+ *                       userNote:
+ *                         type: string
+ *                       siteengineerStatus:
+ *                         type: string
+ *                         enum: [Pending, Approved, Rejected]
+ *                       adminStatus:
+ *                         type: string
+ *                         enum: [Pending, Approved, Rejected]
+ *                       siteengineerFeedback:
+ *                         type: string
+ *                       adminFeedback:
+ *                         type: string
+ *                       addedAt:
+ *                         type: string
+ *                         format: date-time
+ *                       createdByUserName:
+ *                         type: string
+ *                       siteengineerFeedbackByUserName:
+ *                         type: string
+ *                       siteworkName:
+ *                         type: string
+ *                       siteworkDescription:
+ *                         type: string
+ *                       siteworkStatus:
+ *                         type: string
+ *                       siteworkId:
+ *                         type: string
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - Only customers can access this endpoint
+ *       404:
+ *         description: Project not found
+ */
+router.get('/project/:projectId/documents/customer', auth('getSiteworkDocumentsForCustomer'), validate(siteworkValidation.getSiteworkDocumentsForCustomer), siteworkController.getSiteworkDocumentsForCustomer);
+
+/**
+ * @swagger
+ * /siteworks/project/{projectId}/sitework/{siteworkId}/documents/{docId}/customer-review:
+ *   patch:
+ *     summary: Customer review of sitework document
+ *     tags: [Sitework]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Project ID
+ *       - in: path
+ *         name: siteworkId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Sitework ID
+ *       - in: path
+ *         name: docId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Document ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - status
+ *             properties:
+ *               status:
+ *                 type: string
+ *                 enum: [Approved, Rejected]
+ *               feedback:
+ *                 type: string
+ *                 description: Optional feedback from customer
+ *           example:
+ *             status: "Approved"
+ *             feedback: "Work looks good, approved."
+ *     responses:
+ *       200:
+ *         description: Sitework document reviewed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: number
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: Sitework document reviewed successfully
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     _id:
+ *                       type: string
+ *                     files:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           fileType:
+ *                             type: string
+ *                           key:
+ *                             type: string
+ *                           uploadedAt:
+ *                             type: string
+ *                             format: date-time
+ *                     userNote:
+ *                       type: string
+ *                     siteengineerStatus:
+ *                       type: string
+ *                     adminStatus:
+ *                       type: string
+ *                     customerStatus:
+ *                       type: string
+ *                     siteengineerFeedback:
+ *                       type: string
+ *                     adminFeedback:
+ *                       type: string
+ *                     customerFeedback:
+ *                       type: string
+ *                     customerReviewedAt:
+ *                       type: string
+ *                       format: date-time
+ *                     createdByUserName:
+ *                       type: string
+ *                     siteengineerFeedbackByUserName:
+ *                       type: string
+ *                     adminFeedbackByUserName:
+ *                       type: string
+ *                     siteworkName:
+ *                       type: string
+ *                     siteworkDescription:
+ *                       type: string
+ *                     siteworkStatus:
+ *                       type: string
+ *       400:
+ *         description: Invalid input
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - Only customers can review documents
+ *       404:
+ *         description: Sitework or document not found
+ */
+router.patch('/project/:projectId/sitework/:siteworkId/documents/:docId/customer-review', auth('customerReviewSiteworkDocument'), validate(siteworkValidation.customerReviewSiteworkDocument), siteworkController.customerReviewSiteworkDocument);
+
+/**
+ * @swagger
+ * /siteworks/project/{projectId}/sitework/{siteworkId}/documents/{docId}/send-to-customer:
+ *   post:
+ *     summary: Send sitework document to customer for review (Admin only)
+ *     tags: [Sitework]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Project ID
+ *       - in: path
+ *         name: siteworkId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Sitework ID
+ *       - in: path
+ *         name: docId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Document ID
+ *     responses:
+ *       200:
+ *         description: Sitework document sent to customer successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: number
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: Sitework document sent to customer successfully
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     _id:
+ *                       type: string
+ *                     files:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           fileType:
+ *                             type: string
+ *                           key:
+ *                             type: string
+ *                           uploadedAt:
+ *                             type: string
+ *                             format: date-time
+ *                     userNote:
+ *                       type: string
+ *                     siteengineerStatus:
+ *                       type: string
+ *                     adminStatus:
+ *                       type: string
+ *                     customerStatus:
+ *                       type: string
+ *                     siteengineerFeedback:
+ *                       type: string
+ *                     adminFeedback:
+ *                       type: string
+ *                     sentToCustomerAt:
+ *                       type: string
+ *                       format: date-time
+ *                     sentToCustomerBy:
+ *                       type: string
+ *                     sentToCustomerByModel:
+ *                       type: string
+ *                     createdByUserName:
+ *                       type: string
+ *                     siteengineerFeedbackByUserName:
+ *                       type: string
+ *                     adminFeedbackByUserName:
+ *                       type: string
+ *                     sentToCustomerByUserName:
+ *                       type: string
+ *                     siteworkName:
+ *                       type: string
+ *                     siteworkDescription:
+ *                       type: string
+ *                     siteworkStatus:
+ *                       type: string
+ *       400:
+ *         description: Bad request - Document already sent to customer
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - Only admins can send documents to customers
+ *       404:
+ *         description: Sitework or document not found
+ */
+router.post('/project/:projectId/sitework/:siteworkId/documents/:docId/send-to-customer', auth('sendSiteworkDocumentToCustomer'), validate(siteworkValidation.sendSiteworkDocumentToCustomer), siteworkController.sendSiteworkDocumentToCustomer);
+
+/**
+ * @swagger
  * /siteworks/{siteworkId}/documents:
  *   get:
- *     summary: Get all documents for a sitework
+ *     summary: Get sitework documents
  *     tags: [Sitework]
  *     security:
  *       - bearerAuth: []
@@ -334,7 +636,7 @@ router.patch('/:siteworkId/documents/:docId/review', auth('manageSiteworkDocumen
  *               type: object
  *               properties:
  *                 status:
- *                   type: integer
+ *                   type: number
  *                   example: 1
  *                 message:
  *                   type: string
@@ -346,93 +648,39 @@ router.patch('/:siteworkId/documents/:docId/review', auth('manageSiteworkDocumen
  *                     properties:
  *                       _id:
  *                         type: string
- *                       name:
- *                         type: string
- *                       description:
- *                         type: string
- *                       status:
- *                         type: string
- *                       startDate:
- *                         type: string
- *                         format: date-time
- *                       endDate:
- *                         type: string
- *                         format: date-time
- *                       assignedUsers:
+ *                       files:
  *                         type: array
  *                         items:
  *                           type: object
  *                           properties:
- *                             _id:
+ *                             fileType:
  *                               type: string
- *                             name:
+ *                             key:
  *                               type: string
- *                             email:
+ *                             uploadedAt:
  *                               type: string
- *                             role:
- *                               type: string
- *                       sequence:
- *                         type: number
- *                       isActive:
- *                         type: boolean
- *                       user:
- *                         type: object
- *                         properties:
- *                           _id:
- *                             type: string
- *                           name:
- *                             type: string
- *                           email:
- *                             type: string
- *                           role:
- *                             type: string
- *                       documents:
- *                         type: array
- *                         items:
- *                           type: object
- *                           properties:
- *                             _id:
- *                               type: string
- *                             name:
- *                               type: string
- *                             description:
- *                               type: string
- *                             status:
- *                               type: string
- *                             startDate:
- *                               type: string
- *                               format: date-time
- *                             endDate:
- *                               type: string
- *                               format: date-time
- *                             assignedUsers:
- *                               type: array
- *                               items:
- *                                 type: object
- *                                 properties:
- *                                   _id:
- *                                     type: string
- *                                   name:
- *                                     type: string
- *                                   email:
- *                                     type: string
- *                                   role:
- *                                     type: string
- *                             sequence:
- *                               type: number
- *                             isActive:
- *                               type: boolean
- *                             user:
- *                               type: object
- *                               properties:
- *                                 _id:
- *                                   type: string
- *                                 name:
- *                                   type: string
- *                                 email:
- *                                   type: string
- *                                 role:
- *                                   type: string
+ *                             format: date-time
+ *                       userNote:
+ *                         type: string
+ *                       siteengineerStatus:
+ *                         type: string
+ *                         enum: [Pending, Approved, Rejected]
+ *                       adminStatus:
+ *                         type: string
+ *                         enum: [Pending, Approved, Rejected]
+ *                       siteengineerFeedback:
+ *                         type: string
+ *                       adminFeedback:
+ *                         type: string
+ *                       addedAt:
+ *                         type: string
+ *                         format: date-time
+ *                       createdByUserName:
+ *                         type: string
+ *                       adminFeedbackByUserName:
+ *                         type: string
+ *                       siteengineerFeedbackByUserName:
+ *                         type: string
  *       401:
  *         description: Unauthorized
  *       404:

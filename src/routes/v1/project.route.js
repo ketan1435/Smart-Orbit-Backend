@@ -394,6 +394,66 @@ router
 //   .get(auth('getProjects'), validate(projectValidation.getProjects), projectController.getProjects)
 //   .post(auth('manageProjects'), validate(projectValidation.createProject), projectController.createProject);
 
+/**
+ * @swagger
+ * /projects/{projectId}/status:
+ *   patch:
+ *     summary: Update project status manually (Admin only)
+ *     description: Allows an admin to manually change the project status to any valid status
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the project to update
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - status
+ *             properties:
+ *               status:
+ *                 type: string
+ *                 enum: [Draft, Pending, Open, OnHold, Completed, Cancelled]
+ *                 description: The new status for the project
+ *           example:
+ *             status: "Active"
+ *     responses:
+ *       200:
+ *         description: Project status updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: Project status updated successfully
+ *                 data:
+ *                   $ref: '#/components/schemas/Project'
+ *       400:
+ *         description: Bad Request - Invalid status value
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - Only admins can update project status
+ *       404:
+ *         description: Project not found
+ */
+router
+    .route('/:projectId/status')
+    .patch(auth('updateProjectStatus'), validate(projectValidation.updateProjectStatus), projectController.updateProjectStatus);
+
 export default router;
 
 /**

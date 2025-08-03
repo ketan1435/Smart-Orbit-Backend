@@ -211,3 +211,17 @@ export const getMySiteworkProjects = catchAsync(async (req, res) => {
         ...result
     });
 });
+
+export const updateProjectStatus = catchAsync(async (req, res) => {
+    const { projectId } = req.params;
+    const { status } = req.body;
+    const user = req.user;
+
+    const project = await projectService.updateProjectStatusService(projectId, status, user);
+
+    res.status(httpStatus.OK).json({
+        status: 1,
+        message: 'Project status updated successfully',
+        data: project
+    });
+});

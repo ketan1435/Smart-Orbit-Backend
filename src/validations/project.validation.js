@@ -189,4 +189,13 @@ export const getProjectDocumentsForProcurement = {
     params: Joi.object().keys({
         projectId: Joi.string().custom(objectId).required(),
     }),
+};
+
+export const updateProjectStatus = {
+    params: Joi.object().keys({
+        projectId: Joi.string().custom(objectId).required(),
+    }),
+    body: Joi.object().keys({
+        status: Joi.string().valid('Draft', 'Pending', 'Open', 'OnHold', 'Completed', 'Cancelled').required(),
+    }),
 }; 
