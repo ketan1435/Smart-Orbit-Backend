@@ -79,8 +79,13 @@ export const createCustomerLead = {
 
 export const getCustomerLeads = {
   query: Joi.object().keys({
+    search: Joi.string(),
     customerName: Joi.string(),
     leadSource: Joi.string(),
+    mobileNumber: Joi.string(),
+    email: Joi.string(),
+    state: Joi.string(),
+    city: Joi.string(),
     sortBy: Joi.string(),
     limit: Joi.number().integer(),
     page: Joi.number().integer(),

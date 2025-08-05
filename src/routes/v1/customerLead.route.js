@@ -65,15 +65,40 @@ router.get('/import/sample', (req, res) => {
  *       - bearerAuth: []
  *     parameters:
  *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search across all fields (customer name, mobile number, email, state, city, lead source, etc.) - case insensitive
+ *       - in: query
  *         name: customerName
  *         schema:
  *           type: string
- *         description: Filter by customer name (case insensitive)
+ *         description: Filter by customer name (case insensitive) - for backward compatibility
  *       - in: query
  *         name: leadSource
  *         schema:
  *           type: string
- *         description: Filter by lead source
+ *         description: Filter by lead source - for backward compatibility
+ *       - in: query
+ *         name: mobileNumber
+ *         schema:
+ *           type: string
+ *         description: Filter by mobile number (case insensitive) - for backward compatibility
+ *       - in: query
+ *         name: email
+ *         schema:
+ *           type: string
+ *         description: Filter by email (case insensitive) - for backward compatibility
+ *       - in: query
+ *         name: state
+ *         schema:
+ *           type: string
+ *         description: Filter by state (case insensitive) - for backward compatibility
+ *       - in: query
+ *         name: city
+ *         schema:
+ *           type: string
+ *         description: Filter by city (case insensitive) - for backward compatibility
  *       - in: query
  *         name: isActive
  *         schema:
@@ -209,15 +234,40 @@ router.post('/', auth(), validate(customerLeadValidation.createCustomerLead), tr
  *           type: string
  *         description: Field to sort by (e.g., createdAt:desc, customerName:asc)
  *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search across all fields (customer name, mobile number, email, state, city, lead source, etc.) - case insensitive
+ *       - in: query
  *         name: customerName
  *         schema:
  *           type: string
- *         description: Filter by customer name (case insensitive)
+ *         description: Filter by customer name (case insensitive) - for backward compatibility
  *       - in: query
  *         name: leadSource
  *         schema:
  *           type: string
- *         description: Filter by lead source
+ *         description: Filter by lead source - for backward compatibility
+ *       - in: query
+ *         name: mobileNumber
+ *         schema:
+ *           type: string
+ *         description: Filter by mobile number (case insensitive) - for backward compatibility
+ *       - in: query
+ *         name: email
+ *         schema:
+ *           type: string
+ *         description: Filter by email (case insensitive) - for backward compatibility
+ *       - in: query
+ *         name: state
+ *         schema:
+ *           type: string
+ *         description: Filter by state (case insensitive) - for backward compatibility
+ *       - in: query
+ *         name: city
+ *         schema:
+ *           type: string
+ *         description: Filter by city (case insensitive) - for backward compatibility
  *       - in: query
  *         name: isActive
  *         schema:

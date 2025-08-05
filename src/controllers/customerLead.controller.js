@@ -35,13 +35,46 @@ export const listCustomerLeadsController = catchAsync(async (req, res) => {
     options.sortBy = { createdAt: -1 }; // default sort
   }
 
-  // Apply filters if provided
-  if (req.query.customerName) {
-    filter.customerName = { $regex: req.query.customerName, $options: 'i' };
+  // Enhanced search functionality
+  if (req.query.search) {
+    const searchTerm = req.query.search;
+    const searchRegex = { $regex: searchTerm, $options: 'i' };
+    
+    // Create an OR condition to search across multiple fields
+    filter.$or = [
+      { customerName: searchRegex },
+      { mobileNumber: searchRegex },
+      { alternateContactNumber: searchRegex },
+      { whatsappNumber: searchRegex },
+      { email: searchRegex },
+      { state: searchRegex },
+      { city: searchRegex },
+      { leadSource: searchRegex },
+      { preferredLanguage: searchRegex },
+      { googleLocationLink: searchRegex }
+    ];
+  } else {
+    // Apply individual filters if provided (backward compatibility)
+    if (req.query.customerName) {
+      filter.customerName = { $regex: req.query.customerName, $options: 'i' };
+    }
+    if (req.query.leadSource) {
+      filter.leadSource = req.query.leadSource;
+    }
+    if (req.query.mobileNumber) {
+      filter.mobileNumber = { $regex: req.query.mobileNumber, $options: 'i' };
+    }
+    if (req.query.email) {
+      filter.email = { $regex: req.query.email, $options: 'i' };
+    }
+    if (req.query.state) {
+      filter.state = { $regex: req.query.state, $options: 'i' };
+    }
+    if (req.query.city) {
+      filter.city = { $regex: req.query.city, $options: 'i' };
+    }
   }
-  if (req.query.leadSource) {
-    filter.leadSource = req.query.leadSource;
-  }
+  
   if (req.query.isActive !== undefined) {
     filter.isActive = req.query.isActive === 'true';
   }
@@ -108,13 +141,47 @@ export const importCustomerLeadsController = catchAsync(async (req, res) => {
 
 export const exportCustomerLeadsController = catchAsync(async (req, res) => {
   const filter = {};
-  // Reuse filtering logic from list controller
-  if (req.query.customerName) {
-    filter.customerName = { $regex: req.query.customerName, $options: 'i' };
+  
+  // Enhanced search functionality for export
+  if (req.query.search) {
+    const searchTerm = req.query.search;
+    const searchRegex = { $regex: searchTerm, $options: 'i' };
+    
+    // Create an OR condition to search across multiple fields
+    filter.$or = [
+      { customerName: searchRegex },
+      { mobileNumber: searchRegex },
+      { alternateContactNumber: searchRegex },
+      { whatsappNumber: searchRegex },
+      { email: searchRegex },
+      { state: searchRegex },
+      { city: searchRegex },
+      { leadSource: searchRegex },
+      { preferredLanguage: searchRegex },
+      { googleLocationLink: searchRegex }
+    ];
+  } else {
+    // Reuse filtering logic from list controller (backward compatibility)
+    if (req.query.customerName) {
+      filter.customerName = { $regex: req.query.customerName, $options: 'i' };
+    }
+    if (req.query.leadSource) {
+      filter.leadSource = req.query.leadSource;
+    }
+    if (req.query.mobileNumber) {
+      filter.mobileNumber = { $regex: req.query.mobileNumber, $options: 'i' };
+    }
+    if (req.query.email) {
+      filter.email = { $regex: req.query.email, $options: 'i' };
+    }
+    if (req.query.state) {
+      filter.state = { $regex: req.query.state, $options: 'i' };
+    }
+    if (req.query.city) {
+      filter.city = { $regex: req.query.city, $options: 'i' };
+    }
   }
-  if (req.query.leadSource) {
-    filter.leadSource = req.query.leadSource;
-  }
+  
   if (req.query.isActive !== undefined) {
     filter.isActive = req.query.isActive === 'true';
   }
