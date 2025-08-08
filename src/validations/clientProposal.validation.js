@@ -77,8 +77,8 @@ const updateClientProposal = {
             paymentTerms: Joi.string(),
             salesTerms: Joi.string(),
             contactInformation: Joi.string(),
-            status: Joi.string().valid('draft', 'sent', 'approved', 'rejected', 'archived'),
-            version: Joi.number().integer().min(1),
+            // Security: Removed status, version, sentToCustomer fields
+            // These should be handled by separate endpoints to prevent unauthorized changes
         })
         .min(1),
 };

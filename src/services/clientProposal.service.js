@@ -35,12 +35,25 @@ const getUserAndType = async (userId) => {
  * @returns {Promise<ClientProposal>}
  */
 export const createClientProposal = async (clientProposalBody, userId) => {
+    if (!clientProposalBody) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Client proposal data is required');
+    }
+
+    if (!clientProposalBody.project) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Project ID is required');
+    }
+
     const { user, userType } = await getUserAndType(userId);
 
     // Verify project exists
     const project = await Project.findById(clientProposalBody.project);
     if (!project) {
         throw new ApiError(httpStatus.NOT_FOUND, 'Project not found');
+    }
+
+    // Validate customer info
+    if (!clientProposalBody.customerInfo || !clientProposalBody.customerInfo.name) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Customer information is required');
     }
 
     const clientProposal = await ClientProposal.create({
@@ -194,6 +207,10 @@ export const generateClientProposalPDFById = async (clientProposalId, userId) =>
  * @returns {Promise<ClientProposal>}
  */
 export const getClientProposalById = async (id) => {
+    if (!id) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Client proposal ID is required');
+    }
+
     const clientProposal = await ClientProposal.findById(id)
         .populate('project', 'projectName projectCode')
         .populate('createdBy', 'name email')
@@ -218,11 +235,28 @@ export const updateClientProposalById = async (clientProposalId, updateBody, use
 
     // Check if user has permission to update (creator or admin)
     const createdById = clientProposal.createdBy?._id || clientProposal.createdBy;
+    const { user, userType } = await getUserAndType(userId);
+
     if (createdById && createdById.toString() !== userId.toString()) {
-        const user = await User.findById(userId);
         if (!user || user.role !== 'admin') {
             throw new ApiError(httpStatus.FORBIDDEN, 'Forbidden');
         }
+    }
+
+    // Check if proposal is in an editable state
+    if (clientProposal.status !== 'draft' && userType !== 'Admin') {
+        throw new ApiError(
+            httpStatus.FORBIDDEN,
+            `Cannot edit proposal with status '${clientProposal.status}'. Only draft proposals can be edited.`
+        );
+    }
+
+    // Prevent editing proposals that have been sent to customer (unless admin)
+    if (clientProposal.sentToCustomer && userType !== 'Admin') {
+        throw new ApiError(
+            httpStatus.FORBIDDEN,
+            'Cannot edit proposal that has been sent to customer. Only administrators can edit sent proposals.'
+        );
     }
 
     // If project is being updated, verify it exists
@@ -233,10 +267,11 @@ export const updateClientProposalById = async (clientProposalId, updateBody, use
         }
     }
 
-    // Determine user type for updatedBy
-    const { userType } = await getUserAndType(userId);
+    // Remove any status, version, or sentToCustomer updates from the update body
+    // These should be handled by separate endpoints
+    const { status, version, sentToCustomer, sentToCustomerAt, customerRemarks, customerReviewedAt, ...safeUpdateBody } = updateBody;
 
-    Object.assign(clientProposal, updateBody, {
+    Object.assign(clientProposal, safeUpdateBody, {
         updatedBy: userId,
         updatedByModel: userType
     });
