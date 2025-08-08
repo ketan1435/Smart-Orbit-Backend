@@ -565,9 +565,6 @@ export const getProjectsForArchitect = async (user, options) => {
  */
 export const getMyProposals = async (user, options) => {
   const { limit = 10, page = 1, sortBy, status, projectName, startDate, endDate } = options;
-  const sort = sortBy
-    ? { [sortBy.split(':')[0]]: sortBy.split(':')[1] === 'desc' ? -1 : 1 }
-    : { 'proposals.submittedAt': -1 };
 
   // Build filter for proposals
   const proposalFilter = { architect: user._id };
@@ -601,9 +598,6 @@ export const getMyProposals = async (user, options) => {
         select: 'name email'
       }
     })
-    .sort(sort)
-    .skip((page - 1) * limit)
-    .limit(limit)
     .lean();
 
   // Transform the data to focus on proposals
@@ -640,7 +634,47 @@ export const getMyProposals = async (user, options) => {
     }
   }
 
-  // Apply pagination to filtered results
+  // Sort proposals based on sortBy parameter
+  if (sortBy) {
+    const [field, order] = sortBy.split(':');
+    const sortOrder = order === 'desc' ? -1 : 1;
+
+    proposals.sort((a, b) => {
+      let aValue = a[field];
+      let bValue = b[field];
+
+      // Handle date fields
+      if (field === 'submittedAt' || field === 'acceptedAt' || field === 'rejectedAt' || field === 'withdrawnAt') {
+        aValue = new Date(aValue || 0);
+        bValue = new Date(bValue || 0);
+      }
+
+      // Handle numeric fields
+      if (field === 'proposedCharges' || field === 'deliveryTimelineDays') {
+        aValue = Number(aValue) || 0;
+        bValue = Number(bValue) || 0;
+      }
+
+      // Handle string fields
+      if (typeof aValue === 'string' && typeof bValue === 'string') {
+        aValue = aValue.toLowerCase();
+        bValue = bValue.toLowerCase();
+      }
+
+      if (aValue < bValue) return -1 * sortOrder;
+      if (aValue > bValue) return 1 * sortOrder;
+      return 0;
+    });
+  } else {
+    // Default sort by submittedAt descending (latest first)
+    proposals.sort((a, b) => {
+      const dateA = new Date(a.submittedAt || 0);
+      const dateB = new Date(b.submittedAt || 0);
+      return dateB - dateA; // Descending order
+    });
+  }
+
+  // Apply pagination to sorted results
   const totalResults = proposals.length;
   const totalPages = Math.ceil(totalResults / limit);
   const startIndex = (page - 1) * limit;
@@ -1244,4 +1278,4 @@ export const updateProjectStatusService = async (projectId, newStatus, user) => 
   }
 
   return project;
-}; 
+};

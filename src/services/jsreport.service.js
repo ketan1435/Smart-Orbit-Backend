@@ -32,12 +32,37 @@ const initializeJsreport = async () => {
   return jsreportInstance;
 };
 
+// Enhanced HTML entity decoding function
+const decodeHtmlEntities = (html) => {
+  if (!html) return '';
+  try {
+    return decode(html);
+  } catch (error) {
+    console.warn('Error decoding HTML entities:', error);
+    return html;
+  }
+};
+
+// Function to render rich content with proper styling
+const renderRichContent = (content, isPlainText = false) => {
+  if (!content) return '';
+
+  if (isPlainText) {
+    // For plain text like cottageSpecifications, preserve line breaks
+    return `<div class="rich-content plain-text">${content.replace(/\n/g, '<br>')}</div>`;
+  }
+
+  // For HTML content, decode entities and wrap in rich-content div
+  const decodedContent = decodeHtmlEntities(content);
+  return `<div class="rich-content">${decodedContent}</div>`;
+};
+
 const buildHtml = (clientProposal, formatDate, logoBase64) => {
-  const section = (title, content) =>
+  const section = (title, content, isPlainText = false) =>
     content ? `
       <div class="section">
-        <h2>${title}</h2>
-        <div class="content">${decode(content)}</div>
+        <h2 class="section-title">${title}</h2>
+        ${renderRichContent(content, isPlainText)}
       </div>` : '';
 
   return `
@@ -60,8 +85,8 @@ const buildHtml = (clientProposal, formatDate, logoBase64) => {
       }
       
       .page-content {
-        margin: 120px 40px 100px 40px;
-        min-height: calc(100vh - 220px);
+        margin: 10px 20px 180px 20px;
+        min-height: calc(100vh - 300px);
       }
       
       h1 {
@@ -69,25 +94,25 @@ const buildHtml = (clientProposal, formatDate, logoBase64) => {
         font-weight: bold;
         margin: 20px 0 15px 0;
         text-align: center;
-        color: #2c3e50;
       }
       
       h2 {
         font-size: 14pt;
-        font-weight: bold;
+        font-weight: 700;
         margin: 25px 0 12px 0;
-        color: #2c3e50;
-        border-bottom: 2px solid #3498db;
+        padding-bottom: 5px;
+      }
+      
+      .section-title {
+        font-size: 14pt;
+        font-weight: 700;
+        margin: 25px 0 12px 0;
         padding-bottom: 5px;
       }
       
       .project-details {
-        margin: 20px 0;
-        background: #f8f9fa;
-        padding: 15px;
-        border-radius: 5px;
-        border-left: 4px solid #3498db;
-      }
+padding-bottom: 20px;
+        border-bottom: 1px solid #ccc;      }
       
       .project-details div {
         margin: 8px 0;
@@ -95,10 +120,9 @@ const buildHtml = (clientProposal, formatDate, logoBase64) => {
       }
       
       .project-details strong {
-        color: #2c3e50;
         font-weight: bold;
         display: inline-block;
-        width: 180px;
+        width: 200px;
       }
       
       .key-highlights {
@@ -127,7 +151,8 @@ const buildHtml = (clientProposal, formatDate, logoBase64) => {
       
       .section {
         margin: 20px 0;
-        page-break-inside: avoid;
+        padding-bottom: 20px;
+        border-bottom: 1px solid #ccc;
       }
       
       .content {
@@ -148,6 +173,124 @@ const buildHtml = (clientProposal, formatDate, logoBase64) => {
         margin: 5px 0;
       }
       
+      /* Rich Content Styles for WYSIWYG content */
+      .rich-content {
+        font-family: Arial, sans-serif;
+        line-height: 1.6;
+        color: #333;
+        margin: 10px 0;
+        font-size: 11pt;
+      }
+      
+      .rich-content.plain-text {
+        white-space: pre-line;
+        line-height: 1.6;
+      }
+      
+      .rich-content h1 {
+        font-size: 16pt;
+        font-weight: bold;
+        margin: 15px 0 8px 0;
+        color: #1a1a1a;
+        border-bottom: 1px solid #e0e0e0;
+        padding-bottom: 3px;
+      }
+      
+      .rich-content h2 {
+        font-size: 14pt;
+        font-weight: bold;
+        margin: 12px 0 6px 0;
+        color: #1a1a1a;
+      }
+      
+      .rich-content h3 {
+        font-size: 12pt;
+        font-weight: bold;
+        margin: 10px 0 5px 0;
+        color: #1a1a1a;
+      }
+      
+      .rich-content h4 {
+        font-size: 11pt;
+        font-weight: bold;
+        margin: 8px 0 4px 0;
+        color: #1a1a1a;
+      }
+      
+      .rich-content p {
+        margin: 6px 0;
+        line-height: 1.6;
+      }
+      
+      .rich-content ul, .rich-content ol {
+        margin: 8px 0;
+        padding-left: 20px;
+      }
+      
+      .rich-content li {
+        margin: 3px 0;
+        line-height: 1.6;
+      }
+      
+      .rich-content ul li {
+        list-style-type: disc;
+      }
+      
+      .rich-content ol li {
+        list-style-type: decimal;
+      }
+      
+      .rich-content blockquote {
+        margin: 10px 0;
+        padding: 8px 12px;
+        font-style: italic;
+      }
+      
+      .rich-content table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 10px 0;
+        font-size: 10pt;
+      }
+      
+      .rich-content table th {
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        padding: 6px 8px;
+        font-weight: bold;
+        text-align: left;
+        color: #495057;
+      }
+      
+      .rich-content table td {
+        border: 1px solid #dee2e6;
+        padding: 6px 8px;
+        vertical-align: top;
+      }
+      
+      .rich-content table tr:nth-child(even) {
+        background-color: #f8f9fa;
+      }
+      
+      .rich-content strong {
+        font-weight: bold;
+        color: #1a1a1a;
+      }
+      
+      .rich-content em {
+        font-style: italic;
+      }
+      
+      .rich-content figure.table {
+        margin: 10px 0;
+      }
+      
+      .rich-content figure.table table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      
+      /* Regular table styles for non-rich content */
       table {
         width: 100%;
         border-collapse: collapse;
@@ -224,7 +367,7 @@ const buildHtml = (clientProposal, formatDate, logoBase64) => {
       /* Print-specific styles */
       @media print {
         .page-content {
-          margin: 120px 40px 100px 40px;
+          margin: 10px 40px 180px 40px;
         }
       }
     </style>
@@ -236,8 +379,8 @@ const buildHtml = (clientProposal, formatDate, logoBase64) => {
       <div class="project-details">
         <div><strong>Project Location:</strong> ${clientProposal.projectLocation || 'N/A'}</div>
         <div><strong>Project Type:</strong> ${clientProposal.projectType || 'N/A'}</div>
-        <div><strong>Unit Cost:</strong> ₹${clientProposal.unitCost || 'N/A'} (Excluding GST)</div>
-        <div><strong>Manufacturing & Supply by:</strong> ${clientProposal.manufacturingSupply || 'Smart Orbiters, Pune'}</div>
+        <div><strong>Unit Cost:</strong> ₹${clientProposal.unitCost || 'N/A'}</div>
+        <div><strong>Manufacturing & Supply by:</strong> ${'<strong>Smart Orbiters, Pune</strong>'}</div>
       </div>
 
       ${section('1. Project Overview', clientProposal.projectOverview)}
@@ -249,29 +392,6 @@ const buildHtml = (clientProposal, formatDate, logoBase64) => {
       ${section('7. Payment Terms', clientProposal.paymentTerms)}
       ${section('8. Sales Terms & Conditions', clientProposal.salesTerms)}
       ${section('9. Contact Information', clientProposal.contactInformation)}
-
-      <div class="footer-info">
-        <div><strong>EMAIL:</strong> info@mobico.co.in, www.mobico.co.in</div>
-        <div><strong>Contact No:</strong> +91 70 5361 5361 & +91 9325396912</div>
-        <div><strong>Udyog Adhaar Number:</strong> MH26A0254417</div>
-        <div><strong>Import Export Code:</strong> ADPPH4467G</div>
-      </div>
-    </div>
-
-    <div class="page-break">
-      <div class="page-content">
-        <div class="meta-info">
-          <h2>Meta Information</h2>
-          <p><strong>Status:</strong> ${clientProposal.status || 'N/A'}</p>
-          <p><strong>Version:</strong> ${clientProposal.version || 'N/A'}</p>
-          <p><strong>Created At:</strong> ${formatDate(clientProposal.createdAt)}</p>
-          <p><strong>Last Updated:</strong> ${formatDate(clientProposal.updatedAt)}</p>
-          <p><strong>Created By:</strong> ${clientProposal.createdBy?.name || 'N/A'}</p>
-          <p><strong>Customer Name:</strong> ${clientProposal.customerInfo?.name || 'N/A'}</p>
-          <p><strong>Customer Email:</strong> ${clientProposal.customerInfo?.email || 'N/A'}</p>
-          <p><strong>Customer Phone:</strong> ${clientProposal.customerInfo?.phone || 'N/A'}</p>
-        </div>
-      </div>
     </div>
   </body>
   </html>`;
@@ -315,33 +435,64 @@ export const generateClientProposalPDF = async (clientProposal) => {
         recipe: 'chrome-pdf',
         chrome: {
           displayHeaderFooter: true,
-          marginTop: '100px',
-          marginBottom: '80px',
+          marginTop: '210px',
+          marginBottom: '160px',
           marginLeft: '0px',
           marginRight: '0px',
           printBackground: true,
           format: 'A4',
           headerTemplate: `
-                        <div style="width: 100%; margin: 0; padding: 15px 40px; font-size: 10px; font-family: Arial, sans-serif; border-bottom: 1px solid #ccc; display: flex; justify-content: space-between; align-items: center; background: white;">
-                            <div style="display: flex; align-items: center;">
-                                ${logoBase64 ? `<img src="data:image/png;base64,${logoBase64}" style="height: 40px; margin-right: 15px;" />` : ''}
-                                <div style="color: #2c3e50; font-weight: bold; font-size: 14px;">Smart Orbiters</div>
+                            <div style="
+                              width: 100%; 
+                              margin: 0; 
+                              padding: 5px 20px; 
+                              font-size: 14px; 
+                              font-family: Arial, sans-serif; 
+                              border-bottom: 1px solid #ccc; 
+                              background: white;
+                              display: flex;
+                              flex-direction: column;
+                              align-items: center;
+                              justify-content: center;
+                              text-align: center;
+                            ">
+                              ${logoBase64 ? `<img src="data:image/png;base64,${logoBase64}" 
+     style="height: 90px; margin-bottom: 10px; background: white;" />` : ''}
+                              <div style="line-height: 1.1; color: #000; font-weight: bold;">
+                                <div>Flat No. 405, A Wing, Pavani Park, Chakan Talegoan Road, Kharabwadi,</div>
+                                <div>Pune, Maharashtra 410501, India</div>
+                                <div>Contact No: +91 7053615361 & +91 9325396912</div>
+                                <div>Email Id: info@mobico.co.in</div>
+                              </div>
                             </div>
-                            <div style="text-align: right; line-height: 1.2; color: #666;">
-                                <div style="font-size: 9px;">Flat No.405, Pavani Park, Pune 410501</div>
-                                <div style="font-size: 9px;">+91 7053615361 | +91 9325396912</div>
-                                <div style="font-size: 9px;">info@mobico.co.in</div>
-                            </div>
-                        </div>
-                    `,
+                          `,
+
           footerTemplate: `
-                        <div style="width: 100%; margin: 0; padding: 10px 40px; font-size: 9px; font-family: Arial, sans-serif; color: #666; text-align: center; border-top: 1px solid #ccc; background: white;">
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <div>© Smart Orbiters | GST: 27ADPPH4467G1Z8</div>
-                                <div>Page <span class="pageNumber"></span> of <span class="totalPages"></span></div>
+                          <div style="
+                            width: 100%; 
+                            margin: 0; 
+                            padding: 10px 20px; 
+                            font-size: 12px; 
+                            font-weight: bold;
+                            color: #000; 
+                            text-align: left; 
+                            border-top: 1px solid #ccc; 
+                            background: white;
+                          ">
+                            <div >
+                              <div>
+                                EMAIL: <a href="mailto:info@mobico.co.in" style="color: #6366f1; text-decoration: none;"><strong>info@mobico.co.in</strong></a>, 
+                                <a href="https://www.mobico.co.in" target="_blank" style="color: #6366f1; text-decoration: none;"><strong>www.mobico.co.in</strong></a>,
+                                Contact No: <strong>+91 7053615361</strong>, <strong>+91 9325396912</strong>
+                              </div>
+                              <div><strong>GST No:</strong> 27ADPPH4467G1Z8</div>
+                              <div><strong>Udyog Aadhaar Number:</strong> MH26A0254417</div>
+                              <div><strong>Import Export Code:</strong> ADPPH4467G</div>
                             </div>
-                        </div>
-                    `
+                           
+                          </div>
+                        `
+
         }
       },
       data: {

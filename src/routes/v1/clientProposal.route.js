@@ -85,6 +85,14 @@ const router = express.Router();
  *           type: string
  *           description: Detailed cost breakdown (HTML content)
  *           example: "<h3>Cost Breakdown</h3><table>...</table>"
+ *         keyDurabilityFeatures:
+ *           type: string
+ *           description: Key durability features and quality standards (HTML content)
+ *           example: "<h3>Durability Features</h3><p>Weather-resistant materials, 10-year warranty...</p>"
+ *         additionalFeatures:
+ *           type: string
+ *           description: Additional features and customizations (HTML content)
+ *           example: "<h3>Additional Features</h3><p>Smart home integration, custom lighting...</p>"
  *         paymentTerms:
  *           type: string
  *           description: Payment terms (HTML content)

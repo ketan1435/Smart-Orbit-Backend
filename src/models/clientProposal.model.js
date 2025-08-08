@@ -23,6 +23,8 @@ const ClientProposalSchema = new Schema(
         projectOverview: { type: String },
         cottageSpecifications: { type: String },
         materialDetails: { type: String },
+        keyDurabilityFeatures: { type: String },
+        additionalFeatures: { type: String },
         costBreakdown: { type: String },
         paymentTerms: { type: String },
         salesTerms: { type: String },
