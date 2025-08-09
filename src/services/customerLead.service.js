@@ -185,12 +185,49 @@ export const createCustomerLeadService = async (req, session) => {
         }).session(session);
 
         if (!existingPayment) {
+          // Calculate perDayAmount properly
+          let perDayAmount = 1; // Default value
+
+          if (siteVisitData.assignmentAmount) {
+            try {
+              let daysDiff = 1; // Default to 1 day for single visits
+
+              // Handle date range visits
+              if (siteVisitData.visitEndDate && siteVisitData.visitStartDate) {
+                const startDate = new Date(siteVisitData.visitStartDate);
+                const endDate = new Date(siteVisitData.visitEndDate);
+
+                // Check if dates are valid
+                if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime())) {
+                  const timeDiff = endDate.getTime() - startDate.getTime();
+                  daysDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
+
+                  // Ensure at least 1 day
+                  if (daysDiff <= 0) {
+                    daysDiff = 1;
+                  }
+                }
+              } else if (siteVisitData.visitDate) {
+                // Handle single day visits
+                const visitDate = new Date(siteVisitData.visitDate);
+                if (!isNaN(visitDate.getTime())) {
+                  daysDiff = 1; // Single day visit
+                }
+              }
+
+              perDayAmount = siteVisitData.assignmentAmount / daysDiff;
+            } catch (error) {
+              // If there's any error in date calculation, use the full amount
+              perDayAmount = siteVisitData.assignmentAmount;
+            }
+          }
+
           await ProjectAssignmentPayment.create([{
             project: project._id,
             createdBy: req.user.id,
             createdByModel: req.user.constructor.modelName,
             assignedAmount: siteVisitData.assignmentAmount,
-            perDayAmount: siteVisitData.assignmentAmount / (siteVisitData.visitEndDate - siteVisitData.visitStartDate) === 0 || siteVisitData.assignmentAmount / (siteVisitData.visitEndDate - siteVisitData.visitStartDate) === Infinity || siteVisitData.assignmentAmount / (siteVisitData.visitEndDate - siteVisitData.visitStartDate) === undefined ? 1 : siteVisitData.assignmentAmount / (siteVisitData.visitEndDate - siteVisitData.visitStartDate),
+            perDayAmount: perDayAmount,
             note: "Site visit assignment amount",
             user: siteVisitData.siteEngineer
           }], { session });
