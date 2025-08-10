@@ -43,6 +43,9 @@ const scpDataSchema = Joi.object({
   ).allow(null, ''), // New field
   siteVisits: Joi.array().items(siteVisitSchema), // New field for multiple site visits
   scpRemarks: Joi.string().allow(''),
+  // Tracking fields for SCP updates
+  lastUpdatedBy: Joi.string().custom(objectId).allow(null, ''),
+  lastUpdatedAt: Joi.date().allow(null, ''),
 });
 
 const requirementSchema = Joi.object({
@@ -57,6 +60,16 @@ const requirementSchema = Joi.object({
   videoUrlKeys: Joi.array().items(Joi.string()),
   voiceMessageUrlKeys: Joi.array().items(Joi.string()),
   sketchUrlKeys: Joi.array().items(Joi.string()),
+  // SCP user selection fields
+  sendToScp: Joi.boolean().default(false),
+  selectedScpUser: Joi.alternatives().try(
+    Joi.string().custom(objectId),
+    Joi.array().items(Joi.string().custom(objectId)).min(1)
+  ).when('sendToScp', {
+    is: true,
+    then: Joi.required(),
+    otherwise: Joi.optional()
+  }),
 });
 
 export const createCustomerLead = {
@@ -128,5 +141,38 @@ export const shareRequirement = {
   }),
   body: Joi.object().keys({
     userIds: Joi.array().items(Joi.string().custom(objectId)).min(1).required(),
+  }),
+};
+
+export const shareRequirementWithScpUsers = {
+  params: Joi.object().keys({
+    leadId: Joi.string().custom(objectId).required(),
+    requirementId: Joi.string().custom(objectId).required(),
+  }),
+  body: Joi.object().keys({
+    scpUserIds: Joi.array().items(Joi.string().custom(objectId)).min(1).required(),
+  }),
+};
+
+export const updateScpDataByScpUser = {
+  params: Joi.object().keys({
+    leadId: Joi.string().custom(objectId).required(),
+    requirementId: Joi.string().custom(objectId).required(),
+  }),
+  body: Joi.object().keys({
+    scpData: scpDataSchema.required(),
+  }),
+};
+
+export const getScpUserAssignedRequirements = {
+  query: Joi.object().keys({
+    page: Joi.number().integer().min(1).default(1),
+    limit: Joi.number().integer().min(1).max(100).default(10),
+    sortBy: Joi.string().valid('sharedAt:asc', 'sharedAt:desc', 'updatedAt:asc', 'updatedAt:desc', 'projectName:asc', 'projectName:desc', 'customerName:asc', 'customerName:desc').default('sharedAt:desc'),
+    search: Joi.string().allow(''),
+    projectName: Joi.string().allow(''),
+    customerName: Joi.string().allow(''),
+    requirementType: Joi.string().allow(''),
+    status: Joi.string().valid('pending', 'updated', 'all').default('all'),
   }),
 }; 

@@ -4,6 +4,7 @@ import validate from '../../middlewares/validate.js';
 import * as projectValidation from '../../validations/project.validation.js';
 import * as projectController from '../../controllers/project.controller.js';
 import { transactional } from '../../utils/transactional.js';
+import { userController } from '../../controllers/index.js';
 // const projectValidation = require('../../validations/project.validation');
 // const projectController = require('../../controllers/project.controller');
 
@@ -53,6 +54,47 @@ router
         projectController.rejectProposal
     );
 
+/**
+ * @swagger
+ * /projects/scp-users:
+ *   get:
+ *     summary: Get all SCP users for dropdown
+ *     description: Retrieve a list of all active users with the 'scp-user' role for dropdown selection.
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       "200":
+ *         description: OK
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 1
+ *                 users:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       _id:
+ *                         type: string
+ *                       name:
+ *                         type: string
+ *                       email:
+ *                         type: string
+ *                       role:
+ *                         type: string
+ *                       isActive:
+ *                         type: boolean
+ *       "401":
+ *         $ref: '#/components/responses/Unauthorized'
+ *       "403":
+ *         $ref: '#/components/responses/Forbidden'
+ */
+router.get('/scp-users', auth('getUsers'), userController.getScpUsers);
 
 /**
  * @swagger

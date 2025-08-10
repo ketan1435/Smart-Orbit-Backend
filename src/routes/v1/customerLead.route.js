@@ -13,6 +13,9 @@ import {
   shareRequirementForUserController,
   getSharedRequirementsForUserController,
   getMySharedRequirementsController,
+  shareRequirementWithScpUsersController,
+  updateScpDataByScpUserController,
+  getScpUserAssignedRequirementsController,
 } from '../../controllers/customerLead.controller.js';
 import { createCustomerLeadService, updateCustomerLeadService } from '../../services/customerLead.service.js';
 import auth from '../../middlewares/auth.js';
@@ -296,6 +299,148 @@ router.post('/', auth(), validate(customerLeadValidation.createCustomerLead), tr
  *                   type: integer
  */
 router.get('/', listCustomerLeadsController);
+
+/**
+ * @swagger
+ * /customer-leads/scp-assigned-requirements:
+ *   get:
+ *     summary: Get requirements assigned to current SCP user for modification
+ *     description: Retrieves all requirements that have been assigned to the current SCP user for SCP data modification, with pagination, filtering, and sorting options
+ *     tags: [Customer Leads]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           default: 1
+ *         description: Page number for pagination
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 100
+ *           default: 10
+ *         description: Number of items per page
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *           enum: [sharedAt:asc, sharedAt:desc, updatedAt:asc, updatedAt:desc, projectName:asc, projectName:desc, customerName:asc, customerName:desc]
+ *           default: sharedAt:desc
+ *         description: Sort order for the results
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search across project name, customer name, site address, site type, and structure type
+ *       - in: query
+ *         name: projectName
+ *         schema:
+ *           type: string
+ *         description: Filter by project name
+ *       - in: query
+ *         name: customerName
+ *         schema:
+ *           type: string
+ *         description: Filter by customer name
+ *       - in: query
+ *         name: requirementType
+ *         schema:
+ *           type: string
+ *         description: Filter by requirement type
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [pending, updated, all]
+ *           default: all
+ *         description: Filter by status (pending = not updated yet, updated = already updated)
+ *     responses:
+ *       200:
+ *         description: Requirements assigned to SCP user retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: SCP user assigned requirements retrieved successfully.
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     requirements:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           _id:
+ *                             type: string
+ *                           projectName:
+ *                             type: string
+ *                           requirementType:
+ *                             type: string
+ *                           requirementDescription:
+ *                             type: string
+ *                           urgency:
+ *                             type: string
+ *                           budget:
+ *                             type: string
+ *                           scpData:
+ *                             type: object
+ *                           files:
+ *                             type: array
+ *                           lead:
+ *                             type: object
+ *                           project:
+ *                             type: object
+ *                           visits:
+ *                             type: array
+ *                           scpShare:
+ *                             type: object
+ *                           status:
+ *                             type: string
+ *                             enum: [pending, updated]
+ *                           createdAt:
+ *                             type: string
+ *                             format: date-time
+ *                           updatedAt:
+ *                             type: string
+ *                             format: date-time
+ *                     pagination:
+ *                       type: object
+ *                       properties:
+ *                         currentPage:
+ *                           type: integer
+ *                         totalPages:
+ *                           type: integer
+ *                         totalRequirements:
+ *                           type: integer
+ *                         hasNextPage:
+ *                           type: boolean
+ *                         hasPrevPage:
+ *                           type: boolean
+ *                         limit:
+ *                           type: integer
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ */
+router.get(
+  '/scp-assigned-requirements',
+  auth('getProjects'),
+  validate(customerLeadValidation.getScpUserAssignedRequirements),
+  getScpUserAssignedRequirementsController
+);
+
 
 /**
  * @swagger
@@ -648,5 +793,191 @@ router.get(
   auth('manageLeads'), // Or a more specific permission
   getSharedRequirementsForUserController
 );
+
+/**
+ * @swagger
+ * /customer-leads/{leadId}/requirements/{requirementId}/share-scp:
+ *   post:
+ *     summary: Share requirement with multiple SCP users and grant update permissions
+ *     description: Allows an admin to share a requirement with multiple SCP users and grant them permission to update SCP data once
+ *     tags: [Customer Leads]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: leadId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the customer lead
+ *       - in: path
+ *         name: requirementId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the requirement to share
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - scpUserIds
+ *             properties:
+ *               scpUserIds:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: Array of SCP user IDs to share with
+ *                 minItems: 1
+ *             example:
+ *               scpUserIds: ["64f57c1a7baf4a001f68b111", "64f57c1a7baf4a001f68b222"]
+ *     responses:
+ *       200:
+ *         description: Requirement shared with SCP users successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: Requirement shared with SCP users successfully.
+ *                 data:
+ *                   type: object
+ *       400:
+ *         description: Bad Request (e.g., users are not SCP users)
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Customer lead, requirement, or SCP users not found
+ */
+router.post(
+  '/:leadId/requirements/:requirementId/share-scp',
+  auth('manageLeads'),
+  validate(customerLeadValidation.shareRequirementWithScpUsers),
+  shareRequirementWithScpUsersController
+);
+
+/**
+ * @swagger
+ * /customer-leads/{leadId}/requirements/{requirementId}/update-scp:
+ *   patch:
+ *     summary: Update SCP data by SCP user (one-time only)
+ *     description: Allows an SCP user to update SCP data for a requirement they have been shared with. This can only be done once per requirement.
+ *     tags: [Customer Leads]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: leadId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the customer lead
+ *       - in: path
+ *         name: requirementId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The ID of the requirement to update
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - scpData
+ *             properties:
+ *               scpData:
+ *                 type: object
+ *                 description: The updated SCP data
+ *                 properties:
+ *                   siteAddress:
+ *                     type: string
+ *                   googleLocationLink:
+ *                     type: string
+ *                   siteType:
+ *                     type: string
+ *                   plotSize:
+ *                     type: string
+ *                   totalArea:
+ *                     type: string
+ *                   plinthStatus:
+ *                     type: string
+ *                   structureType:
+ *                     type: string
+ *                   numUnits:
+ *                     type: string
+ *                   usageType:
+ *                     type: string
+ *                   avgStayDuration:
+ *                     type: string
+ *                   additionalFeatures:
+ *                     type: string
+ *                   designIdeas:
+ *                     type: string
+ *                   drawingStatus:
+ *                     type: string
+ *                   architectStatus:
+ *                     type: string
+ *                   roomRequirements:
+ *                     type: string
+ *                   tokenAdvance:
+ *                     type: string
+ *                   financing:
+ *                     type: string
+ *                   roadWidth:
+ *                     type: string
+ *                   targetCompletionDate:
+ *                     type: string
+ *                   scpRemarks:
+ *                     type: string
+ *             example:
+ *               scpData:
+ *                 siteAddress: "123 Main St, City, State"
+ *                 siteType: "Residential"
+ *                 plotSize: "2000 sq ft"
+ *                 structureType: "Cottage"
+ *                 scpRemarks: "Site visit completed, all measurements taken"
+ *     responses:
+ *       200:
+ *         description: SCP data updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: SCP data updated successfully.
+ *                 data:
+ *                   type: object
+ *       400:
+ *         description: Bad Request (e.g., SCP data already updated)
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden (e.g., no permission to update SCP data)
+ *       404:
+ *         description: Customer lead or requirement not found
+ */
+router.patch(
+  '/:leadId/requirements/:requirementId/update-scp',
+  auth('getProjects'),
+  validate(customerLeadValidation.updateScpDataByScpUser),
+  updateScpDataByScpUserController
+);
+
 
 export default router;

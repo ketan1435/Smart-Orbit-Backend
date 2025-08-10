@@ -10,6 +10,7 @@ const Roles = Object.freeze({
   ADMIN: 'Admin',
   WORKER: 'worker',
   DISPATCH_INSTALLATION: 'dispatch-installation',
+  SCP_USER: 'scp-user',
 });
 
 export default Roles;

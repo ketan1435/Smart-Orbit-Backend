@@ -23,6 +23,9 @@ const scpDataSchema = new mongoose.Schema({
     targetCompletionDate: { type: String, default: '' },
     siteVisitDate: { type: Date, default: null },
     scpRemarks: { type: String, default: '' },
+    // Tracking fields for SCP updates
+    lastUpdatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    lastUpdatedAt: { type: Date },
 }, { _id: false });
 
 const sharedWithSchema = new mongoose.Schema({
@@ -30,6 +33,10 @@ const sharedWithSchema = new mongoose.Schema({
     sharedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     sharedAt: { type: Date, default: Date.now },
     isSeen: { type: Boolean, default: false },
+    // SCP-specific permissions
+    canUpdateScpData: { type: Boolean, default: false },
+    scpDataUpdated: { type: Boolean, default: false },
+    scpDataUpdatedAt: { type: Date },
 }, { _id: false });
 
 export const fileSchema = new mongoose.Schema({

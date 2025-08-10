@@ -390,3 +390,19 @@ export const resetUserPasswordById = async (userId, newPassword) => {
   await user.save();
   return user;
 };
+
+/**
+ * Get all SCP users for dropdown
+ * @returns {Promise<Array>}
+ */
+export const getScpUsersService = async () => {
+  const scpUsers = await User.find({
+    role: 'scp-user',
+    isActive: true
+  })
+    .select('name email role isActive')
+    .sort({ name: 1 })
+    .lean();
+
+  return scpUsers;
+};

@@ -3,7 +3,7 @@ import pick from '../utils/pick.js';
 import ApiError from '../utils/ApiError.js';
 import catchAsync from '../utils/catchAsync.js';
 import { userService } from '../services/index.js';
-import { createWorkerBySiteEngineerService, getWorkersBySiteEngineerService, updateWorkerBySiteEngineerService, activateWorkerBySiteEngineerService, deactivateWorkerBySiteEngineerService } from '../services/user.service.js';
+import { createWorkerBySiteEngineerService, getWorkersBySiteEngineerService, updateWorkerBySiteEngineerService, activateWorkerBySiteEngineerService, deactivateWorkerBySiteEngineerService, getScpUsersService } from '../services/user.service.js';
 
 const createUser = catchAsync(async (req, res) => {
   const user = await userService.createUser(req.body);
@@ -210,6 +210,11 @@ export const resetUserPasswordById = catchAsync(async (req, res) => {
 
   const updatedUser = await userService.resetUserPasswordById(userId, password);
   res.send({ status: 1, user: updatedUser });
+});
+
+export const getScpUsers = catchAsync(async (req, res) => {
+  const users = await getScpUsersService();
+  res.send({ status: 1, users });
 });
 
 export {

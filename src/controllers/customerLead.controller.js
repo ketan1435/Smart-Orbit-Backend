@@ -10,6 +10,9 @@ import {
   exportCustomerLeadsService,
   shareRequirementWithUsersService,
   getSharedRequirementsForUserService,
+  shareRequirementWithScpUsersService,
+  updateScpDataByScpUserService,
+  getScpUserAssignedRequirementsService,
 } from '../services/customerLead.service.js';
 import ApiError from '../utils/ApiError.js';
 import httpStatus from 'http-status';
@@ -39,7 +42,7 @@ export const listCustomerLeadsController = catchAsync(async (req, res) => {
   if (req.query.search) {
     const searchTerm = req.query.search;
     const searchRegex = { $regex: searchTerm, $options: 'i' };
-    
+
     // Create an OR condition to search across multiple fields
     filter.$or = [
       { customerName: searchRegex },
@@ -74,7 +77,7 @@ export const listCustomerLeadsController = catchAsync(async (req, res) => {
       filter.city = { $regex: req.query.city, $options: 'i' };
     }
   }
-  
+
   if (req.query.isActive !== undefined) {
     filter.isActive = req.query.isActive === 'true';
   }
@@ -141,12 +144,12 @@ export const importCustomerLeadsController = catchAsync(async (req, res) => {
 
 export const exportCustomerLeadsController = catchAsync(async (req, res) => {
   const filter = {};
-  
+
   // Enhanced search functionality for export
   if (req.query.search) {
     const searchTerm = req.query.search;
     const searchRegex = { $regex: searchTerm, $options: 'i' };
-    
+
     // Create an OR condition to search across multiple fields
     filter.$or = [
       { customerName: searchRegex },
@@ -181,7 +184,7 @@ export const exportCustomerLeadsController = catchAsync(async (req, res) => {
       filter.city = { $regex: req.query.city, $options: 'i' };
     }
   }
-  
+
   if (req.query.isActive !== undefined) {
     filter.isActive = req.query.isActive === 'true';
   }
@@ -240,4 +243,73 @@ export const getSharedRequirementsForUserController = catchAsync(async (req, res
   const { userId } = req.params;
   const requirements = await getSharedRequirementsForUserService(userId);
   res.status(httpStatus.OK).json({ status: 1, data: requirements });
+});
+
+/**
+ * Share requirement with multiple SCP users and grant update permissions
+ */
+export const shareRequirementWithScpUsersController = catchAsync(async (req, res) => {
+  const { leadId, requirementId } = req.params;
+  const { scpUserIds } = req.body;
+  const adminId = req.user.id;
+
+  const updatedRequirement = await shareRequirementWithScpUsersService(leadId, requirementId, scpUserIds, adminId);
+  res.status(httpStatus.OK).json({
+    status: 1,
+    message: 'Requirement shared with SCP users successfully.',
+    data: updatedRequirement,
+  });
+});
+
+/**
+ * Update SCP data by SCP user (one-time only)
+ */
+export const updateScpDataByScpUserController = catchAsync(async (req, res) => {
+  const { leadId, requirementId } = req.params;
+  const { scpData } = req.body;
+  const scpUserId = req.user.id;
+
+  const updatedRequirement = await updateScpDataByScpUserService(leadId, requirementId, scpUserId, scpData);
+  res.status(httpStatus.OK).json({
+    status: 1,
+    message: 'SCP data updated successfully.',
+    data: updatedRequirement,
+  });
+});
+
+/**
+ * Get requirements assigned to SCP user for modification
+ */
+export const getScpUserAssignedRequirementsController = catchAsync(async (req, res) => {
+  const scpUserId = req.user._id;
+
+  // Extract query parameters
+  const {
+    page = 1,
+    limit = 10,
+    sortBy = 'sharedAt:desc',
+    search = '',
+    projectName = '',
+    customerName = '',
+    requirementType = '',
+    status = ''
+  } = req.query;
+
+  const options = {
+    page: parseInt(page, 10),
+    limit: parseInt(limit, 10),
+    sortBy,
+    search,
+    projectName,
+    customerName,
+    requirementType,
+    status
+  };
+
+  const result = await getScpUserAssignedRequirementsService(scpUserId, {}, options);
+  res.status(httpStatus.OK).json({
+    status: 1,
+    message: 'SCP user assigned requirements retrieved successfully.',
+    data: result
+  });
 });

@@ -88,7 +88,53 @@ export const createCustomerLeadService = async (req, session) => {
       project: project._id,
     }, { session });
 
-    // 5.1 Handle multiple site visits
+    // 5.1 Handle SCP user sharing if sendToScp is true
+    if (reqData.sendToScp && reqData.selectedScpUser) {
+      console.log('SCP sharing requested:', {
+        sendToScp: reqData.sendToScp,
+        selectedScpUser: reqData.selectedScpUser,
+        requirementId: requirementId.toString()
+      });
+
+      // Handle single SCP user (string) or multiple SCP users (array)
+      const scpUserIds = Array.isArray(reqData.selectedScpUser)
+        ? reqData.selectedScpUser
+        : [reqData.selectedScpUser];
+
+      console.log('SCP user IDs to process:', scpUserIds);
+
+      // Validate all SCP users
+      for (const scpUserId of scpUserIds) {
+        const scpUser = await User.findById(scpUserId).session(session);
+        if (!scpUser || scpUser.role !== 'scp-user') {
+          throw new ApiError(httpStatus.BAD_REQUEST, `Invalid SCP user ID: ${scpUserId}`);
+        }
+        console.log(`Validated SCP user: ${scpUser.name} (${scpUser.email})`);
+      }
+
+      // Share requirement with all selected SCP users and grant update permissions
+      for (const scpUserId of scpUserIds) {
+        const result = await Requirement.updateOne(
+          { _id: requirementId, 'sharedWith.user': { $ne: scpUserId } },
+          {
+            $push: {
+              sharedWith: {
+                user: scpUserId,
+                sharedBy: req.user.id,
+                sharedAt: new Date(),
+                isSeen: false,
+                canUpdateScpData: true,
+                scpDataUpdated: false
+              },
+            },
+          },
+          { session }
+        );
+        console.log(`Shared requirement with SCP user ${scpUserId}, result:`, result);
+      }
+    }
+
+    // 5.2 Handle multiple site visits
     const siteVisitsToCreate = [];
     const siteEngineersToShare = new Set();
 
@@ -147,11 +193,10 @@ export const createCustomerLeadService = async (req, session) => {
       siteEngineersToShare.add(reqData.scpData.siteEngineer);
     }
 
-    // 5.2 Create all site visits
+    // 5.3 Push all site visits to project
     if (siteVisitsToCreate.length > 0) {
       const createdSiteVisits = await SiteVisit.create(siteVisitsToCreate, { session, ordered: true });
 
-      // 5.3 Push all site visits to project
       for (const siteVisit of createdSiteVisits) {
         project.siteVisits.push(siteVisit._id);
       }
@@ -397,8 +442,8 @@ export const shareRequirementWithUsersService = async (leadId, requirementId, us
 
   // Check if any of the users are procurement team members
   const users = await User.find({ _id: { $in: userIds } }).select('_id role');
-  const procurementUsers = users.filter(user => user.role === Roles.PROCUREMENT);
-  const otherUsers = users.filter(user => user.role !== Roles.PROCUREMENT);
+  const procurementUsers = users.filter(user => user.role === 'procurement-team');
+  const otherUsers = users.filter(user => user.role !== 'procurement-team');
 
   // Handle regular users (non-procurement)
   otherUsers.forEach(user => {
@@ -454,6 +499,110 @@ export const shareRequirementWithUsersService = async (leadId, requirementId, us
   return requirement;
 };
 
+/**
+ * Share requirement with multiple SCP users and grant update permissions
+ * @param {string} leadId - The lead ID
+ * @param {string} requirementId - The requirement ID
+ * @param {Array<string>} scpUserIds - Array of SCP user IDs
+ * @param {string} adminId - The admin ID who is sharing
+ * @returns {Promise<Object>}
+ */
+export const shareRequirementWithScpUsersService = async (leadId, requirementId, scpUserIds, adminId) => {
+  const requirement = await Requirement.findOne({ _id: requirementId, lead: leadId });
+  if (!requirement) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Requirement not found for this lead');
+  }
+
+  // Check if all users are SCP users
+  const scpUsers = await User.find({ _id: { $in: scpUserIds } });
+  if (scpUsers.length !== scpUserIds.length) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'One or more SCP users not found');
+  }
+
+  // Check if all users are actually SCP users
+  const nonScpUsers = scpUsers.filter(user => user.role !== 'scp-user');
+  if (nonScpUsers.length > 0) {
+    throw new ApiError(httpStatus.BAD_REQUEST, `Users ${nonScpUsers.map(u => u.name).join(', ')} are not SCP users`);
+  }
+
+  let updated = false;
+
+  // Process each SCP user
+  for (const scpUserId of scpUserIds) {
+    // Check if already shared
+    const existingShare = requirement.sharedWith.find(share => share.user.toString() === scpUserId);
+    if (existingShare) {
+      // Update existing share to grant SCP update permissions
+      existingShare.canUpdateScpData = true;
+      existingShare.sharedBy = adminId;
+      existingShare.sharedAt = new Date();
+      updated = true;
+    } else {
+      // Add new share with SCP update permissions
+      requirement.sharedWith.push({
+        user: scpUserId,
+        sharedBy: adminId,
+        isSeen: false,
+        canUpdateScpData: true,
+        scpDataUpdated: false
+      });
+      updated = true;
+    }
+  }
+
+  if (updated) {
+    await requirement.save();
+  }
+
+  return requirement;
+};
+
+/**
+ * Update SCP data by SCP user (one-time only)
+ * @param {string} leadId - The lead ID
+ * @param {string} requirementId - The requirement ID
+ * @param {string} scpUserId - The SCP user ID
+ * @param {Object} scpData - The updated SCP data
+ * @returns {Promise<Object>}
+ */
+export const updateScpDataByScpUserService = async (leadId, requirementId, scpUserId, scpData) => {
+  const requirement = await Requirement.findOne({ _id: requirementId, lead: leadId });
+  if (!requirement) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Requirement not found for this lead');
+  }
+
+  // Check if the user is shared with this requirement and has SCP update permissions
+  const userShare = requirement.sharedWith.find(share =>
+    share.user.toString() === scpUserId && share.canUpdateScpData
+  );
+
+  if (!userShare) {
+    throw new ApiError(httpStatus.FORBIDDEN, 'You do not have permission to update SCP data for this requirement');
+  }
+
+  // Check if SCP data has already been updated by this user
+  if (userShare.scpDataUpdated) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'SCP data has already been updated for this requirement. Only one update is allowed.');
+  }
+
+  // Update the SCP data
+  requirement.scpData = {
+    ...requirement.scpData,
+    ...scpData
+  };
+
+  // Mark as updated for this user
+  userShare.scpDataUpdated = true;
+  userShare.scpDataUpdatedAt = new Date();
+
+  // Track the last update information
+  requirement.scpData.lastUpdatedBy = scpUserId;
+  requirement.scpData.lastUpdatedAt = new Date();
+
+  await requirement.save();
+  return requirement;
+};
+
 export const getSharedRequirementsForUserService = async (userId) => {
   const requirements = await Requirement.find({ 'sharedWith.user': userId })
     .populate('lead', 'customerName') // populate only necessary lead fields
@@ -493,6 +642,197 @@ export const getSharedRequirementsForUserService = async (userId) => {
   }
 
   return Object.values(grouped);
+};
+
+/**
+ * Get requirements assigned to SCP user for modification (with pagination and filters)
+ * @param {string} scpUserId - The SCP user ID
+ * @param {Object} filter - Filter options
+ * @param {Object} options - Pagination and sorting options
+ * @returns {Promise<Object>}
+ */
+export const getScpUserAssignedRequirementsService = async (scpUserId, filter = {}, options = {}) => {
+  const {
+    page = 1,
+    limit = 10,
+    sortBy = 'sharedAt:desc', // Default: latest first
+    search = '',
+    projectName = '',
+    customerName = '',
+    requirementType = '',
+    status = '', // 'pending', 'updated', 'all'
+  } = options;
+
+  // Build the base query for requirements shared with this SCP user
+  const baseQuery = {
+    'sharedWith.user': scpUserId,
+  };
+
+  // Add search filter
+  if (search) {
+    const searchRegex = { $regex: search, $options: 'i' };
+    baseQuery.$or = [
+      { projectName: searchRegex },
+      { 'lead.customerName': searchRegex },
+      { 'scpData.siteAddress': searchRegex },
+      { 'scpData.siteType': searchRegex },
+      { 'scpData.structureType': searchRegex }
+    ];
+  }
+
+  // Add specific filters
+  if (projectName) {
+    baseQuery.projectName = { $regex: projectName, $options: 'i' };
+  }
+
+  if (customerName) {
+    baseQuery['lead.customerName'] = { $regex: customerName, $options: 'i' };
+  }
+
+  if (requirementType) {
+    baseQuery.requirementType = { $regex: requirementType, $options: 'i' };
+  }
+
+  // Get all requirements first (we'll handle sorting and pagination in memory)
+  const allRequirements = await Requirement.find(baseQuery)
+    .populate('lead', 'customerName mobileNumber email state city')
+    .populate('project', 'projectName status')
+    .populate({
+      path: 'sharedWith',
+      match: { user: scpUserId, canUpdateScpData: true },
+      populate: {
+        path: 'user',
+        select: 'name email role'
+      }
+    })
+    .populate({
+      path: 'visits',
+      select: 'documents siteEngineer visitDate visitStartDate visitEndDate',
+      populate: {
+        path: 'siteEngineer',
+        select: 'name email'
+      }
+    })
+    .lean();
+
+  // Process requirements to include SCP-specific information
+  const processedRequirements = allRequirements.map(req => {
+    // Find the specific share for this SCP user
+    const userShare = req.sharedWith.find(share =>
+      share.user && share.user._id.toString() === scpUserId.toString()
+    );
+
+    // Determine status
+    let status = 'pending';
+    if (userShare && userShare.scpDataUpdated) {
+      status = 'updated';
+    }
+
+    // Filter out other users' shares for cleaner response
+    const scpShare = userShare ? {
+      sharedBy: userShare.sharedBy,
+      sharedAt: userShare.sharedAt,
+      isSeen: userShare.isSeen,
+      canUpdateScpData: userShare.canUpdateScpData,
+      scpDataUpdated: userShare.scpDataUpdated,
+      scpDataUpdatedAt: userShare.scpDataUpdatedAt
+    } : null;
+
+    return {
+      _id: req._id,
+      projectName: req.projectName,
+      requirementType: req.requirementType,
+      requirementDescription: req.requirementDescription,
+      urgency: req.urgency,
+      budget: req.budget,
+      scpData: req.scpData,
+      files: req.files,
+      lead: req.lead,
+      project: req.project,
+      visits: req.visits || [],
+      scpShare,
+      status,
+      createdAt: req.createdAt,
+      updatedAt: req.updatedAt,
+      // Add sorting fields for in-memory sorting
+      sharedAt: userShare ? userShare.sharedAt : req.createdAt,
+      scpDataUpdatedAt: userShare ? userShare.scpDataUpdatedAt : null
+    };
+  });
+
+  // Apply status filter if specified
+  let filteredRequirements = processedRequirements;
+  if (status && status !== 'all') {
+    filteredRequirements = processedRequirements.filter(req => req.status === status);
+  }
+
+  // Apply sorting
+  if (sortBy) {
+    const [field, order] = sortBy.split(':');
+    const sortOrder = order === 'desc' ? -1 : 1;
+
+    if (field === 'sharedAt') {
+      filteredRequirements.sort((a, b) => {
+        const dateA = new Date(a.sharedAt || 0);
+        const dateB = new Date(b.sharedAt || 0);
+        return (dateB - dateA) * sortOrder;
+      });
+    } else if (field === 'updatedAt') {
+      filteredRequirements.sort((a, b) => {
+        const dateA = new Date(a.scpDataUpdatedAt || 0);
+        const dateB = new Date(b.scpDataUpdatedAt || 0);
+        return (dateB - dateA) * sortOrder;
+      });
+    } else if (field === 'projectName') {
+      filteredRequirements.sort((a, b) => {
+        const nameA = (a.projectName || '').toLowerCase();
+        const nameB = (b.projectName || '').toLowerCase();
+        return nameA.localeCompare(nameB) * sortOrder;
+      });
+    } else if (field === 'customerName') {
+      filteredRequirements.sort((a, b) => {
+        const nameA = (a.lead?.customerName || '').toLowerCase();
+        const nameB = (b.lead?.customerName || '').toLowerCase();
+        return nameA.localeCompare(nameB) * sortOrder;
+      });
+    } else {
+      // Default sorting by createdAt
+      filteredRequirements.sort((a, b) => {
+        const dateA = new Date(a.createdAt || 0);
+        const dateB = new Date(b.createdAt || 0);
+        return (dateB - dateA) * sortOrder;
+      });
+    }
+  } else {
+    // Default sort: latest shared first
+    filteredRequirements.sort((a, b) => {
+      const dateA = new Date(a.sharedAt || 0);
+      const dateB = new Date(b.sharedAt || 0);
+      return dateB - dateA; // Descending order
+    });
+  }
+
+  // Apply pagination
+  const totalRequirements = filteredRequirements.length;
+  const totalPages = Math.ceil(totalRequirements / limit);
+  const startIndex = (page - 1) * limit;
+  const endIndex = startIndex + limit;
+  const paginatedRequirements = filteredRequirements.slice(startIndex, endIndex);
+
+  const hasNextPage = page < totalPages;
+  const hasPrevPage = page > 1;
+
+  return {
+    requirements: paginatedRequirements,
+    pagination: {
+      currentPage: page,
+      totalPages,
+      totalRequirements,
+      hasNextPage,
+      hasPrevPage,
+      limit
+    }
+  };
 };
 
 const normalizeHeaders = (headers) => {
