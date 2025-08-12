@@ -940,6 +940,25 @@ router.post(
  *                     type: string
  *                   scpRemarks:
  *                     type: string
+ *               files:
+ *                 type: array
+ *                 description: Array of files to be stored in the requirement
+ *                 items:
+ *                   type: object
+ *                   required:
+ *                     - fileType
+ *                     - key
+ *                   properties:
+ *                     fileType:
+ *                       type: string
+ *                       enum: [image, video, voiceMessage, sketch, pdf, document, layoutPlan, 2d drawing, 3d drawing, audio]
+ *                       description: Type of the file
+ *                     key:
+ *                       type: string
+ *                       description: S3 key of the uploaded file (from presigned URL upload)
+ *                     originalName:
+ *                       type: string
+ *                       description: Original file name (optional)
  *             example:
  *               scpData:
  *                 siteAddress: "123 Main St, City, State"
@@ -947,6 +966,16 @@ router.post(
  *                 plotSize: "2000 sq ft"
  *                 structureType: "Cottage"
  *                 scpRemarks: "Site visit completed, all measurements taken"
+ *               files:
+ *                 - fileType: "image"
+ *                   key: "uploads/tmp/scp-files/some-uuid.jpg"
+ *                   originalName: "site-photo-1.jpg"
+ *                 - fileType: "pdf"
+ *                   key: "uploads/tmp/scp-files/some-uuid.pdf"
+ *                   originalName: "site-plan.pdf"
+ *                 - fileType: "audio"
+ *                   key: "uploads/tmp/scp-files/some-uuid.mp3"
+ *                   originalName: "voice-message.mp3"
  *     responses:
  *       200:
  *         description: SCP data updated successfully

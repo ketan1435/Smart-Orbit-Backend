@@ -48,7 +48,7 @@ export const createProject = async (projectBody, session) => {
  * @param {number} [options.page] - Current page (default: 1)
  * @returns {Promise<Object>}
  */
-export const queryProjects = async (filter, options) => {
+export const queryProjects = async (filter, options, user = null) => {
   const { limit = 10, page = 1, sortBy } = options;
   const { customerName, requirementType, projectName, ...directFilters } = filter;
   const sort = sortBy
@@ -56,6 +56,20 @@ export const queryProjects = async (filter, options) => {
     : { createdAt: -1 };
 
   const projectFilter = { ...directFilters };
+
+  // Filter for SCP users - only show projects where they are in the sharedWith array
+  if (user && user.role === Roles.SCP_USER) {
+    const requirementsWithScpUser = await Requirement.find({
+      'sharedWith.user': user._id
+    }).select('_id');
+
+    if (requirementsWithScpUser.length === 0) {
+      return { results: [], page, limit, totalPages: 0, totalResults: 0 };
+    }
+
+    const requirementIds = requirementsWithScpUser.map(r => r._id);
+    projectFilter.requirement = { $in: requirementIds };
+  }
 
   // Fuzzy search for project name
   if (projectName) {
@@ -165,6 +179,8 @@ export const acceptArchitectProposal = async (projectId, proposalId, adminUser) 
 
   // Accept the chosen proposal
   proposalToAccept.status = 'Accepted';
+  proposalToAccept.acceptedBy = adminUser._id;
+  proposalToAccept.acceptedByModel = adminUser.constructor.modelName;
   proposalToAccept.acceptedAt = new Date();
   project.architect = proposalToAccept.architect; // Assign architect to the project
 

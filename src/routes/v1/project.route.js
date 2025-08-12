@@ -49,7 +49,7 @@ router
 router
     .route('/proposals/:proposalId/reject')
     .patch(
-        auth('manageProjects'),
+        auth('rejectProposal'),
         validate(projectValidation.rejectProposal),
         projectController.rejectProposal
     );
@@ -185,7 +185,7 @@ router
 
 router
     .route('/:projectId/proposals/:proposalId/accept')
-    .patch(auth('manageProjects'), validate(projectValidation.acceptProposal), projectController.acceptProposal);
+    .patch(auth('acceptProposal'), validate(projectValidation.acceptProposal), projectController.acceptProposal);
 
 router
     .route('/:projectId/architect-documents')

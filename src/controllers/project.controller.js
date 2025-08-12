@@ -18,7 +18,7 @@ import ApiError from '../utils/ApiError.js';
 export const getProjects = catchAsync(async (req, res) => {
     const filter = pick(req.query, ['projectName', 'status', 'projectCode', 'customerName', 'requirementType']);
     const options = pick(req.query, ['sortBy', 'limit', 'page']);
-    const result = await projectService.queryProjects(filter, options);
+    const result = await projectService.queryProjects(filter, options, req.user);
     res.status(httpStatus.OK).send({ status: 1, message: 'Projects fetched successfully.', data: result });
 });
 

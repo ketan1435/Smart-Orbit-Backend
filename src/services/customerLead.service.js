@@ -565,7 +565,7 @@ export const shareRequirementWithScpUsersService = async (leadId, requirementId,
  * @param {Object} scpData - The updated SCP data
  * @returns {Promise<Object>}
  */
-export const updateScpDataByScpUserService = async (leadId, requirementId, scpUserId, scpData) => {
+export const updateScpDataByScpUserService = async (leadId, requirementId, scpUserId, scpData, files = []) => {
   const requirement = await Requirement.findOne({ _id: requirementId, lead: leadId });
   if (!requirement) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Requirement not found for this lead');
@@ -585,11 +585,54 @@ export const updateScpDataByScpUserService = async (leadId, requirementId, scpUs
     throw new ApiError(httpStatus.BAD_REQUEST, 'SCP data has already been updated for this requirement. Only one update is allowed.');
   }
 
+  // Process files if provided
+  const tempFileKeysToDelete = [];
+  const newFiles = [];
+
+  if (files && files.length > 0) {
+    try {
+      for (const fileData of files) {
+        const { fileType, key: tempKey } = fileData;
+        const fileName = tempKey.split('/').pop();
+        const permanentKey = `customer-leads/${leadId}/${requirementId}/scp-files/${fileType}/${fileName}`;
+
+        // Copy file from temporary to permanent location
+        await storage.copyFile(tempKey, permanentKey);
+
+        // Add to new files array
+        newFiles.push({
+          fileType,
+          key: permanentKey,
+          originalName: fileData.originalName || fileName, // Preserve original name if provided
+          uploadedAt: new Date()
+        });
+
+        // Mark for deletion from temp location
+        tempFileKeysToDelete.push(tempKey);
+      }
+    } catch (error) {
+      // If any file copy fails, clean up any successfully copied files
+      for (const file of newFiles) {
+        try {
+          await storage.deleteFile(file.key);
+        } catch (deleteError) {
+          logger.error('Failed to delete file during cleanup:', deleteError);
+        }
+      }
+      throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to process uploaded files');
+    }
+  }
+
   // Update the SCP data
   requirement.scpData = {
     ...requirement.scpData,
     ...scpData
   };
+
+  // Add new files to the requirement
+  if (newFiles.length > 0) {
+    requirement.files = [...(requirement.files || []), ...newFiles];
+  }
 
   // Mark as updated for this user
   userShare.scpDataUpdated = true;
@@ -600,6 +643,16 @@ export const updateScpDataByScpUserService = async (leadId, requirementId, scpUs
   requirement.scpData.lastUpdatedAt = new Date();
 
   await requirement.save();
+
+  // Clean up temporary files
+  for (const tempKey of tempFileKeysToDelete) {
+    try {
+      await storage.deleteFile(tempKey);
+    } catch (deleteError) {
+      logger.error('Failed to delete temporary file:', deleteError);
+    }
+  }
+
   return requirement;
 };
 

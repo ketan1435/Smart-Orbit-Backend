@@ -161,6 +161,13 @@ export const updateScpDataByScpUser = {
   }),
   body: Joi.object().keys({
     scpData: scpDataSchema.required(),
+    files: Joi.array().items(
+      Joi.object({
+        fileType: Joi.string().valid('image', 'video', 'voiceMessage', 'sketch', 'pdf', 'document', 'layoutPlan', '2d drawing', '3d drawing', 'audio').required(),
+        key: Joi.string().required(),
+        originalName: Joi.string().optional(),
+      })
+    ).optional(),
   }),
 };
 

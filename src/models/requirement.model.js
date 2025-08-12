@@ -40,8 +40,9 @@ const sharedWithSchema = new mongoose.Schema({
 }, { _id: false });
 
 export const fileSchema = new mongoose.Schema({
-    fileType: { type: String, required: true, enum: ['image', 'video', 'voiceMessage', 'sketch', 'pdf', 'document', 'layoutPlan', '2d drawing', '3d drawing'] },
+    fileType: { type: String, required: true, enum: ['image', 'video', 'voiceMessage', 'sketch', 'pdf', 'document', 'layoutPlan', '2d drawing', '3d drawing', 'audio'] },
     key: { type: String, required: true },
+    originalName: { type: String }, // Original file name
     uploadedAt: { type: Date, default: Date.now },
 }, { _id: false });
 

@@ -266,10 +266,10 @@ export const shareRequirementWithScpUsersController = catchAsync(async (req, res
  */
 export const updateScpDataByScpUserController = catchAsync(async (req, res) => {
   const { leadId, requirementId } = req.params;
-  const { scpData } = req.body;
+  const { scpData, files } = req.body;
   const scpUserId = req.user.id;
 
-  const updatedRequirement = await updateScpDataByScpUserService(leadId, requirementId, scpUserId, scpData);
+  const updatedRequirement = await updateScpDataByScpUserService(leadId, requirementId, scpUserId, scpData, files);
   res.status(httpStatus.OK).json({
     status: 1,
     message: 'SCP data updated successfully.',
