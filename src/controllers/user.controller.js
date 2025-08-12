@@ -213,7 +213,13 @@ export const resetUserPasswordById = catchAsync(async (req, res) => {
 });
 
 export const getScpUsers = catchAsync(async (req, res) => {
-  const users = await getScpUsersService();
+  const filter = pick(req.query, ['name', 'role', 'state', 'city', 'town']);
+  if (filter.town != null) {
+    filter.region = filter.town;
+    delete filter.town;
+  }
+  const options = pick(req.query, ['sortBy', 'limit', 'page']);
+  const users = await getScpUsersService(filter, options);
   res.send({ status: 1, users });
 });
 

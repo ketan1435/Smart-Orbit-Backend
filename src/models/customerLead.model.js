@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { validateLocaleAndSetLanguage } from 'typescript';
 
 const customerLeadSchema = new mongoose.Schema({
   leadSource: { type: String, required: true },
@@ -10,6 +11,9 @@ const customerLeadSchema = new mongoose.Schema({
   preferredLanguage: { type: [String] },
   state: { type: String, default: '' },
   city: { type: String, default: '' },
+  townVillage: { type: String, default: '' },
+  preferredLanguage: { type: [String], default: [] },
+  state: { type: String, default: '' },
   googleLocationLink: { type: String },
 
   // Changed: requirements is now an array of ObjectId references to the Requirement model

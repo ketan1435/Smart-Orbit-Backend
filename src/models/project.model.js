@@ -189,6 +189,18 @@ const architectProposalSchema = mongoose.Schema({
         type: Date,
         default: Date.now,
     },
+    acceptedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        refPath: 'acceptedByModel',
+    },
+    acceptedByModel: {
+        type: String,
+        enum: ['User', 'Admin'],
+    },
+    adminRemark: {
+        type: String,
+        trim: true,
+    },
     acceptedAt: Date,
     rejectedAt: Date,
     withdrawnAt: Date,

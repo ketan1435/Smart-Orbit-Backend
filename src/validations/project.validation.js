@@ -51,6 +51,9 @@ export const acceptProposal = {
         projectId: Joi.string().custom(objectId).required(),
         proposalId: Joi.string().custom(objectId).required(),
     }),
+    body: Joi.object().keys({
+        reviewerRemark: Joi.string().optional().allow(''),
+    }),
 };
 
 export const getProposals = {

@@ -887,37 +887,39 @@ export const deleteMultipleFilesFromRequirementService = async (leadId, requirem
 export const getSharedRequirementsForUserService = async (userId) => {
   const requirements = await Requirement.find({ 'sharedWith.user': userId })
     .populate('lead', 'customerName') // populate only necessary lead fields
-    .populate({
-      path: 'visits',
-      select: 'documents',
-      populate: {
-        path: 'siteEngineer',
-        select: 'name email'
-      }
-    })
     .lean();
 
   // Group requirements by lead
   const grouped = {};
   for (const req of requirements) {
     const leadId = req.lead._id.toString();
-    if (!grouped[leadId]) {
-      grouped[leadId] = {
-        leadId,
-        customerName: req.lead.customerName,
-        mobileNumber: req.lead.mobileNumber,
-        email: req.lead.email,
-        state: req.lead.state,
-        city: req.lead.city,
-        requirements: [],
-      };
-    }
+    grouped[leadId] = {
+      leadId,
+      customerName: req.lead.customerName,
+      mobileNumber: req.lead.mobileNumber,
+      email: req.lead.email,
+      state: req.lead.state,
+      city: req.lead.city,
+      requirements: [],
+    };
+
 
     // Add site visits data to the requirement
     const requirementWithVisits = {
       ...req,
-      siteVisits: req.visits || []
     };
+    delete requirementWithVisits.scpData.googleLocationLink;
+    delete requirementWithVisits.scpData.siteAddress;
+    delete requirementWithVisits.scpData.avgStayDuration;
+    delete requirementWithVisits.scpData.drawingStatus;
+    delete requirementWithVisits.scpData.roomRequirements;
+    delete requirementWithVisits.scpData.architectStatus;
+    delete requirementWithVisits.scpData.tokenAdvance;
+    delete requirementWithVisits.scpData.financing;
+    delete requirementWithVisits.scpData.siteVisitDate;
+    delete requirementWithVisits.scpData.targetCompletionDate;
+    delete requirementWithVisits.scpData.lastUpdatedBy;
+    delete requirementWithVisits.scpData.lastUpdatedAt;
 
     grouped[leadId].requirements.push(requirementWithVisits);
   }

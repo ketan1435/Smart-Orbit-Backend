@@ -79,7 +79,7 @@ export const queryUsers = async (filter, options) => {
 
   const sortOption = sortBy ? { [sortBy.split(':')[0]]: sortBy.split(':')[1] === 'desc' ? -1 : 1 } : { createdAt: -1 };
 
-  const users = await User.find(query).sort(sortOption).skip(skip).limit(limit).populate('createdBy', 'name email role').select('name email role createdBy isActive experience education phoneNumber city region address profilePicture ');
+  const users = await User.find(query).sort(sortOption).skip(skip).limit(limit).populate('createdBy', 'name email role').select('name email role createdBy isActive experience education phoneNumber city state region address profilePicture ');
   const totalResults = await User.countDocuments(query);
 
   return {
@@ -395,13 +395,38 @@ export const resetUserPasswordById = async (userId, newPassword) => {
  * Get all SCP users for dropdown
  * @returns {Promise<Array>}
  */
-export const getScpUsersService = async () => {
-  const scpUsers = await User.find({
-    role: 'scp-user',
-    isActive: true
-  })
-    .select('name email role isActive')
-    .sort({ name: 1 })
+export const getScpUsersService = async (filter, options) => {
+  const { limit = 50, page = 1, sortBy } = options;
+  const skip = (page - 1) * limit;
+
+  const sortOption = sortBy ? { [sortBy.split(':')[0]]: sortBy.split(':')[1] === 'desc' ? -1 : 1 } : { createdAt: -1 };
+
+  // Build optimized filter with partial search for region
+  const optimizedFilter = { role: 'scp-user', isActive: true };
+
+  // Add exact matches for state and city if provided
+  if (filter.state) {
+    optimizedFilter.state = filter.state;
+  }
+  if (filter.city) {
+    optimizedFilter.city = filter.city;
+  }
+
+  // Add partial search for region if provided
+  if (filter.region) {
+    optimizedFilter.region = { $regex: filter.region, $options: 'i' };
+  }
+
+  // Add name search if provided
+  if (filter.name) {
+    optimizedFilter.name = { $regex: filter.name, $options: 'i' };
+  }
+
+  const scpUsers = await User.find(optimizedFilter)
+    .select('name email role isActive state city region')
+    .sort(sortOption)
+    .skip(skip)
+    .limit(limit)
     .lean();
 
   return scpUsers;

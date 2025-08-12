@@ -83,7 +83,7 @@ export const createCustomerLead = {
     email: Joi.string().email().allow(''),
     preferredLanguage: Joi.alternatives().try(
       Joi.string().allow(''),
-      Joi.array().items(Joi.string().min(1)).min(1)
+      Joi.array().items(Joi.string()).allow('')
     ),
     state: Joi.string().allow(''),
     city: Joi.string().allow(''),
@@ -129,7 +129,7 @@ export const updateCustomerLead = {
       email: Joi.string().email().allow(''),
       preferredLanguage: Joi.alternatives().try(
         Joi.string().allow(''),
-        Joi.array().items(Joi.string().min(1)).min(1)
+        Joi.array().items(Joi.string()).allow('')
       ),
       state: Joi.string().allow(''),
       city: Joi.string().allow(''),

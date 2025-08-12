@@ -642,6 +642,7 @@ export const getMyProposals = async (user, options) => {
         portfolioLink: proposal.portfolioLink,
         remarks: proposal.remarks,
         status: proposal.status,
+        adminRemark: proposal.adminRemark,
         submittedAt: proposal.submittedAt,
         acceptedAt: proposal.acceptedAt,
         rejectedAt: proposal.rejectedAt,
