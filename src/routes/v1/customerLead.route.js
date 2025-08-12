@@ -15,7 +15,10 @@ import {
   getMySharedRequirementsController,
   shareRequirementWithScpUsersController,
   updateScpDataByScpUserController,
+  updateScpDataByAdminController,
   getScpUserAssignedRequirementsController,
+  deleteFileFromRequirement,
+  deleteMultipleFilesFromRequirement,
 } from '../../controllers/customerLead.controller.js';
 import { createCustomerLeadService, updateCustomerLeadService } from '../../services/customerLead.service.js';
 import auth from '../../middlewares/auth.js';
@@ -1008,5 +1011,154 @@ router.patch(
   updateScpDataByScpUserController
 );
 
+/**
+ * @swagger
+ * /customer-leads/{leadId}/requirements/{requirementId}/update-scp-admin:
+ *   patch:
+ *     summary: Update SCP data by admin
+ *     description: Allow admin to update SCP data for a requirement (without permission restrictions)
+ *     tags: [CustomerLeads]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: leadId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The lead ID
+ *       - in: path
+ *         name: requirementId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The requirement ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - scpData
+ *             properties:
+ *               scpData:
+ *                 type: object
+ *                 description: The SCP data to update
+ *                 properties:
+ *                   siteAddress:
+ *                     type: string
+ *                   googleLocationLink:
+ *                     type: string
+ *                   siteType:
+ *                     type: string
+ *                   plotSize:
+ *                     type: string
+ *                   totalArea:
+ *                     type: string
+ *                   plinthStatus:
+ *                     type: string
+ *                   structureType:
+ *                     type: string
+ *                   numUnits:
+ *                     type: string
+ *                   usageType:
+ *                     type: string
+ *                   avgStayDuration:
+ *                     type: string
+ *                   additionalFeatures:
+ *                     type: string
+ *                   designIdeas:
+ *                     type: string
+ *                   drawingStatus:
+ *                     type: string
+ *                   architectStatus:
+ *                     type: string
+ *                   roomRequirements:
+ *                     type: string
+ *                   tokenAdvance:
+ *                     type: string
+ *                   financing:
+ *                     type: string
+ *                   roadWidth:
+ *                     type: string
+ *                   targetCompletionDate:
+ *                     type: string
+ *                   scpRemarks:
+ *                     type: string
+ *               files:
+ *                 type: array
+ *                 description: Array of files to be stored in the requirement
+ *                 items:
+ *                   type: object
+ *                   required:
+ *                     - fileType
+ *                     - key
+ *                   properties:
+ *                     fileType:
+ *                       type: string
+ *                       enum: [image, video, voiceMessage, sketch, pdf, document, layoutPlan, 2d drawing, 3d drawing, audio]
+ *                       description: Type of the file
+ *                     key:
+ *                       type: string
+ *                       description: S3 key of the uploaded file (from presigned URL upload)
+ *                     originalName:
+ *                       type: string
+ *                       description: Original file name (optional)
+ *     responses:
+ *       200:
+ *         description: SCP data updated successfully by admin
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: SCP data updated successfully by admin.
+ *                 data:
+ *                   type: object
+ *       400:
+ *         description: Bad Request
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden (admin access required)
+ *       404:
+ *         description: Customer lead or requirement not found
+ */
+router.patch(
+  '/:leadId/requirements/:requirementId/update-scp-admin',
+  auth('manageProjects'),
+  validate(customerLeadValidation.updateScpDataByScpUser),
+  updateScpDataByAdminController
+);
+
+/**
+ * @route   DELETE /customer-leads/{leadId}/requirements/{requirementId}/files/{fileKey}
+ * @desc    Delete a single file from a requirement
+ * @access  Private (Admin, SCP User with permissions)
+ */
+router.delete(
+  '/:leadId/requirements/:requirementId/files/:fileKey',
+  auth('manageProjects'),
+  validate(customerLeadValidation.deleteFile),
+  deleteFileFromRequirement
+);
+
+/**
+ * @route   DELETE /customer-leads/{leadId}/requirements/{requirementId}/files
+ * @desc    Delete multiple files from a requirement (bulk deletion)
+ * @access  Private (Admin, SCP User with permissions)
+ */
+router.delete(
+  '/:leadId/requirements/:requirementId/files',
+  auth('manageProjects'),
+  validate(customerLeadValidation.deleteMultipleFiles),
+  deleteMultipleFilesFromRequirement
+);
 
 export default router;

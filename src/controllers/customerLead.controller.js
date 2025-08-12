@@ -12,7 +12,10 @@ import {
   getSharedRequirementsForUserService,
   shareRequirementWithScpUsersService,
   updateScpDataByScpUserService,
+  updateScpDataByAdminService,
   getScpUserAssignedRequirementsService,
+  deleteFileFromRequirementService,
+  deleteMultipleFilesFromRequirementService,
 } from '../services/customerLead.service.js';
 import ApiError from '../utils/ApiError.js';
 import httpStatus from 'http-status';
@@ -311,5 +314,54 @@ export const getScpUserAssignedRequirementsController = catchAsync(async (req, r
     status: 1,
     message: 'SCP user assigned requirements retrieved successfully.',
     data: result
+  });
+});
+
+/**
+ * Update SCP data by admin (similar to SCP user but without permission restrictions)
+ */
+export const updateScpDataByAdminController = catchAsync(async (req, res) => {
+  const { leadId, requirementId } = req.params;
+  const { scpData, files } = req.body;
+  const adminId = req.user.id;
+
+  const updatedRequirement = await updateScpDataByAdminService(leadId, requirementId, adminId, scpData, files);
+  res.status(httpStatus.OK).json({
+    status: 1,
+    message: 'SCP data updated successfully by admin.',
+    data: updatedRequirement,
+  });
+});
+
+/**
+ * Delete a single file from a requirement
+ */
+export const deleteFileFromRequirement = catchAsync(async (req, res) => {
+  const { leadId, requirementId, fileKey } = req.params;
+  const userId = req.user.id;
+
+  const updatedRequirement = await deleteFileFromRequirementService(leadId, requirementId, fileKey, userId);
+
+  res.status(httpStatus.OK).json({
+    status: 1,
+    message: 'File deleted successfully',
+    data: updatedRequirement,
+  });
+});
+
+/**
+ * Delete multiple files from a requirement (bulk deletion)
+ */
+export const deleteMultipleFilesFromRequirement = catchAsync(async (req, res) => {
+  const { leadId, requirementId } = req.params;
+  const { fileKeys } = req.body;
+  const userId = req.user.id;
+
+  const result = await deleteMultipleFilesFromRequirementService(leadId, requirementId, fileKeys, userId);
+
+  res.status(httpStatus.OK).json({
+    status: 1,
+    message: `Successfully deleted ${result.totalDeleted} out of ${result.totalRequested} files`,
+    data: result,
   });
 });

@@ -7,7 +7,7 @@ const customerLeadSchema = new mongoose.Schema({
   alternateContactNumber: { type: String },
   whatsappNumber: { type: String },
   email: { type: String, lowercase: true, trim: true },
-  preferredLanguage: { type: String },
+  preferredLanguage: { type: [String] },
   state: { type: String, default: '' },
   city: { type: String, default: '' },
   googleLocationLink: { type: String },

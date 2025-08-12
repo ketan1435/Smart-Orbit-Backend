@@ -81,7 +81,10 @@ export const createCustomerLead = {
     password: Joi.string().allow(''),
     whatsappNumber: Joi.string().allow(''),
     email: Joi.string().email().allow(''),
-    preferredLanguage: Joi.string().allow(''),
+    preferredLanguage: Joi.alternatives().try(
+      Joi.string().allow(''),
+      Joi.array().items(Joi.string().min(1)).min(1)
+    ),
     state: Joi.string().allow(''),
     city: Joi.string().allow(''),
     googleLocationLink: Joi.string().uri({ allowRelative: false }).allow(''),
@@ -124,7 +127,10 @@ export const updateCustomerLead = {
       alternateContactNumber: Joi.string().allow(''),
       whatsappNumber: Joi.string().allow(''),
       email: Joi.string().email().allow(''),
-      preferredLanguage: Joi.string().allow(''),
+      preferredLanguage: Joi.alternatives().try(
+        Joi.string().allow(''),
+        Joi.array().items(Joi.string().min(1)).min(1)
+      ),
       state: Joi.string().allow(''),
       city: Joi.string().allow(''),
       isActive: Joi.boolean(),
@@ -182,4 +188,36 @@ export const getScpUserAssignedRequirements = {
     requirementType: Joi.string().allow(''),
     status: Joi.string().valid('pending', 'updated', 'all').default('all'),
   }),
+};
+
+const deleteMultipleFiles = {
+  body: Joi.object().keys({
+    fileKeys: Joi.array().items(Joi.string().required()).min(1).required()
+      .messages({
+        'array.min': 'At least one file key must be provided',
+        'any.required': 'File keys array is required'
+      })
+  })
+};
+
+const deleteFile = {
+  params: Joi.object().keys({
+    leadId: Joi.string().custom(objectId).required(),
+    requirementId: Joi.string().custom(objectId).required(),
+    fileKey: Joi.string().required()
+      .messages({
+        'any.required': 'File key is required'
+      })
+  })
+};
+
+export default {
+  createCustomerLead,
+  updateCustomerLead,
+  shareRequirement,
+  shareRequirementWithScpUsers,
+  updateScpDataByScpUser,
+  getScpUserAssignedRequirements,
+  deleteMultipleFiles,
+  deleteFile,
 }; 
