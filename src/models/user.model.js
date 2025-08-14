@@ -76,6 +76,21 @@ const userSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    documents: [{
+      fileType: {
+        type: String,
+        required: true,
+        enum: ['image', 'pdf', 'document']
+      },
+      key: {
+        type: String,
+        required: true
+      },
+      uploadedAt: {
+        type: Date,
+        default: Date.now
+      }
+    }],
     isActive: {
       type: Boolean,
       default: true,

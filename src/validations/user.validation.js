@@ -16,6 +16,13 @@ export const createUser = {
     education: Joi.string().optional(),
     experience: Joi.string().optional(),
     profilePictureKey: Joi.string(),
+    documents: Joi.array().items(
+      Joi.object({
+        fileType: Joi.string().valid('image', 'pdf', 'document').required(),
+        key: Joi.string().required(),
+        uploadedAt: Joi.date().optional()
+      })
+    ).optional(),
     isActive: Joi.boolean(),
   }),
 };
@@ -52,12 +59,20 @@ export const updateUser = {
       name: Joi.string(),
       phoneNumber: Joi.string(),
       state: Joi.string(),
-      city: Joi.string(),
+      city: Joi.string().allow(''),
       region: Joi.string(),
       address: Joi.string(),
       education: Joi.string(),
       experience: Joi.string(),
       profilePictureKey: Joi.string(),
+      documents: Joi.array().items(
+        Joi.object({
+          _id: Joi.string().custom(objectId).optional(),
+          fileType: Joi.string().valid('image', 'pdf', 'document').required(),
+          key: Joi.string().required(),
+          uploadedAt: Joi.date().optional()
+        })
+      ).optional(),
       isActive: Joi.boolean(),
     })
     .min(1),
@@ -92,6 +107,13 @@ export const createWorkerOrFabricatorSchema = Joi.object({
   address: Joi.string().optional(),
   education: Joi.string().optional(),
   experience: Joi.string().optional(),
+  documents: Joi.array().items(
+    Joi.object({
+      fileType: Joi.string().valid('image', 'pdf', 'document').required(),
+      key: Joi.string().required(),
+      uploadedAt: Joi.date().optional()
+    })
+  ).optional(),
 });
 
 export const updateWorkerBySiteEngineer = {
@@ -103,6 +125,13 @@ export const updateWorkerBySiteEngineer = {
     email: Joi.string().email().optional(),
     mobileNumber: Joi.string().optional(),
     role: Joi.string().valid('worker', 'fabricator').optional(),
+    documents: Joi.array().items(
+      Joi.object({
+        fileType: Joi.string().valid('image', 'pdf', 'document').required(),
+        key: Joi.string().required(),
+        uploadedAt: Joi.date().optional()
+      })
+    ).optional(),
     isActive: Joi.boolean().optional(),
   }),
 };
