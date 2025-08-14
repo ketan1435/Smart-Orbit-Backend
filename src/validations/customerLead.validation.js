@@ -87,6 +87,7 @@ export const createCustomerLead = {
     ),
     state: Joi.string().allow(''),
     city: Joi.string().allow(''),
+    town: Joi.string().allow(''),
     googleLocationLink: Joi.string().uri({ allowRelative: false }).allow(''),
     requirements: Joi.array().items(requirementSchema).min(1).required(),
     isActive: Joi.boolean().default(true),
