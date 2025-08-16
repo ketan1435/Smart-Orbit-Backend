@@ -1,8 +1,11 @@
 import httpStatus from 'http-status';
+import mongoose from 'mongoose';
 import Message from '../models/message.model.js';
 import ApiError from '../utils/ApiError.js';
 import storage from '../factory/storage.factory.js';
 import Project from '../models/project.model.js';
+import User from '../models/user.model.js';
+import Admin from '../models/admin.model.js';
 import socketManager from '../config/socket.js';
 
 /**
@@ -117,13 +120,25 @@ export const createMessage = async (req, session) => {
         throw new ApiError(httpStatus.NOT_FOUND, 'Project not found');
     }
 
+    // Process tags if present
+    let processedTags = [];
+    if (req.body.tags && Array.isArray(req.body.tags)) {
+        processedTags = req.body.tags.map(tag => ({
+            userId: tag.userId,
+            userModel: tag.userModel,
+            username: tag.username,
+            tagPosition: tag.tagPosition
+        }));
+    }
+
     // Create message using session
     const messageData = {
         project,
         content,
         sender: req.user.id,
         senderModel: req.user.constructor.modelName,
-        files: []
+        files: [],
+        tags: processedTags
     };
 
     const createdMessages = await Message.create([messageData], { session });
@@ -334,5 +349,262 @@ export const createMessageSocket = async (req) => {
     } catch (error) {
         console.error('Socket message creation error:', error);
         return { success: false, error: error.message || 'Failed to create message' };
+    }
+};
+
+/**
+ * Update message by id
+ * @param {ObjectId} messageId
+ * @param {Object} updateData
+ * @param {Object} req - Request object for user info
+ * @returns {Promise<Message>}
+ */
+export const updateMessageById = async (messageId, updateData, req) => {
+    const message = await getMessageById(messageId);
+
+    // Check if user can update this message (sender or admin)
+    if (message.sender.toString() !== req.user.id && req.user.role !== 'admin') {
+        throw new ApiError(httpStatus.FORBIDDEN, 'You can only update your own messages');
+    }
+
+    const updatedMessage = await Message.findByIdAndUpdate(
+        messageId,
+        updateData,
+        { new: true, runValidators: true }
+    )
+        .populate('project', 'projectName projectCode status')
+        .populate('sender', 'name email role');
+
+    return updatedMessage;
+};
+
+/**
+ * Get messages by IDs
+ * @param {Array} messageIds
+ * @returns {Promise<Array>}
+ */
+export const getMessagesByIds = async (messageIds) => {
+    const messages = await Message.find({
+        _id: { $in: messageIds }
+    }).populate('sender', 'name email role');
+
+    return messages;
+};
+
+/**
+ * Mark messages as read
+ * @param {Array} messageIds
+ * @param {ObjectId} userId
+ * @returns {Promise<Object>}
+ */
+export const markMessagesAsRead = async (messageIds, userId) => {
+    const result = await Message.updateMany(
+        {
+            _id: { $in: messageIds },
+            sender: { $ne: new mongoose.Types.ObjectId(userId) } // Don't mark own messages as read - use ObjectId for comparison
+        },
+        { isRead: true }
+    );
+
+    return {
+        modifiedCount: result.modifiedCount,
+        totalMessages: messageIds.length
+    };
+};
+
+/**
+ * Mark message as read
+ * @param {ObjectId} messageId
+ * @param {ObjectId} userId
+ * @returns {Promise<Message>}
+ */
+export const markMessageAsRead = async (messageId, userId) => {
+    const message = await Message.findById(messageId);
+
+    if (!message) {
+        throw new ApiError(httpStatus.NOT_FOUND, 'Message not found');
+    }
+
+    // Don't mark own messages as read
+    if (message.sender.toString() === userId.toString()) {
+        return message;
+    }
+
+    const updatedMessage = await Message.findByIdAndUpdate(
+        messageId,
+        { isRead: true },
+        { new: true, runValidators: true }
+    )
+        .populate('project', 'projectName projectCode status')
+        .populate('sender', 'name email role');
+
+    return updatedMessage;
+};
+
+/**
+ * Get unread message count for a user
+ * @param {ObjectId} userId
+ * @param {ObjectId} projectId - Optional project filter
+ * @returns {Promise<Object>}
+ */
+export const getUnreadMessageCount = async (userId, projectId = null) => {
+    console.log('getUnreadMessageCount called with userId:', userId, 'type:', typeof userId);
+
+    const filter = {
+        sender: { $ne: new mongoose.Types.ObjectId(userId) }, // Don't count own messages - use ObjectId for comparison
+        isRead: false
+    };
+
+    if (projectId) {
+        filter.project = projectId;
+    }
+
+    console.log('getUnreadMessageCount filter:', JSON.stringify(filter, null, 2));
+
+    const count = await Message.countDocuments(filter);
+
+    console.log('getUnreadMessageCount result:', count);
+
+    // Debug: Check a few sample messages to see sender format
+    const sampleMessages = await Message.find({ isRead: false }).limit(3);
+    console.log('Sample unread messages:', sampleMessages.map(msg => ({
+        id: msg._id,
+        sender: msg.sender,
+        senderType: typeof msg.sender,
+        senderString: msg.sender.toString()
+    })));
+
+    return {
+        unreadCount: count,
+        projectId: projectId || 'all'
+    };
+};
+
+/**
+ * Get unread message counts for all projects
+ * @param {ObjectId} userId
+ * @returns {Promise<Array>}
+ */
+export const getUnreadMessageCountsByProject = async (userId) => {
+    console.log('getUnreadMessageCountsByProject called with userId:', userId, 'type:', typeof userId);
+
+    const pipeline = [
+        {
+            $match: {
+                sender: { $ne: new mongoose.Types.ObjectId(userId) }, // Don't count own messages - use ObjectId for comparison
+                isRead: false
+            }
+        },
+        {
+            $group: {
+                _id: '$project',
+                unreadCount: { $sum: 1 }
+            }
+        },
+        {
+            $lookup: {
+                from: 'projects',
+                localField: '_id',
+                foreignField: '_id',
+                as: 'project'
+            }
+        },
+        {
+            $unwind: '$project'
+        },
+        {
+            $project: {
+                projectId: '$_id',
+                projectName: '$project.projectName',
+                projectCode: '$project.projectCode',
+                unreadCount: 1
+            }
+        },
+        {
+            $sort: { unreadCount: -1 }
+        }
+    ];
+
+    console.log('getUnreadMessageCountsByProject pipeline:', JSON.stringify(pipeline, null, 2));
+
+    const results = await Message.aggregate(pipeline);
+
+    console.log('getUnreadMessageCountsByProject results:', results);
+
+    return results;
+};
+
+/**
+ * Get taggable users for a project
+ * @param {ObjectId} projectId
+ * @param {ObjectId} currentUserId
+ * @returns {Promise<Array>}
+ */
+export const getTaggableUsers = async (projectId, currentUserId) => {
+    console.log('getTaggableUsers service called with:', { projectId, currentUserId });
+
+    if (!projectId) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Project ID is required');
+    }
+
+    if (!currentUserId) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Current user ID is required');
+    }
+
+    // Get the project to find the requirement
+    const project = await Project.findById(projectId).populate('requirement');
+
+    console.log('Project found:', project ? 'Yes' : 'No');
+
+    if (!project) {
+        throw new ApiError(httpStatus.NOT_FOUND, 'Project not found');
+    }
+
+    const taggableUsers = [];
+
+    // Add admin users
+    const adminUsers = await Admin.find({}, 'name email');
+    taggableUsers.push(...adminUsers.filter(admin => admin && admin._id).map(admin => ({
+        _id: admin._id,
+        name: admin.name || admin.email || 'Admin User',
+        email: admin.email,
+        role: 'Admin',
+        userModel: 'Admin'
+    })));
+
+    // Add shared users from requirement
+    if (project.requirement && project.requirement.sharedWith) {
+        for (const sharedUser of project.requirement.sharedWith) {
+            if (sharedUser.user && sharedUser.user.toString() !== currentUserId.toString()) {
+                // Get user details
+                const user = await User.findById(sharedUser.user).select('name email role');
+                if (user && user._id) {
+                    taggableUsers.push({
+                        _id: user._id,
+                        name: user.name || user.email || 'User',
+                        email: user.email,
+                        role: user.role,
+                        userModel: 'User'
+                    });
+                }
+            }
+        }
+    }
+
+    // Remove duplicates and sort by name
+    const uniqueUsers = taggableUsers.filter((user, index, self) =>
+        index === self.findIndex(u => u._id.toString() === user._id.toString())
+    );
+
+    // Sort by name, handling cases where name might be undefined or null
+    try {
+        return uniqueUsers.sort((a, b) => {
+            const nameA = (a.name || a.email || '').toLowerCase();
+            const nameB = (b.name || b.email || '').toLowerCase();
+            return nameA.localeCompare(nameB);
+        });
+    } catch (error) {
+        console.error('Error sorting taggable users:', error);
+        return uniqueUsers; // Return unsorted if sorting fails
     }
 }; 

@@ -14,12 +14,34 @@ router
     .post(auth(), validate(messageValidation.createMessage), transactional(messageService.createMessage));
 
 router
-    .route('/:messageId')
-    .get(auth(), validate(messageValidation.getMessage), messageController.getMessage)
-    .delete(auth(), validate(messageValidation.deleteMessage), messageController.deleteMessage);
+    .route('/unread-count')
+    .get(auth(), messageController.getUnreadMessageCount);
+
+router
+    .route('/unread-counts-by-project')
+    .get(auth(), messageController.getUnreadMessageCountsByProject);
+
+router
+    .route('/project/:projectId/taggable-users')
+    .get(auth(), messageController.getTaggableUsers);
 
 router
     .route('/project/:projectId')
     .get(auth(), validate(messageValidation.getProjectMessages), messageController.getProjectMessages);
+
+router
+    .route('/mark-read')
+    .patch(auth(), messageController.markMessagesAsRead);
+
+router
+    .route('/:messageId/read')
+    .patch(auth(), messageController.markMessageAsRead);
+
+router
+    .route('/:messageId')
+    .get(auth(), validate(messageValidation.getMessage), messageController.getMessage)
+    .delete(auth(), validate(messageValidation.deleteMessage), messageController.deleteMessage);
+
+
 
 export default router; 

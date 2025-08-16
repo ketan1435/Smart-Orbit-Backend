@@ -43,7 +43,7 @@ export const createProject = async (projectBody, session) => {
  * Query for projects with pagination, sorting, and filtering
  * @param {Object} filter - Mongo filter
  * @param {Object} options - Query options
- * @param {string} [options.sortBy] - Sort option in the format: field:(desc|asc)
+ * @param {string} [options.sortBy] - "Sort option in the format: field:(desc|asc)"
  * @param {number} [options.limit] - Maximum number of results per page (default: 10)
  * @param {number} [options.page] - Current page (default: 1)
  * @returns {Promise<Object>}
@@ -475,7 +475,7 @@ export const getArchitectDocumentsForCustomer = async (projectId, user) => {
  * Query for projects for a specific customer
  * @param {Object} user - The authenticated user object (customer)
  * @param {Object} options - Query options
- * @param {string} [options.sortBy] - Sort option in the format: field:(desc|asc)
+ * @param {string} [options.sortBy] - "Sort option in the format: field:(desc|asc)"
  * @param {number} [options.limit] - Maximum number of results per page (default: 10)
  * @param {number} [options.page] - Current page (default: 1)
  * @returns {Promise<Object>}
@@ -519,7 +519,7 @@ export const getProjectsForCustomer = async (user, options) => {
  * Get projects for architect
  * @param {Object} user - The authenticated user object (architect)
  * @param {Object} options - Query options
- * @param {string} [options.sortBy] - Sort option in the format: field:(desc|asc)
+ * @param {string} [options.sortBy] - "Sort option in the format: field:(desc|asc)"
  * @param {number} [options.limit] - Maximum number of results per page (default: 10)
  * @param {number} [options.page] - Current page (default: 1)
  * @returns {Promise<Object>}
@@ -570,7 +570,7 @@ export const getProjectsForArchitect = async (user, options) => {
  * Get proposals submitted by the authenticated architect
  * @param {Object} user - The authenticated architect user
  * @param {Object} options - Query options
- * @param {string} [options.sortBy] - Sort option in the format: field:(desc|asc)
+ * @param {string} [options.sortBy] - "Sort option in the format: field:(desc|asc)"
  * @param {number} [options.limit] - Maximum number of results per page (default: 10)
  * @param {number} [options.page] - Current page (default: 1)
  * @param {string} [options.status] - Filter by proposal status
@@ -1295,4 +1295,149 @@ export const updateProjectStatusService = async (projectId, newStatus, user) => 
   }
 
   return project;
+};
+
+/**
+ * Get project chat groups for the authenticated user
+ * @param {Object} user - The authenticated user
+ * @param {Object} filter - Filter options
+ * @param {Object} options - Query options
+ * @returns {Promise<Object>}
+ */
+export const getProjectChatGroups = async (user, filter = {}, options = {}) => {
+  const { limit = 10, page = 1, sortBy } = options;
+  const { customerName, projectName, status } = filter;
+  const sort = sortBy
+    ? { [sortBy.split(':')[0]]: sortBy.split(':')[1] === 'desc' ? -1 : 1 }
+    : { createdAt: -1 };
+
+  let projectFilter = {};
+
+  // If user is admin, show all projects
+  if (user.role === 'Admin' || user.role === 'sales-admin') {
+    // Apply filters for admin
+    if (projectName) {
+      projectFilter.projectName = { $regex: projectName, $options: 'i' };
+    }
+    if (status) {
+      projectFilter.status = status;
+    }
+    if (customerName) {
+      const leads = await CustomerLead.find({
+        customerName: { $regex: customerName, $options: 'i' },
+      }).select('_id');
+      const leadIds = leads.map(l => l._id);
+      if (leadIds.length > 0) {
+        projectFilter.lead = { $in: leadIds };
+      } else {
+        return { results: [], page, limit, totalPages: 0, totalResults: 0 };
+      }
+    }
+
+    // Get all projects with pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const [projects, total] = await Promise.all([
+      Project.find(projectFilter)
+        .select('projectName projectCode status createdAt updatedAt')
+        .populate('lead', 'customerName')
+        .populate('requirement', 'requirementType')
+        .sort(sort)
+        .skip(skip)
+        .limit(parseInt(limit)),
+      Project.countDocuments(projectFilter)
+    ]);
+
+    const results = projects.map(project => ({
+      _id: project._id,
+      projectName: project.projectName,
+      projectCode: project.projectCode,
+      status: project.status,
+      customerName: project.lead?.customerName || 'N/A',
+      requirementType: project.requirement?.requirementType || 'N/A',
+      createdAt: project.createdAt,
+      updatedAt: project.updatedAt,
+      sharedAt: project.createdAt, // For admin, use creation date
+      isSeen: true // Admin has access to all projects
+    }));
+
+    return {
+      results,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      totalPages: Math.ceil(total / parseInt(limit)),
+      totalResults: total
+    };
+  } else {
+    // For regular users, only show projects shared with them
+    const requirementsWithUser = await Requirement.find({
+      'sharedWith.user': user._id
+    }).select('_id project requirementType');
+
+    if (requirementsWithUser.length === 0) {
+      return { results: [], page, limit, totalPages: 0, totalResults: 0 };
+    }
+
+    const requirementIds = requirementsWithUser.map(r => r._id);
+    projectFilter.requirement = { $in: requirementIds };
+
+    // Apply additional filters
+    if (projectName) {
+      projectFilter.projectName = { $regex: projectName, $options: 'i' };
+    }
+    if (status) {
+      projectFilter.status = status;
+    }
+    if (customerName) {
+      const leads = await CustomerLead.find({
+        customerName: { $regex: customerName, $options: 'i' },
+      }).select('_id');
+      const leadIds = leads.map(l => l._id);
+      if (leadIds.length > 0) {
+        projectFilter.lead = { $in: leadIds };
+      } else {
+        return { results: [], page, limit, totalPages: 0, totalResults: 0 };
+      }
+    }
+
+    // Get projects with pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const [projects, total] = await Promise.all([
+      Project.find(projectFilter)
+        .select('projectName projectCode status createdAt updatedAt')
+        .populate('lead', 'customerName')
+        .populate('requirement', 'requirementType sharedWith')
+        .sort(sort)
+        .skip(skip)
+        .limit(parseInt(limit)),
+      Project.countDocuments(projectFilter)
+    ]);
+
+    // Map projects with shared information
+    const results = projects.map(project => {
+      const requirement = requirementsWithUser.find(r => r._id.toString() === project.requirement?._id.toString());
+      const sharedInfo = requirement ?
+        project.requirement.sharedWith.find(sw => sw.user.toString() === user._id.toString()) : null;
+
+      return {
+        _id: project._id,
+        projectName: project.projectName,
+        projectCode: project.projectCode,
+        status: project.status,
+        customerName: project.lead?.customerName || 'N/A',
+        requirementType: project.requirement?.requirementType || 'N/A',
+        createdAt: project.createdAt,
+        updatedAt: project.updatedAt,
+        sharedAt: sharedInfo?.sharedAt || project.createdAt,
+        isSeen: sharedInfo?.isSeen || false
+      };
+    });
+
+    return {
+      results,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      totalPages: Math.ceil(total / parseInt(limit)),
+      totalResults: total
+    };
+  }
 };
