@@ -98,6 +98,113 @@ router.get('/scp-users', auth('getUsers'), userController.getScpUsers);
 
 /**
  * @swagger
+ * /projects/chat-groups:
+ *   get:
+ *     summary: Get project chat groups for the authenticated user
+ *     description: Retrieve a list of projects that the user has access to for chat functionality. For regular users, shows projects shared with them. For admins, shows all projects.
+ *     tags: [Projects]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Number of items per page
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *           default: createdAt:desc
+ *         description: "Sort option in the format: field:(desc|asc)"
+ *       - in: query
+ *         name: projectName
+ *         schema:
+ *           type: string
+ *         description: Filter by project name (fuzzy search)
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *         description: Filter by project status
+ *       - in: query
+ *         name: customerName
+ *         schema:
+ *           type: string
+ *         description: Filter by customer name (fuzzy search)
+ *     responses:
+ *       200:
+ *         description: Project chat groups retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: Project chat groups retrieved successfully
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     results:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           _id:
+ *                             type: string
+ *                           projectName:
+ *                             type: string
+ *                           projectCode:
+ *                             type: string
+ *                           status:
+ *                             type: string
+ *                           customerName:
+ *                             type: string
+ *                           requirementType:
+ *                             type: string
+ *                           createdAt:
+ *                             type: string
+ *                             format: date-time
+ *                           updatedAt:
+ *                             type: string
+ *                             format: date-time
+ *                           sharedAt:
+ *                             type: string
+ *                             format: date-time
+ *                           isSeen:
+ *                             type: boolean
+ *                     page:
+ *                       type: integer
+ *                       example: 1
+ *                     limit:
+ *                       type: integer
+ *                       example: 10
+ *                     totalPages:
+ *                       type: integer
+ *                       example: 5
+ *                     totalResults:
+ *                       type: integer
+ *                       example: 50
+ *       401:
+ *         $ref: '#/components/responses/Unauthorized'
+ *       403:
+ *         $ref: '#/components/responses/Forbidden'
+ */
+router.get('/chat-groups', auth('getProjects'), projectController.getProjectChatGroups);
+
+/**
+ * @swagger
  * /projects/my-sitework-projects:
  *   get:
  *     summary: Get projects where the authenticated user is assigned in any sitework

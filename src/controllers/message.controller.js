@@ -63,4 +63,77 @@ export const getProjectMessages = catchAsync(async (req, res) => {
         message: 'Project messages fetched successfully.',
         data: result
     });
+});
+
+/**
+ * Mark message as read
+ */
+export const markMessageAsRead = catchAsync(async (req, res) => {
+    const message = await messageService.markMessageAsRead(req.params.messageId, req.user.id);
+    res.status(httpStatus.OK).send({
+        status: 1,
+        message: 'Message marked as read successfully.',
+        data: message
+    });
+});
+
+/**
+ * Mark multiple messages as read
+ */
+export const markMessagesAsRead = catchAsync(async (req, res) => {
+    const { messageIds } = req.body;
+
+    if (!messageIds || !Array.isArray(messageIds)) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Message IDs array is required');
+    }
+
+    const result = await messageService.markMessagesAsRead(messageIds, req.user.id);
+    res.status(httpStatus.OK).send({
+        status: 1,
+        message: 'Messages marked as read successfully.',
+        data: result
+    });
+});
+
+/**
+ * Get unread message count
+ */
+export const getUnreadMessageCount = catchAsync(async (req, res) => {
+    const { projectId } = req.query;
+    const result = await messageService.getUnreadMessageCount(req.user.id, projectId);
+    res.status(httpStatus.OK).send({
+        status: 1,
+        message: 'Unread message count fetched successfully.',
+        data: result
+    });
+});
+
+/**
+ * Get unread message counts by project
+ */
+export const getUnreadMessageCountsByProject = catchAsync(async (req, res) => {
+    const result = await messageService.getUnreadMessageCountsByProject(req.user.id);
+    res.status(httpStatus.OK).send({
+        status: 1,
+        message: 'Unread message counts by project fetched successfully.',
+        data: result
+    });
+});
+
+/**
+ * Get taggable users for a project
+ */
+export const getTaggableUsers = catchAsync(async (req, res) => {
+    console.log('getTaggableUsers called with projectId:', req.params.projectId);
+    console.log('getTaggableUsers called with userId:', req.user.id);
+
+    const result = await messageService.getTaggableUsers(req.params.projectId, req.user.id);
+
+    console.log('getTaggableUsers result:', result);
+
+    res.status(httpStatus.OK).send({
+        status: 1,
+        message: 'Taggable users fetched successfully.',
+        data: result
+    });
 }); 

@@ -38,9 +38,7 @@ class SocketService {
 
     async handleMessageRead(messageId, userId) {
         try {
-            const message = await messageService.updateMessageById(messageId, {
-                isRead: true
-            }, { user: { id: userId } });
+            const message = await messageService.markMessageAsRead(messageId, userId);
 
             // Emit read receipt to sender
             socketManager.emitToUser(message.sender, 'message-read', {

@@ -21,6 +21,26 @@ const messageSchema = new mongoose.Schema({
     content: {
         type: String,
     },
+    tags: [{
+        userId: {
+            type: mongoose.Schema.Types.ObjectId,
+            refPath: 'tags.userModel',
+            required: true
+        },
+        userModel: {
+            type: String,
+            enum: ['User', 'Admin'],
+            required: true
+        },
+        username: {
+            type: String,
+            required: true
+        },
+        tagPosition: {
+            type: Number,
+            required: true
+        }
+    }],
     isRead: {
         type: Boolean,
         default: false

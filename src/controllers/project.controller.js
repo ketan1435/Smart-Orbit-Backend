@@ -225,3 +225,14 @@ export const updateProjectStatus = catchAsync(async (req, res) => {
         data: project
     });
 });
+
+export const getProjectChatGroups = catchAsync(async (req, res) => {
+    const filter = pick(req.query, ['projectName', 'status', 'customerName']);
+    const options = pick(req.query, ['sortBy', 'limit', 'page']);
+    const result = await projectService.getProjectChatGroups(req.user, filter, options);
+    res.status(httpStatus.OK).send({
+        status: 1,
+        message: 'Project chat groups retrieved successfully.',
+        data: result
+    });
+});

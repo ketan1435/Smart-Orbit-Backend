@@ -98,6 +98,10 @@ class SocketManager {
                 this.handleMessageRead(socket, data);
             });
 
+            socket.on('messages-read', (data) => {
+                this.handleMessagesRead(socket, data);
+            });
+
             // Handle disconnect
             socket.on('disconnect', () => {
                 this.handleDisconnect(socket);
@@ -218,6 +222,12 @@ class SocketManager {
         try {
             const { messageId } = data;
 
+            // Import message service dynamically
+            const messageService = await import('../services/message.service.js');
+
+            // Mark message as read in database
+            const message = await messageService.markMessageAsRead(messageId, socket.userId);
+
             // Emit read receipt to project room
             const userRooms = this.userRooms.get(socket.userId);
             if (userRooms) {
@@ -231,8 +241,65 @@ class SocketManager {
                     }
                 });
             }
+
+            // Emit read receipt to sender
+            if (message.sender && message.sender.toString() !== socket.userId) {
+                socket.to(`user:${message.sender}`).emit('message-read', {
+                    messageId,
+                    readBy: socket.userId,
+                    timestamp: new Date()
+                });
+            }
+
+            logger.info(`Message ${messageId} marked as read by user ${socket.userId}`);
         } catch (error) {
             logger.error('Socket message read error:', error);
+        }
+    }
+
+    async handleMessagesRead(socket, data) {
+        try {
+            const { messageIds } = data;
+
+            if (!Array.isArray(messageIds) || messageIds.length === 0) {
+                return;
+            }
+
+            // Import message service dynamically
+            const messageService = await import('../services/message.service.js');
+
+            // Mark messages as read in database
+            const result = await messageService.markMessagesAsRead(messageIds, socket.userId);
+
+            // Emit read receipts to project room for each message
+            const userRooms = this.userRooms.get(socket.userId);
+            if (userRooms) {
+                userRooms.forEach(roomName => {
+                    if (roomName.startsWith('project:')) {
+                        socket.to(roomName).emit('messages-read-receipt', {
+                            messageIds,
+                            userId: socket.userId,
+                            timestamp: new Date()
+                        });
+                    }
+                });
+            }
+
+            // Emit read receipts to senders
+            const messages = await messageService.getMessagesByIds(messageIds);
+            messages.forEach(message => {
+                if (message.sender && message.sender.toString() !== socket.userId) {
+                    socket.to(`user:${message.sender}`).emit('messages-read', {
+                        messageIds: [message._id],
+                        readBy: socket.userId,
+                        timestamp: new Date()
+                    });
+                }
+            });
+
+            logger.info(`${result.modifiedCount} messages marked as read by user ${socket.userId}`);
+        } catch (error) {
+            logger.error('Socket messages read error:', error);
         }
     }
 
