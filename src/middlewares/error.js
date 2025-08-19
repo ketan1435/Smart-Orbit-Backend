@@ -6,7 +6,12 @@ import ApiError from '../utils/ApiError.js';
 
 const errorConverter = (err, req, res, next) => {
   let error = err;
-  if (!(error instanceof ApiError)) {
+
+  if (err instanceof mongoose.Error.ValidationError) {
+    const messages = Object.values(err.errors).map((error) => error.message);
+    const message = messages.join(', ');
+    error = new ApiError(httpStatus.BAD_REQUEST, message);
+  } else if (!(error instanceof ApiError)) {
     const statusCode =
       error.statusCode || error instanceof mongoose.Error ? httpStatus.BAD_REQUEST : httpStatus.INTERNAL_SERVER_ERROR;
     const message = error.message || httpStatus[statusCode];

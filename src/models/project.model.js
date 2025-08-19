@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { fileSchema } from './requirement.model.js';
+import { STATUS_VALUES } from '../config/enums/status.enum.js';
 
 /**
  * @swagger
@@ -264,7 +265,7 @@ const projectSchema = new mongoose.Schema(
     {
         projectName: {
             type: String,
-            required: true,
+            required: [true, 'Please mention Customer Email And Project Name !!'],
             trim: true,
         },
         projectCode: {
@@ -285,7 +286,7 @@ const projectSchema = new mongoose.Schema(
         requirement: { type: mongoose.Schema.Types.ObjectId, ref: 'Requirement' },
         status: {
             type: String,
-            enum: ['Draft', 'Pending', 'Open', 'OnHold', 'Completed', 'Cancelled'],
+            enum: STATUS_VALUES,
             default: 'Draft',
         },
         siteVisits: {

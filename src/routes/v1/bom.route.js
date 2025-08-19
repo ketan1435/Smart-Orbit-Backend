@@ -782,7 +782,7 @@ router
  *         $ref: '#/components/responses/Unauthorized'
  */
 router
-    .route('/boms/procurement-team')
+    .route('/boms/planning-engineer')
     .get(auth('getProcurementTeam'), validate(bomValidation.getProcurementTeam), bomController.getProcurementTeam);
 
 /**

@@ -6,6 +6,8 @@ import {
   updateCustomerLeadService,
   activateCustomerLeadService,
   deactivateCustomerLeadService,
+  updateCustomerLeadStatusService,
+  updateCustomerAndProjectsStatusService,
   importCustomerLeadsService,
   exportCustomerLeadsService,
   shareRequirementWithUsersService,
@@ -19,6 +21,7 @@ import {
 } from '../services/customerLead.service.js';
 import ApiError from '../utils/ApiError.js';
 import httpStatus from 'http-status';
+import { STATUS_ENUM } from '../config/enums/status.enum.js';
 
 export const createCustomerLeadController = catchAsync(async (req, res) => {
   const lead = await createCustomerLeadService(req.body);
@@ -81,8 +84,8 @@ export const listCustomerLeadsController = catchAsync(async (req, res) => {
     }
   }
 
-  if (req.query.isActive !== undefined) {
-    filter.isActive = req.query.isActive === 'true';
+  if (req.query.status) {
+    filter.status = req.query.status;
   }
 
   const result = await listCustomerLeadsService(filter, options);
@@ -112,7 +115,7 @@ export const activateCustomerLeadController = catchAsync(async (req, res) => {
   if (!lead) {
     throw new ApiError(404, 'Customer lead not found');
   }
-  res.status(200).json({ success: true, status: 1, isActive: true });
+  res.status(200).json({ success: true, status: 1, status: STATUS_ENUM.ACTIVE });
 });
 
 export const deactivateCustomerLeadController = catchAsync(async (req, res) => {
@@ -121,7 +124,41 @@ export const deactivateCustomerLeadController = catchAsync(async (req, res) => {
   if (!lead) {
     throw new ApiError(404, 'Customer lead not found');
   }
-  res.status(200).json({ success: true, status: 1, isActive: false });
+  res.status(200).json({ success: true, status: 1, status: STATUS_ENUM.INACTIVE });
+});
+
+export const updateCustomerLeadStatusController = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+  
+  if (!status) {
+    throw new ApiError(400, 'Status is required');
+  }
+  
+  const lead = await updateCustomerLeadStatusService(id, status);
+  res.status(200).json({ 
+    success: true, 
+    status: 1, 
+    message: 'Customer lead status updated successfully',
+    data: lead 
+  });
+});
+
+export const updateCustomerAndProjectsStatusController = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+  
+  if (!status) {
+    throw new ApiError(400, 'Status is required');
+  }
+  
+  const result = await updateCustomerAndProjectsStatusService(id, status);
+  res.status(200).json({ 
+    success: true, 
+    status: 1, 
+    message: `Customer status updated to ${status} and ${result.projectsUpdated} projects synchronized successfully`,
+    data: result 
+  });
 });
 
 export const importCustomerLeadsController = catchAsync(async (req, res) => {
@@ -188,8 +225,8 @@ export const exportCustomerLeadsController = catchAsync(async (req, res) => {
     }
   }
 
-  if (req.query.isActive !== undefined) {
-    filter.isActive = req.query.isActive === 'true';
+  if (req.query.status) {
+    filter.status = req.query.status;
   }
 
   // Handle date filters

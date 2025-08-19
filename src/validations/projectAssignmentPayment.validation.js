@@ -5,7 +5,7 @@ export const getProjectAssignmentPayments = {
   query: Joi.object().keys({
     projectName: Joi.string().description('Filter by project name (case-insensitive)'),
     userName: Joi.string().description('Filter by user name (case-insensitive)'),
-    userRole: Joi.string().valid('admin', 'sales-admin', 'architect', 'fabricator', 'procurement-team', 'site-engineer', 'worker', 'dispatch-installation', 'user', 'Admin').description('Filter by user role'),
+    userRole: Joi.string().valid('admin', 'sales-admin', 'architect', 'fabricator', 'planning-engineer', 'site-engineer', 'worker', 'dispatch-installation', 'user', 'Admin').description('Filter by user role'),
     createdBy: Joi.string().custom(objectId),
     createdByModel: Joi.string().valid('Admin', 'User'),
     sortBy: Joi.string(),

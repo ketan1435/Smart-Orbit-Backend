@@ -7,6 +7,8 @@ import {
   getCustomerLeadController,
   activateCustomerLeadController,
   deactivateCustomerLeadController,
+  updateCustomerLeadStatusController,
+  updateCustomerAndProjectsStatusController,
   importCustomerLeadsController,
   exportCustomerLeadsController,
   // updateCustomerLeadController,
@@ -575,6 +577,122 @@ router.patch('/:id/activate', activateCustomerLeadController);
  *         description: Customer lead not found
  */
 router.patch('/:id/deactivate', deactivateCustomerLeadController);
+
+/**
+ * @swagger
+ * /customer-leads/{id}/status:
+ *   patch:
+ *     summary: Update the status of a customer lead
+ *     tags: [Customer Leads]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The customer lead ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - status
+ *             properties:
+ *               status:
+ *                 type: string
+ *                 enum: [pending, in_progress, completed, cancelled]
+ *                 description: The new status of the customer lead
+ *     responses:
+ *       200:
+ *         description: Customer lead status updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: Customer lead status updated successfully.
+ *                 data:
+ *                   type: object
+ *       400:
+ *         description: Bad Request (e.g., invalid status)
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Customer lead not found
+ */
+router.patch(
+  '/:id/status',
+  auth(),
+  validate(customerLeadValidation.updateCustomerLeadStatus),
+  updateCustomerLeadStatusController
+);
+
+/**
+ * @swagger
+ * /customer-leads/{id}/status-with-projects:
+ *   patch:
+ *     summary: Update the status of a customer lead and synchronize all associated projects
+ *     tags: [Customer Leads]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The customer lead ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - status
+ *             properties:
+ *               status:
+ *                 type: string
+ *                 enum: [Active, Inactive, Hold, Draft, Complete, InProgress, Cancelled]
+ *                 description: The new status of the customer lead
+ *     responses:
+ *       200:
+ *         description: Customer lead and project statuses updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: Customer status updated to Active and 3 projects synchronized successfully
+ *                 data:
+ *                   type: object
+ *       400:
+ *         description: Bad Request (e.g., invalid status)
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Customer lead not found
+ */
+router.patch(
+  '/:id/status-with-projects',
+  auth(),
+  validate(customerLeadValidation.updateCustomerLeadStatus),
+  updateCustomerAndProjectsStatusController
+);
 
 /**
  * @swagger

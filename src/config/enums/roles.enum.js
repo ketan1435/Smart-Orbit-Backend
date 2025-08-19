@@ -1,5 +1,5 @@
 const Roles = Object.freeze({
-  PROCUREMENT: 'procurement-team',
+  PLANNING_ENGINEER: 'planning-engineer',
   ARCHITECT: 'architect',
   FABRICATION_PLANNER: 'fabrication-planner',
   SITE_ENGINEER: 'site-engineer',

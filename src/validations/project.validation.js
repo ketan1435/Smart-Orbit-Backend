@@ -1,5 +1,6 @@
 import Joi from 'joi';
 import { objectId } from './custom.validation.js';
+import { STATUS_VALUES } from '../config/enums/status.enum.js';
 
 // Validation schemas for Project can be added here later
 // For now, project creation is internal.
@@ -199,6 +200,6 @@ export const updateProjectStatus = {
         projectId: Joi.string().custom(objectId).required(),
     }),
     body: Joi.object().keys({
-        status: Joi.string().valid('Draft', 'Pending', 'Open', 'OnHold', 'Completed', 'Cancelled').required(),
+        status: Joi.string().valid(...STATUS_VALUES).required(),
     }),
 }; 

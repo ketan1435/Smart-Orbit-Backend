@@ -8,6 +8,8 @@ import storage from '../factory/storage.factory.js';
 import Sitework from '../models/sitework.model.js';
 import Roles from '../config/enums/roles.enum.js';
 import ProjectAssignmentPayment from '../models/projectAssignmentPaymant.model.js';
+import { STATUS_VALUES } from '../config/enums/status.enum.js';
+import { STATUS_ENUM } from '../config/enums/status.enum.js';
 
 /**
  * Generates a unique project code.
@@ -76,16 +78,22 @@ export const queryProjects = async (filter, options, user = null) => {
     projectFilter.projectName = { $regex: projectName, $options: 'i' };
   }
 
+  const leadFilter = {
+    status: { $nin: [STATUS_ENUM.DRAFT] }
+  };
+
   // Filter by customer name (via lead)
   if (customerName) {
-    const leads = await CustomerLead.find({
-      customerName: { $regex: customerName, $options: 'i' },
-    }).select('_id');
-    const leadIds = leads.map(l => l._id);
-    if (leadIds.length === 0)
-      return { results: [], page, limit, totalPages: 0, totalResults: 0 };
-    projectFilter.lead = { $in: leadIds };
+    leadFilter.customerName = { $regex: customerName, $options: 'i' };
   }
+
+  const leads = await CustomerLead.find(leadFilter).select('_id');
+  const leadIds = leads.map((l) => l._id);
+  if (customerName && leadIds.length === 0) {
+    return { results: [], page, limit, totalPages: 0, totalResults: 0 };
+  }
+  projectFilter.lead = { $in: leadIds };
+
 
   // Filter by requirementType (from Requirement collection)
   if (requirementType) {
@@ -110,8 +118,33 @@ export const queryProjects = async (filter, options, user = null) => {
     })
     .sort(sort)
     .skip((page - 1) * limit)
-    .limit(limit)
-    .lean();
+    .limit(limit);
+
+  // Auto-sync project statuses with customer statuses
+  const projectStatusMapping = {
+    [STATUS_ENUM.ACTIVE]: STATUS_ENUM.ACTIVE,
+    [STATUS_ENUM.INACTIVE]: STATUS_ENUM.CANCELLED,
+    [STATUS_ENUM.HOLD]: STATUS_ENUM.HOLD,
+    [STATUS_ENUM.COMPLETE]: STATUS_ENUM.COMPLETE,
+    [STATUS_ENUM.CANCELLED]: STATUS_ENUM.CANCELLED,
+    [STATUS_ENUM.INPROGRESS]: STATUS_ENUM.INPROGRESS,
+    [STATUS_ENUM.DRAFT]: STATUS_ENUM.DRAFT,
+  };
+
+  // Update project statuses that don't match their customer status
+  const updatePromises = projects.map(async (project) => {
+    if (project.lead && project.lead.status) {
+      const customerStatus = project.lead.status;
+      const expectedProjectStatus = projectStatusMapping[customerStatus] || STATUS_ENUM.DRAFT;
+
+      if (project.status !== expectedProjectStatus) {
+        project.status = expectedProjectStatus;
+        await project.save();
+      }
+    }
+  });
+
+  await Promise.all(updatePromises);
 
   const totalResults = await Project.countDocuments(projectFilter);
 
@@ -1116,29 +1149,58 @@ export const getProjectDocumentsForProcurement = async (projectId, user) => {
 };
 
 export const getProjectById = async (projectId) => {
-  const project = await Project.findById(projectId)
-    .populate('lead')
-    .populate('architect')
-    .populate('siteVisits')
-    .populate({
-      path: 'siteVisits',
-      populate: {
-        path: 'siteEngineer',
-        select: 'name email role'
-      }
-    })
-    .populate('assignedSiteEngineer')
-    .populate({
-      path: 'requirement',
-      populate: {
-        path: 'sharedWith.user sharedWith.sharedBy',
-        select: 'name email role'
-      }
-    });
-  if (!project) {
-    throw new ApiError(httpStatus.NOT_FOUND, 'Project not found');
-  }
-  return project;
+    if (!isValidObjectId(projectId)) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid project ID');
+    }
+    const project = await Project.findById(projectId)
+        .populate('lead')
+        .populate('requirement')
+        .populate({
+            path: 'proposals.architect',
+            select: 'name email',
+        })
+        .populate({
+            path: 'architectDocuments.architect',
+            select: 'name email',
+        })
+        .populate({
+            path: 'siteVisits',
+            populate: {
+                path: 'siteEngineer',
+                select: 'name email'
+            }
+        })
+        .populate({
+            path: 'requirement.sharedWith.user',
+            select: 'name email role'
+        });
+
+    if (!project) {
+        throw new ApiError(httpStatus.NOT_FOUND, 'Project not found');
+    }
+
+    // Auto-sync project status with customer status
+    if (project.lead && project.lead.status) {
+        const customerStatus = project.lead.status;
+        const projectStatusMapping = {
+            [STATUS_ENUM.ACTIVE]: STATUS_ENUM.ACTIVE,
+            [STATUS_ENUM.INACTIVE]: STATUS_ENUM.CANCELLED,
+            [STATUS_ENUM.HOLD]: STATUS_ENUM.HOLD,
+            [STATUS_ENUM.COMPLETE]: STATUS_ENUM.COMPLETE,
+            [STATUS_ENUM.CANCELLED]: STATUS_ENUM.CANCELLED,
+            [STATUS_ENUM.INPROGRESS]: STATUS_ENUM.INPROGRESS,
+            [STATUS_ENUM.DRAFT]: STATUS_ENUM.DRAFT,
+        };
+
+        const expectedProjectStatus = projectStatusMapping[customerStatus] || STATUS_ENUM.DRAFT;
+
+        if (project.status !== expectedProjectStatus) {
+            project.status = expectedProjectStatus;
+            await project.save();
+        }
+    }
+
+    return project;
 };
 
 export const assignSiteEngineersService = async (projectId, siteEngineers) => {
@@ -1262,39 +1324,22 @@ export const getProjectsForUserAssignedInSiteworkService = async (userId, query)
  * @param {Object} user
  * @returns {Promise<Project>}
  */
-export const updateProjectStatusService = async (projectId, newStatus, user) => {
-  // Verify user is admin
-  if (user.role !== 'Admin' && user.role !== 'sales-admin') {
-    throw new ApiError(httpStatus.FORBIDDEN, 'Only admins can update project status');
-  }
-
-  // Validate status
-  const validStatuses = ['Draft', 'Pending', 'Open', 'OnHold', 'Completed', 'Cancelled'];
-  if (!validStatuses.includes(newStatus)) {
-    throw new ApiError(httpStatus.BAD_REQUEST, `Invalid status. Must be one of: ${validStatuses.join(', ')}`);
-  }
-
-  // Find and update the project
-  const project = await Project.findByIdAndUpdate(
-    projectId,
-    {
-      status: newStatus,
-      updatedAt: new Date()
-    },
-    {
-      new: true,
-      runValidators: true
+export const updateProjectStatusService = async (projectId, newStatus) => {
+    if (!isValidObjectId(projectId)) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid project ID');
     }
-  ).populate('lead')
-    .populate('requirement')
-    .populate('architect')
-    .populate('assignedSiteEngineer');
+    if (!STATUS_VALUES.includes(newStatus)) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid status value');
+    }
 
-  if (!project) {
-    throw new ApiError(httpStatus.NOT_FOUND, 'Project not found');
-  }
+    const project = await Project.findById(projectId);
+    if (!project) {
+        throw new ApiError(httpStatus.NOT_FOUND, 'Project not found');
+    }
 
-  return project;
+    project.status = newStatus;
+    await project.save();
+    return project;
 };
 
 /**

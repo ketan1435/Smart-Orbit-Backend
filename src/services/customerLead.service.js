@@ -15,6 +15,7 @@ import { roles } from '../config/roles.js';
 import Roles from '../config/enums/roles.enum.js';
 import { createUser } from './user.service.js';
 import ProjectAssignmentPayment from '../models/projectAssignmentPaymant.model.js';
+import { STATUS_ENUM, STATUS_VALUES } from '../config/enums/status.enum.js';
 
 
 export const createCustomerLeadService = async (req, session) => {
@@ -28,6 +29,8 @@ export const createCustomerLeadService = async (req, session) => {
   const leadPayload = {
     ...basicLeadInfo,
     createdBy: req.user.id,
+    createdByModel: req.user.role === 'Admin' ? 'Admin' : 'User',
+    status: basicLeadInfo.status || STATUS_ENUM.DRAFT,
     requirements: [], // will update after creating Requirement docs
   };
 
@@ -366,7 +369,7 @@ export const updateCustomerLeadService = async (req, session) => {
     'preferredLanguage',
     'state',
     'city',
-    'isActive',
+    'status',
   ];
 
   for (const key of Object.keys(updateBody)) {
@@ -392,7 +395,7 @@ export const activateCustomerLeadService = async (id) => {
   if (!lead) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Customer lead not found');
   }
-  lead.isActive = true;
+  lead.status = STATUS_ENUM.ACTIVE;
   await lead.save();
   return lead;
 };
@@ -402,9 +405,83 @@ export const deactivateCustomerLeadService = async (id) => {
   if (!lead) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Customer lead not found');
   }
-  lead.isActive = false;
+  lead.status = STATUS_ENUM.INACTIVE;
   await lead.save();
   return lead;
+};
+
+export const updateCustomerLeadStatusService = async (id, newStatus) => {
+  const lead = await getCustomerLeadByIdService(id);
+  if (!lead) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Customer lead not found');
+  }
+  
+  if (!STATUS_VALUES.includes(newStatus)) {
+    throw new ApiError(httpStatus.BAD_REQUEST, `Invalid status. Must be one of: ${STATUS_VALUES.join(', ')}`);
+  }
+  
+  lead.status = newStatus;
+  await lead.save();
+  return lead;
+};
+
+export const updateCustomerAndProjectsStatusService = async (id, newStatus) => {
+  const lead = await getCustomerLeadByIdService(id);
+  if (!lead) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Customer lead not found');
+  }
+  
+  if (!STATUS_VALUES.includes(newStatus)) {
+    throw new ApiError(httpStatus.BAD_REQUEST, `Invalid status. Must be one of: ${STATUS_VALUES.join(', ')}`);
+  }
+
+  // Start a session for transaction
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    // Update customer lead status
+    lead.status = newStatus;
+    await lead.save({ session });
+
+    // Find all projects associated with this customer lead
+    const projects = await Project.find({ lead: id }).session(session);
+    
+    // Update all project statuses based on customer status
+    const projectStatusMapping = {
+      [STATUS_ENUM.ACTIVE]: STATUS_ENUM.ACTIVE,
+      [STATUS_ENUM.INACTIVE]: STATUS_ENUM.CANCELLED,
+      [STATUS_ENUM.HOLD]: STATUS_ENUM.HOLD,
+      [STATUS_ENUM.COMPLETE]: STATUS_ENUM.COMPLETE,
+      [STATUS_ENUM.CANCELLED]: STATUS_ENUM.CANCELLED,
+      [STATUS_ENUM.INPROGRESS]: STATUS_ENUM.INPROGRESS,
+      [STATUS_ENUM.DRAFT]: STATUS_ENUM.DRAFT,
+    };
+
+    const newProjectStatus = projectStatusMapping[newStatus] || STATUS_ENUM.DRAFT;
+
+    // Update all projects
+    if (projects.length > 0) {
+      await Project.updateMany(
+        { lead: id },
+        { status: newProjectStatus },
+        { session }
+      );
+    }
+
+    await session.commitTransaction();
+    
+    return {
+      customer: lead,
+      projectsUpdated: projects.length,
+      newProjectStatus
+    };
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    session.endSession();
+  }
 };
 
 export const shareRequirementService = async (leadId, requirementId, userIdToShareWith, adminId) => {
@@ -578,11 +655,6 @@ export const updateScpDataByScpUserService = async (leadId, requirementId, scpUs
 
   if (!userShare) {
     throw new ApiError(httpStatus.FORBIDDEN, 'You do not have permission to update SCP data for this requirement');
-  }
-
-  // Check if SCP data has already been updated by this user
-  if (userShare.scpDataUpdated) {
-    throw new ApiError(httpStatus.BAD_REQUEST, 'SCP data has already been updated for this requirement. Only one update is allowed.');
   }
 
   // Process files if provided with better error handling
@@ -1326,7 +1398,7 @@ export const exportCustomerLeadsService = async (filter = {}) => {
   const dataToExport = [];
   const headers = [
     // Basic Info
-    'Lead ID', 'Lead Source', 'Customer Name', 'Mobile Number', 'Alternate Contact', 'Email', 'State', 'City', 'Is Active', 'Created At',
+    'Lead ID', 'Lead Source', 'Customer Name', 'Mobile Number', 'Alternate Contact', 'Email', 'State', 'City', 'Status', 'Created At',
     // Requirement specific
     'Requirement ID', 'Requirement Type', 'Other Requirement', 'Description', 'Urgency', 'Budget',
     // SCP Data
@@ -1348,7 +1420,7 @@ export const exportCustomerLeadsService = async (filter = {}) => {
           'Email': lead.email,
           'State': lead.state,
           'City': lead.city,
-          'Is Active': lead.isActive,
+          'Status': lead.status,
           'Created At': lead.createdAt.toISOString(),
 
           'Requirement ID': requirement._id.toString(),
@@ -1393,7 +1465,7 @@ export const exportCustomerLeadsService = async (filter = {}) => {
         'Email': lead.email,
         'State': lead.state,
         'City': lead.city,
-        'Is Active': lead.isActive,
+        'Status': lead.status,
         'Created At': lead.createdAt.toISOString(),
       };
       dataToExport.push(row);

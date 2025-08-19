@@ -277,10 +277,56 @@ router.get('/chat-groups', auth('getProjects'), projectController.getProjectChat
  */
 router.get('/my-sitework-projects', auth(), projectController.getMySiteworkProjects);
 
+// Specific routes must come before the general :projectId route
 router
-    .route('/:projectId')
-    .get(auth('getProjects'), projectController.getProjectById);
+    .route('/approved-documents/planning-engineer')
+    .get(
+        auth('getProjects'),
+        validate(projectValidation.getApprovedDocumentsForProcurement),
+        projectController.getApprovedDocumentsForProcurement
+    );
+// Backward-compatible alias
+router
+    .route('/approved-documents/procurement')
+    .get(
+        auth('getProjects'),
+        validate(projectValidation.getApprovedDocumentsForProcurement),
+        projectController.getApprovedDocumentsForProcurement
+    );
 
+router
+    .route('/planning-engineer/my-projects')
+    .get(
+        auth('getProjects'),
+        validate(projectValidation.getProjectsForProcurement),
+        projectController.getProjectsForProcurement
+    );
+// Backward-compatible alias
+router
+    .route('/procurement/my-projects')
+    .get(
+        auth('getProjects'),
+        validate(projectValidation.getProjectsForProcurement),
+        projectController.getProjectsForProcurement
+    );
+
+router
+    .route('/planning-engineer/:projectId/documents')
+    .get(
+        auth('getProjects'),
+        validate(projectValidation.getProjectDocumentsForProcurement),
+        projectController.getProjectDocumentsForProcurement
+    );
+// Backward-compatible alias
+router
+    .route('/procurement/:projectId/documents')
+    .get(
+        auth('getProjects'),
+        validate(projectValidation.getProjectDocumentsForProcurement),
+        projectController.getProjectDocumentsForProcurement
+    );
+
+// All :projectId routes must come before the general :projectId route
 router
     .route('/:projectId/visits')
     .get(auth('getProjects'), validate(projectValidation.getProjectSiteVisits), projectController.getProjectSiteVisits);
@@ -295,11 +341,6 @@ router
     .patch(auth('acceptProposal'), validate(projectValidation.acceptProposal), projectController.acceptProposal);
 
 router
-    .route('/:projectId/architect-documents')
-    .post(auth('manageProjects'), validate(projectValidation.submitArchitectDocument), transactional(projectController.submitArchitectDocument))
-    .get(auth('getProjects'), projectController.getArchitectDocuments);
-
-router
     .route('/:projectId/architect-documents/:documentId/admin-review')
     .patch(auth('manageProjects'), validate(projectValidation.reviewArchitectDocument), projectController.reviewArchitectDocument);
 
@@ -312,41 +353,41 @@ router
     .patch(auth('getProjects'), validate(projectValidation.customerReviewDocument), projectController.customerReviewDocument);
 
 router
+    .route('/:projectId/architect-documents/:documentId/send-to-planning-engineer')
+    .post(auth('manageProjects'), validate(projectValidation.sendDocumentToProcurement), projectController.sendDocumentToProcurement);
+
+router
     .route('/:projectId/architect-documents/customer')
     .get(
         auth('getProjects'),
         validate(projectValidation.getArchitectDocumentsForCustomer),
         projectController.getArchitectDocumentsForCustomer
     );
-
+// Backward-compatible alias
 router
     .route('/:projectId/architect-documents/:documentId/send-to-procurement')
     .post(auth('manageProjects'), validate(projectValidation.sendDocumentToProcurement), projectController.sendDocumentToProcurement);
 
 router
-    .route('/approved-documents/procurement')
-    .get(
-        auth('getProjects'),
-        validate(projectValidation.getApprovedDocumentsForProcurement),
-        projectController.getApprovedDocumentsForProcurement
-    );
+    .route('/:projectId/architect-documents')
+    .post(auth('manageProjects'), validate(projectValidation.submitArchitectDocument), transactional(projectController.submitArchitectDocument))
+    .get(auth('getProjects'), projectController.getArchitectDocuments);
 
 router
-    .route('/procurement/my-projects')
-    .get(
-        auth('getProjects'),
-        validate(projectValidation.getProjectsForProcurement),
-        projectController.getProjectsForProcurement
-    );
+    .route('/:projectId/assign-site-engineers')
+    .post(auth('manageProjects'), projectController.assignSiteEngineers);
 
 router
-    .route('/procurement/:projectId/documents')
-    .get(
-        auth('getProjects'),
-        validate(projectValidation.getProjectDocumentsForProcurement),
-        projectController.getProjectDocumentsForProcurement
-    );
+    .route('/:projectId/assigned-site-engineers')
+    .get(auth('getProjects'), projectController.getAssignedSiteEngineers);
 
+router
+    .route('/:projectId/status')
+    .patch(auth('updateProjectStatus'), validate(projectValidation.updateProjectStatus), projectController.updateProjectStatus);
+
+router
+    .route('/:projectId')
+    .get(auth('getProjects'), projectController.getProjectById);
 // Add these routes before the export statement
 
 /**
@@ -399,58 +440,7 @@ router
  *       404:
  *         description: Project not found
  */
-router
-    .route('/:projectId/assign-site-engineers')
-    .post(auth('manageProjects'), projectController.assignSiteEngineers);
 
-/**
- * @swagger
- * /projects/{projectId}/assigned-site-engineers:
- *   get:
- *     summary: Get assigned site engineers for a project
- *     tags: [Projects]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: projectId
- *         required: true
- *         schema:
- *           type: string
- *         description: The project ID
- *     responses:
- *       200:
- *         description: Assigned site engineers retrieved successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 status:
- *                   type: integer
- *                   example: 1
- *                 message:
- *                   type: string
- *                   example: Assigned site engineers retrieved successfully
- *                 data:
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       _id:
- *                         type: string
- *                       name:
- *                         type: string
- *                       email:
- *                         type: string
- *                       role:
- *                         type: string
- *       404:
- *         description: Project not found
- */
-router
-    .route('/:projectId/assigned-site-engineers')
-    .get(auth('getProjects'), projectController.getAssignedSiteEngineers);
 
 // Add this route after the existing routes
 
@@ -599,10 +589,6 @@ router
  *       404:
  *         description: Project not found
  */
-router
-    .route('/:projectId/status')
-    .patch(auth('updateProjectStatus'), validate(projectValidation.updateProjectStatus), projectController.updateProjectStatus);
-
 export default router;
 
 /**

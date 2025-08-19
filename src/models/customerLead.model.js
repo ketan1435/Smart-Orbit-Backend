@@ -1,10 +1,11 @@
 import mongoose from 'mongoose';
 import { validateLocaleAndSetLanguage } from 'typescript';
+import { STATUS_VALUES } from '../config/enums/status.enum.js';
 
 const customerLeadSchema = new mongoose.Schema({
-  leadSource: { type: String, required: true },
-  customerName: { type: String, required: true },
-  mobileNumber: { type: String, required: true },
+  leadSource: { type: String },
+  customerName: { type: String },
+  mobileNumber: { type: String },
   alternateContactNumber: { type: String },
   whatsappNumber: { type: String },
   email: { type: String, lowercase: true, trim: true },
@@ -22,7 +23,15 @@ const customerLeadSchema = new mongoose.Schema({
     ref: 'Requirement',
   }],
 
-  isActive: { type: Boolean, default: true },
+  status: {
+    type: String,
+    enum: STATUS_VALUES,
+    default: 'Draft'
+  },
+  isConvertedToCustomer: {
+    type: Boolean,
+    default: false,
+  },
 }, {
   timestamps: true,
 });
