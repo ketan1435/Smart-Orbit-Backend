@@ -706,13 +706,14 @@ export const updateScpDataByScpUserService = async (leadId, requirementId, scpUs
     throw new ApiError(httpStatus.NOT_FOUND, 'Requirement not found for this lead');
   }
 
-  // Check if the user is shared with this requirement and has SCP update permissions
+  // Remove permission validation - SCP users now have full access to update SCP data
+  // Check if the user is shared with this requirement (but don't require canUpdateScpData permission)
   const userShare = requirement.sharedWith.find(share =>
-    share.user.toString() === scpUserId && share.canUpdateScpData
+    share.user.toString() === scpUserId
   );
 
   if (!userShare) {
-    throw new ApiError(httpStatus.FORBIDDEN, 'You do not have permission to update SCP data for this requirement');
+    throw new ApiError(httpStatus.FORBIDDEN, 'You are not shared with this requirement');
   }
 
   // Process files if provided with better error handling
