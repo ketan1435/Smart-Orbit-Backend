@@ -1018,6 +1018,14 @@ export const deleteMultipleFilesFromRequirementService = async (leadId, requirem
 export const getSharedRequirementsForUserService = async (userId) => {
   const requirements = await Requirement.find({ 'sharedWith.user': userId })
     .populate('lead', 'customerName') // populate only necessary lead fields
+    .populate({
+      path: 'sharedWith.user',
+      select: '_id name email role'
+    })
+    .populate({
+      path: 'sharedWith.sharedBy',
+      select: '_id name email role'
+    })
     .lean();
 
   // Group requirements by lead
@@ -1114,10 +1122,16 @@ export const getScpUserAssignedRequirementsService = async (scpUserId, filter = 
     .populate({
       path: 'sharedWith',
       match: { user: scpUserId, canUpdateScpData: true },
-      populate: {
-        path: 'user',
-        select: 'name email role'
-      }
+      populate: [
+        {
+          path: 'user',
+          select: '_id name email role'
+        },
+        {
+          path: 'sharedBy',
+          select: '_id name email role'
+        }
+      ]
     })
     .populate({
       path: 'visits',

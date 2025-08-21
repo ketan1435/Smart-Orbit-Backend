@@ -3,6 +3,7 @@ import CustomerLead from '../models/customerLead.model.js';
 import ApiError from '../utils/ApiError.js';
 import { mongoose, isValidObjectId } from 'mongoose';
 import Requirement from '../models/requirement.model.js';
+import User from '../models/user.model.js';
 import httpStatus from 'http-status';
 import storage from '../factory/storage.factory.js';
 import Sitework from '../models/sitework.model.js';
@@ -1170,14 +1171,46 @@ export const getProjectById = async (projectId) => {
                 path: 'siteEngineer',
                 select: 'name email'
             }
-        })
-        .populate({
-            path: 'requirement.sharedWith.user',
-            select: 'name email role'
         });
 
     if (!project) {
         throw new ApiError(httpStatus.NOT_FOUND, 'Project not found');
+    }
+
+    // Manually populate sharedWith user data if requirement exists
+    if (project.requirement && project.requirement.sharedWith && project.requirement.sharedWith.length > 0) {
+        console.log('Manual population: Found sharedWith data', project.requirement.sharedWith);
+        
+        // Get all unique user IDs from sharedWith
+        const userIds = [...new Set([
+            ...project.requirement.sharedWith.map(share => share.user),
+            ...project.requirement.sharedWith.map(share => share.sharedBy)
+        ])].filter(id => id);
+        
+        console.log('Manual population: User IDs to fetch', userIds);
+        
+        if (userIds.length > 0) {
+            const users = await User.find({ _id: { $in: userIds } }).select('_id name email role');
+            console.log('Manual population: Found users', users);
+            
+            const userMap = users.reduce((map, user) => {
+                map[user._id.toString()] = user;
+                return map;
+            }, {});
+            
+            console.log('Manual population: User map', userMap);
+            
+            // Populate the sharedWith array
+            project.requirement.sharedWith = project.requirement.sharedWith.map(share => {
+                const populatedShare = {
+                    ...share.toObject(),
+                    user: userMap[share.user.toString()] || share.user,
+                    sharedBy: userMap[share.sharedBy.toString()] || share.sharedBy
+                };
+                console.log('Manual population: Populated share', populatedShare);
+                return populatedShare;
+            });
+        }
     }
 
     // Auto-sync project status with customer status
@@ -1451,7 +1484,14 @@ export const getProjectChatGroups = async (user, filter = {}, options = {}) => {
       Project.find(projectFilter)
         .select('projectName projectCode status createdAt updatedAt')
         .populate('lead', 'customerName')
-        .populate('requirement', 'requirementType sharedWith')
+        .populate({
+          path: 'requirement',
+          select: 'requirementType sharedWith',
+          populate: {
+            path: 'sharedWith.user',
+            select: '_id name email role'
+          }
+        })
         .sort(sort)
         .skip(skip)
         .limit(parseInt(limit)),
