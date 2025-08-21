@@ -16,6 +16,7 @@ import Roles from '../config/enums/roles.enum.js';
 import { createUser } from './user.service.js';
 import ProjectAssignmentPayment from '../models/projectAssignmentPaymant.model.js';
 import { STATUS_ENUM, STATUS_VALUES } from '../config/enums/status.enum.js';
+import { updateCustomerStatusWithCascade } from './statusCascade.service.js';
 
 
 export const createCustomerLeadService = async (req, session) => {
@@ -26,11 +27,13 @@ export const createCustomerLeadService = async (req, session) => {
   const requirementIds = [];
 
   // 1. Create the CustomerLead first
+  const { town, ...restBasicLeadInfo } = basicLeadInfo;
   const leadPayload = {
-    ...basicLeadInfo,
+    ...restBasicLeadInfo,
+    townVillage: town || restBasicLeadInfo.townVillage, // Map town to townVillage
     createdBy: req.user.id,
     createdByModel: req.user.role === 'Admin' ? 'Admin' : 'User',
-    status: basicLeadInfo.status || STATUS_ENUM.DRAFT,
+    status: basicLeadInfo.status || STATUS_ENUM.INPROGRESS, // Default to inprogress for new customers
     requirements: [], // will update after creating Requirement docs
   };
 
@@ -351,12 +354,29 @@ export const getCustomerLeadByIdService = async (id) => {
 };
 
 export const updateCustomerLeadService = async (req, session) => {
+  console.log('=== BACKEND DEBUG: UPDATE CUSTOMER LEAD ===');
+  console.log('Request body:', JSON.stringify(req.body, null, 2));
+  console.log('Status value:', req.body.status);
+  console.log('Status type:', typeof req.body.status);
+  console.log('Status length:', req.body.status?.length);
+  console.log('Status char codes:', req.body.status?.split('').map(c => c.charCodeAt(0)));
+  console.log('==========================================');
+  
   const { id } = req.params;
   const { body: updateBody } = req;
   const lead = await getCustomerLeadByIdService(id);
   if (!lead) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Customer lead not found');
   }
+
+  // Handle town field mapping
+  const { town, requirementsToUpdate, ...restUpdateBody } = updateBody;
+  if (town !== undefined) {
+    restUpdateBody.townVillage = town;
+  }
+
+  // Check if status is being updated
+  const isStatusUpdate = restUpdateBody.status && restUpdateBody.status !== lead.status;
 
   // Only allow updating basic fields
   const allowedFields = [
@@ -369,24 +389,62 @@ export const updateCustomerLeadService = async (req, session) => {
     'preferredLanguage',
     'state',
     'city',
+    'townVillage',
+    'googleLocationLink',
     'status',
   ];
 
-  for (const key of Object.keys(updateBody)) {
+  for (const key of Object.keys(restUpdateBody)) {
     if (allowedFields.includes(key)) {
-      lead[key] = updateBody[key];
+      lead[key] = restUpdateBody[key];
     }
   }
 
-  await lead.save({ session });
-  return {
-    status: httpStatus.OK,
-    body: {
-      status: 1,
-      message: 'Customer lead updated successfully',
-      data: lead,
-    },
-  };
+  // Handle requirement updates if provided
+  if (requirementsToUpdate && Array.isArray(requirementsToUpdate)) {
+    for (const reqUpdate of requirementsToUpdate) {
+      const requirement = await Requirement.findById(reqUpdate._id);
+      if (!requirement) {
+        throw new ApiError(httpStatus.NOT_FOUND, `Requirement with ID ${reqUpdate._id} not found`);
+      }
+      
+      // Verify the requirement belongs to this lead
+      if (requirement.lead.toString() !== id) {
+        throw new ApiError(httpStatus.BAD_REQUEST, `Requirement ${reqUpdate._id} does not belong to this lead`);
+      }
+
+      // Update the requirement fields
+      const { _id, ...updateFields } = reqUpdate;
+      Object.assign(requirement, updateFields);
+      
+      await requirement.save({ session });
+    }
+  }
+
+  // If status is being updated, use cascade logic
+  if (isStatusUpdate) {
+    const result = await updateCustomerStatusWithCascade(id, restUpdateBody.status, session);
+    return {
+      status: httpStatus.OK,
+      body: {
+        status: 1,
+        message: `Customer lead updated successfully. ${result.projectsUpdated} projects also updated to status: ${restUpdateBody.status}`,
+        data: result.customer,
+        projectsUpdated: result.projectsUpdated
+      },
+    };
+  } else {
+    // Regular update without status change
+    await lead.save({ session });
+    return {
+      status: httpStatus.OK,
+      body: {
+        status: 1,
+        message: 'Customer lead updated successfully',
+        data: lead,
+      },
+    };
+  }
 };
 
 

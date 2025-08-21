@@ -10,6 +10,7 @@ import Roles from '../config/enums/roles.enum.js';
 import ProjectAssignmentPayment from '../models/projectAssignmentPaymant.model.js';
 import { STATUS_VALUES } from '../config/enums/status.enum.js';
 import { STATUS_ENUM } from '../config/enums/status.enum.js';
+import { updateProjectStatusWithReflection } from './statusCascade.service.js';
 
 /**
  * Generates a unique project code.
@@ -1337,9 +1338,9 @@ export const updateProjectStatusService = async (projectId, newStatus) => {
         throw new ApiError(httpStatus.NOT_FOUND, 'Project not found');
     }
 
-    project.status = newStatus;
-    await project.save();
-    return project;
+    // Use the cascade service to update project and reflect to customer
+    const result = await updateProjectStatusWithReflection(projectId, newStatus);
+    return result.project;
 };
 
 /**

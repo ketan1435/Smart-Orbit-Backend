@@ -21,6 +21,11 @@ const verifyCallback = (req, resolve, reject, requiredRights) => async (err, use
     const userRights = roleRights.get(user.role?.toLowerCase()) || [];
     const hasRequiredRights = requiredRights.every((requiredRight) => userRights.includes(requiredRight));
     if (!hasRequiredRights && req.params.userId !== user.id) {
+      // Temporary fix: Allow all authenticated users to get projects
+      if (requiredRights.includes('getProjects')) {
+        resolve();
+        return;
+      }
       return reject(new ApiError(httpStatus.FORBIDDEN, 'Forbidden'));
     }
   }

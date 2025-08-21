@@ -73,14 +73,16 @@ const requirementSchema = Joi.object({
 
 const requirementSchemaDraft = Joi.object({
   ...requirementBaseSchema,
-  projectName: Joi.string().allow('', null),
-  requirementType: Joi.string().allow('', null),
+  projectName: Joi.string().required(), // Only projectName is required for draft
+  requirementType: Joi.string().allow('', null), // requirementType is optional for draft
 });
 
 export const createCustomerLead = {
   body: Joi.object({
-    status: Joi.string().valid(...STATUS_VALUES).required(),
+    status: Joi.string().valid(...STATUS_VALUES).optional(), // Make status optional, backend will set default
 
+    // For draft status: only email and projectName are required
+    // For inprogress status (default): all fields are required
     leadSource: Joi.string().when('status', {
         is: STATUS_ENUM.DRAFT,
         then: Joi.string().allow('', null),
@@ -98,34 +100,24 @@ export const createCustomerLead = {
     }),
     alternateContactNumber: Joi.string().allow('', null),
     whatsappNumber: Joi.string().allow('', null),
-    email: Joi.string().email().allow('', null),
+    email: Joi.string().email().required(), // Email is always required
     preferredLanguage: Joi.array().items(Joi.string()),
     state: Joi.string().allow('', null),
     city: Joi.string().allow('', null),
     townVillage: Joi.string().allow('', null),
+    town: Joi.string().allow('', null), // Allow both town and townVillage for compatibility
     googleLocationLink: Joi.string().uri().allow('', null),
     password: Joi.string().custom(password),
     confirmPassword: Joi.string().valid(Joi.ref('password')).when('password', {
         is: Joi.exist(),
         then: Joi.required(),
     }),
-    status: Joi.string().valid(...STATUS_VALUES),
     requirements: Joi.when('status', {
       is: STATUS_ENUM.DRAFT,
-      then: Joi.array().items(requirementSchemaDraft).min(1),
-      otherwise: Joi.array().items(requirementSchema).min(1),
+      then: Joi.array().items(requirementSchemaDraft).min(1), // Only projectName required in requirements
+      otherwise: Joi.array().items(requirementSchema).min(1), // All fields required in requirements
     }),
-  }).when(Joi.object({ status: Joi.string().valid(STATUS_ENUM.DRAFT).required() }).unknown(), {
-    then: Joi.object({
-        email: Joi.string().email().optional(),
-        mobileNumber: Joi.string().optional(),
-        customerName: Joi.string().optional(),
-        state: Joi.string().optional(),
-        city: Joi.string().optional(),
-        townVillage: Joi.string().optional(),
-        requirements: Joi.array().items(requirementSchema).optional()
-    })
-})
+  })
 };
 
 export const getCustomerLeads = {
@@ -165,8 +157,19 @@ export const updateCustomerLead = {
         state: Joi.string(),
         city: Joi.string(),
         townVillage: Joi.string().allow('', null),
+        town: Joi.string().allow('', null), // Allow both town and townVillage for compatibility
         status: Joi.string().valid(...STATUS_VALUES),
         googleLocationLink: Joi.string().uri().allow('', null),
+        requirementsToUpdate: Joi.array().items(Joi.object({
+            _id: Joi.string().required(),
+            projectName: Joi.string(),
+            requirementType: Joi.string(),
+            otherRequirement: Joi.string().allow('', null),
+            requirementDescription: Joi.string(),
+            urgency: Joi.string().allow('', null),
+            budget: Joi.string().allow('', null),
+            scpData: Joi.object().allow(null),
+        })).optional(),
     }).min(1),
 };
 
@@ -245,6 +248,27 @@ export const deleteMultipleFiles = {
   }),
 };
 
+export const updateCustomerStatusWithCascade = {
+  params: Joi.object().keys({
+    id: Joi.string().required().custom(objectId),
+  }),
+  body: Joi.object().keys({
+    status: Joi.string().valid(...STATUS_VALUES).required(),
+  }),
+};
+
+export const recalculateCustomerStatus = {
+  params: Joi.object().keys({
+    id: Joi.string().required().custom(objectId),
+  }),
+};
+
+export const getCustomerStatusSummary = {
+  params: Joi.object().keys({
+    id: Joi.string().required().custom(objectId),
+  }),
+};
+
 export default {
   createCustomerLead,
   updateCustomerLead,
@@ -255,4 +279,7 @@ export default {
   getScpUserAssignedRequirements,
   deleteMultipleFiles,
   deleteFile,
+  updateCustomerStatusWithCascade,
+  recalculateCustomerStatus,
+  getCustomerStatusSummary,
 }; 

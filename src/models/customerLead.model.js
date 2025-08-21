@@ -9,12 +9,10 @@ const customerLeadSchema = new mongoose.Schema({
   alternateContactNumber: { type: String },
   whatsappNumber: { type: String },
   email: { type: String, lowercase: true, trim: true },
-  preferredLanguage: { type: [String] },
+  preferredLanguage: { type: [String], default: [] },
   state: { type: String, default: '' },
   city: { type: String, default: '' },
   townVillage: { type: String, default: '' },
-  preferredLanguage: { type: [String], default: [] },
-  state: { type: String, default: '' },
   googleLocationLink: { type: String },
 
   // Changed: requirements is now an array of ObjectId references to the Requirement model
@@ -26,7 +24,7 @@ const customerLeadSchema = new mongoose.Schema({
   status: {
     type: String,
     enum: STATUS_VALUES,
-    default: 'Draft'
+    default: 'inprogress' // Default to inprogress for new customers
   },
   isConvertedToCustomer: {
     type: Boolean,

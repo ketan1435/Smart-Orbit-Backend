@@ -287,7 +287,7 @@ const projectSchema = new mongoose.Schema(
         status: {
             type: String,
             enum: STATUS_VALUES,
-            default: 'Draft',
+            default: 'draft',
         },
         siteVisits: {
             type: [mongoose.Schema.Types.ObjectId],

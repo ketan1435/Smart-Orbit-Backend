@@ -21,6 +21,9 @@ import {
   getScpUserAssignedRequirementsController,
   deleteFileFromRequirement,
   deleteMultipleFilesFromRequirement,
+  updateCustomerStatusWithCascadeController,
+  recalculateCustomerStatusController,
+  getCustomerStatusSummaryController
 } from '../../controllers/customerLead.controller.js';
 import { createCustomerLeadService, updateCustomerLeadService } from '../../services/customerLead.service.js';
 import auth from '../../middlewares/auth.js';
@@ -1277,6 +1280,208 @@ router.delete(
   auth('manageProjects'),
   validate(customerLeadValidation.deleteMultipleFiles),
   deleteMultipleFilesFromRequirement
+);
+
+/**
+ * @swagger
+ * /customer-leads/{id}/status:
+ *   patch:
+ *     summary: Update the status of a customer lead
+ *     tags: [Customer Leads]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The customer lead ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - status
+ *             properties:
+ *               status:
+ *                 type: string
+ *                 enum: [pending, in_progress, completed, cancelled]
+ *                 description: The new status of the customer lead
+ *     responses:
+ *       200:
+ *         description: Customer lead status updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: Customer lead status updated successfully.
+ *                 data:
+ *                   type: object
+ *       400:
+ *         description: Bad Request (e.g., invalid status)
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Customer lead not found
+ */
+router.patch(
+  '/:id/status',
+  auth(),
+  validate(customerLeadValidation.updateCustomerLeadStatus),
+  updateCustomerLeadStatusController
+);
+
+/**
+ * @swagger
+ * /customer-leads/{id}/status-cascade:
+ *   patch:
+ *     summary: Update customer status with cascade to all projects
+ *     tags: [Customer Leads]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The customer lead ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - status
+ *             properties:
+ *               status:
+ *                 type: string
+ *                 enum: [active, inactive, inprogress, complete, draft, close]
+ *                 description: The new status for customer and all projects
+ *     responses:
+ *       200:
+ *         description: Customer and project statuses updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: Customer status updated to active. 3 projects also updated.
+ *                 data:
+ *                   type: object
+ *       400:
+ *         description: Bad Request (e.g., invalid status)
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Customer lead not found
+ */
+router.patch(
+  '/:id/status-cascade',
+  auth(),
+  validate(customerLeadValidation.updateCustomerStatusWithCascade),
+  updateCustomerStatusWithCascadeController
+);
+
+/**
+ * @swagger
+ * /customer-leads/{id}/status-recalculate:
+ *   post:
+ *     summary: Recalculate customer status based on project statuses
+ *     tags: [Customer Leads]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The customer lead ID
+ *     responses:
+ *       200:
+ *         description: Customer status recalculated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: Customer status recalculated to active based on 3 projects.
+ *                 data:
+ *                   type: object
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Customer lead not found
+ */
+router.post(
+  '/:id/status-recalculate',
+  auth(),
+  validate(customerLeadValidation.recalculateCustomerStatus),
+  recalculateCustomerStatusController
+);
+
+/**
+ * @swagger
+ * /customer-leads/{id}/status-summary:
+ *   get:
+ *     summary: Get customer status summary with project breakdown
+ *     tags: [Customer Leads]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The customer lead ID
+ *     responses:
+ *       200:
+ *         description: Customer status summary retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: Customer status summary retrieved successfully.
+ *                 data:
+ *                   type: object
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Customer lead not found
+ */
+router.get(
+  '/:id/status-summary',
+  auth(),
+  validate(customerLeadValidation.getCustomerStatusSummary),
+  getCustomerStatusSummaryController
 );
 
 export default router;

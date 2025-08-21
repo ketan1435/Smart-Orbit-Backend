@@ -19,11 +19,23 @@ import {
   deleteFileFromRequirementService,
   deleteMultipleFilesFromRequirementService,
 } from '../services/customerLead.service.js';
+import { 
+  updateCustomerStatusWithCascade, 
+  recalculateCustomerStatus, 
+  getCustomerStatusSummary 
+} from '../services/statusCascade.service.js';
 import ApiError from '../utils/ApiError.js';
 import httpStatus from 'http-status';
 import { STATUS_ENUM } from '../config/enums/status.enum.js';
 
 export const createCustomerLeadController = catchAsync(async (req, res) => {
+  console.log('=== BACKEND DEBUG: CREATE CUSTOMER LEAD ===');
+  console.log('Request body:', JSON.stringify(req.body, null, 2));
+  console.log('Status value:', req.body.status);
+  console.log('Status type:', typeof req.body.status);
+  console.log('Status length:', req.body.status?.length);
+  console.log('Status char codes:', req.body.status?.split('').map(c => c.charCodeAt(0)));
+  console.log('==========================================');
   const lead = await createCustomerLeadService(req.body);
   res.status(httpStatus.CREATED).json({ status: 1, message: 'Customer lead created successfully', data: lead });
 });
@@ -399,6 +411,56 @@ export const deleteMultipleFilesFromRequirement = catchAsync(async (req, res) =>
   res.status(httpStatus.OK).json({
     status: 1,
     message: `Successfully deleted ${result.totalDeleted} out of ${result.totalRequested} files`,
+    data: result,
+  });
+});
+
+/**
+ * Update customer status with cascade to projects
+ */
+export const updateCustomerStatusWithCascadeController = catchAsync(async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+
+  if (!status) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Status is required');
+  }
+
+  const result = await updateCustomerStatusWithCascade(id, status);
+  
+  res.status(httpStatus.OK).json({
+    status: 1,
+    message: `Customer status updated to ${status}. ${result.projectsUpdated} projects also updated.`,
+    data: result,
+  });
+});
+
+/**
+ * Recalculate customer status based on project statuses
+ */
+export const recalculateCustomerStatusController = catchAsync(async (req, res) => {
+  const { id } = req.params;
+
+  const result = await recalculateCustomerStatus(id);
+  
+  res.status(httpStatus.OK).json({
+    status: 1,
+    message: `Customer status recalculated to ${result.newCustomerStatus} based on ${result.projectsCount} projects.`,
+    data: result,
+  });
+});
+
+/**
+ * Get customer status summary with project breakdown
+ */
+export const getCustomerStatusSummaryController = catchAsync(async (req, res) => {
+  const { id } = req.params;
+
+  const result = await getCustomerStatusSummary(id);
+  
+  res.status(httpStatus.OK).json({
+    status: 1,
+    message: 'Customer status summary retrieved successfully.',
     data: result,
   });
 });
