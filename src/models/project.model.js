@@ -240,12 +240,12 @@ const architectDocumentSchema = mongoose.Schema({
         type: Boolean,
         default: false,
     },
-    sentToProcurement: {
+    sentToPlanningEngineer: {
         type: Boolean,
         default: false,
     },
-    procurementSentAt: Date,
-    sentToProcurementBy: {
+    sentToPlanningEngineerAt: Date,
+    sentToPlanningEngineerBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
     },

@@ -6,7 +6,7 @@ import storage from '../factory/storage.factory.js';
 import mongoose from 'mongoose';
 import logger from '../config/logger.js';
 import { createCustomerLead, updateCustomerLead } from '../validations/customerLead.validation.js';
-import { createProject } from './project.service.js';
+import { createProject, sendDocumentToProcurement } from './project.service.js';
 import Requirement from '../models/requirement.model.js';
 import User from '../models/user.model.js';
 import SiteVisit from '../models/siteVisit.model.js';
@@ -361,7 +361,7 @@ export const updateCustomerLeadService = async (req, session) => {
   console.log('Status length:', req.body.status?.length);
   console.log('Status char codes:', req.body.status?.split('').map(c => c.charCodeAt(0)));
   console.log('==========================================');
-  
+
   const { id } = req.params;
   const { body: updateBody } = req;
   const lead = await getCustomerLeadByIdService(id);
@@ -407,7 +407,7 @@ export const updateCustomerLeadService = async (req, session) => {
       if (!requirement) {
         throw new ApiError(httpStatus.NOT_FOUND, `Requirement with ID ${reqUpdate._id} not found`);
       }
-      
+
       // Verify the requirement belongs to this lead
       if (requirement.lead.toString() !== id) {
         throw new ApiError(httpStatus.BAD_REQUEST, `Requirement ${reqUpdate._id} does not belong to this lead`);
@@ -416,7 +416,7 @@ export const updateCustomerLeadService = async (req, session) => {
       // Update the requirement fields
       const { _id, ...updateFields } = reqUpdate;
       Object.assign(requirement, updateFields);
-      
+
       await requirement.save({ session });
     }
   }
@@ -473,11 +473,11 @@ export const updateCustomerLeadStatusService = async (id, newStatus) => {
   if (!lead) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Customer lead not found');
   }
-  
+
   if (!STATUS_VALUES.includes(newStatus)) {
     throw new ApiError(httpStatus.BAD_REQUEST, `Invalid status. Must be one of: ${STATUS_VALUES.join(', ')}`);
   }
-  
+
   lead.status = newStatus;
   await lead.save();
   return lead;
@@ -488,7 +488,7 @@ export const updateCustomerAndProjectsStatusService = async (id, newStatus) => {
   if (!lead) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Customer lead not found');
   }
-  
+
   if (!STATUS_VALUES.includes(newStatus)) {
     throw new ApiError(httpStatus.BAD_REQUEST, `Invalid status. Must be one of: ${STATUS_VALUES.join(', ')}`);
   }
@@ -504,7 +504,7 @@ export const updateCustomerAndProjectsStatusService = async (id, newStatus) => {
 
     // Find all projects associated with this customer lead
     const projects = await Project.find({ lead: id }).session(session);
-    
+
     // Update all project statuses based on customer status
     const projectStatusMapping = {
       [STATUS_ENUM.ACTIVE]: STATUS_ENUM.ACTIVE,
@@ -528,7 +528,7 @@ export const updateCustomerAndProjectsStatusService = async (id, newStatus) => {
     }
 
     await session.commitTransaction();
-    
+
     return {
       customer: lead,
       projectsUpdated: projects.length,
@@ -567,7 +567,7 @@ export const shareRequirementService = async (leadId, requirementId, userIdToSha
   return lead;
 };
 
-export const shareRequirementWithUsersService = async (leadId, requirementId, userIds, adminId) => {
+export const shareRequirementWithUsersService = async (leadId, requirementId, userIds, adminId, documentId = null, shouldSendToEngineer = false) => {
   const requirement = await Requirement.findOne({ _id: requirementId, lead: leadId });
   if (!requirement) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Requirement not found for this lead');
@@ -629,6 +629,42 @@ export const shareRequirementWithUsersService = async (leadId, requirementId, us
 
   if (updated) {
     await requirement.save();
+  }
+
+  // Handle automatic document sending to procurement if requested
+  if (shouldSendToEngineer && documentId) {
+    try {
+      // Find the project associated with this requirement
+      const project = await Project.findOne({ requirement: requirementId });
+
+      if (project) {
+        // Verify the document exists and meets criteria
+        const document = project.architectDocuments.find(doc =>
+          doc._id.toString() === documentId &&
+          doc.adminStatus === 'Approved' &&
+          doc.customerStatus === 'Approved' &&
+          !doc.sentToPlanningEngineer
+        );
+
+        if (document) {
+          logger.info(`Auto-sending document ${documentId} to procurement for project ${project._id}`);
+
+          // Create admin object for the service
+          const admin = { _id: adminId };
+
+          await sendDocumentToProcurement(project._id.toString(), documentId, admin);
+          logger.info(`Document ${documentId} successfully sent to procurement`);
+        } else {
+          logger.warn(`Document ${documentId} not found or doesn't meet criteria for auto-sending to procurement`);
+        }
+      } else {
+        logger.warn(`No project found for requirement ${requirementId} when trying to auto-send document to procurement`);
+      }
+    } catch (error) {
+      logger.error(`Failed to auto-send document ${documentId} to procurement:`, error);
+      // Don't throw the error - we don't want to fail the sharing operation because of this
+      // The sharing was successful, the auto-send just failed
+    }
   }
 
   return requirement;

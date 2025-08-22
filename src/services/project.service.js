@@ -363,18 +363,18 @@ export const getArchitectDocuments = async (projectId) => {
     throw new ApiError(httpStatus.NOT_FOUND, 'Project not found');
   }
 
-  // Check if any procurement team members are in the sharedWith list
-  const isSharedWithAnyProcurementTeam = project.requirement?.sharedWith?.some(share =>
-    share.user?.role === Roles.PROCUREMENT
+  // Check if any planning engineer members are in the sharedWith list
+  const isSharedWithAnyPlanningEngineer = project.requirement?.sharedWith?.some(share =>
+    share.user?.role === Roles.PLANNING_ENGINEER
   ) || false;
 
   const requirementId = project.requirement._id;
   const customerLeadId = project.lead;
 
-  // Add the isSharedWithAnyProcurementTeam flag to each architect document
+  // Add the isSharedWithAnyPlanningEngineer flag to each architect document
   const architectDocumentsWithFlag = project.architectDocuments.map(doc => ({
     ...doc.toObject(),
-    isSharedWithAnyProcurementTeam,
+    isSharedWithAnyPlanningEngineer,
     requirementId,
     customerLeadId
   }));
@@ -881,7 +881,7 @@ export const sendDocumentToProcurement = async (projectId, documentId, admin) =>
   }
 
   // Check if already sent to procurement
-  if (document.sentToProcurement) {
+  if (document.sentToPlanningEngineer) {
     throw new ApiError(
       httpStatus.BAD_REQUEST,
       'Document has already been sent to procurement'
@@ -889,9 +889,9 @@ export const sendDocumentToProcurement = async (projectId, documentId, admin) =>
   }
 
   // Mark document as sent to procurement
-  project.architectDocuments[documentIndex].sentToProcurement = true;
-  project.architectDocuments[documentIndex].procurementSentAt = new Date();
-  project.architectDocuments[documentIndex].sentToProcurementBy = admin._id;
+  project.architectDocuments[documentIndex].sentToPlanningEngineer = true;
+  project.architectDocuments[documentIndex].sentToPlanningEngineerAt = new Date();
+  project.architectDocuments[documentIndex].sentToPlanningEngineerBy = admin._id;
 
   await project.save();
   return project;
@@ -907,13 +907,13 @@ export const getApprovedDocumentsForProcurement = async (filter, options) => {
   const { limit = 10, page = 1, sortBy } = options;
   const sort = sortBy
     ? { [sortBy.split(':')[0]]: sortBy.split(':')[1] === 'desc' ? -1 : 1 }
-    : { 'architectDocuments.procurementSentAt': -1 };
+    : { 'architectDocuments.sentToPlanningEngineerAt': -1 };
 
   // Build the aggregation pipeline
   const pipeline = [
     {
       $match: {
-        'architectDocuments.sentToProcurement': true,
+        'architectDocuments.sentToPlanningEngineer': true,
         'architectDocuments.adminStatus': 'Approved',
         'architectDocuments.customerStatus': 'Approved'
       }
@@ -956,7 +956,7 @@ export const getApprovedDocumentsForProcurement = async (filter, options) => {
     },
     {
       $match: {
-        'architectDocuments.sentToProcurement': true,
+        'architectDocuments.sentToPlanningEngineer': true,
         'architectDocuments.adminStatus': 'Approved',
         'architectDocuments.customerStatus': 'Approved'
       }
@@ -972,9 +972,9 @@ export const getApprovedDocumentsForProcurement = async (filter, options) => {
     {
       $lookup: {
         from: 'users',
-        localField: 'architectDocuments.sentToProcurementBy',
+        localField: 'architectDocuments.sentToPlanningEngineerBy',
         foreignField: '_id',
-        as: 'architectDocuments.sentToProcurementBy'
+        as: 'architectDocuments.sentToPlanningEngineerBy'
       }
     },
     {
@@ -982,7 +982,7 @@ export const getApprovedDocumentsForProcurement = async (filter, options) => {
     },
     {
       $unwind: {
-        path: '$architectDocuments.sentToProcurementBy',
+        path: '$architectDocuments.sentToPlanningEngineerBy',
         preserveNullAndEmptyArrays: true
       }
     },
@@ -1016,9 +1016,9 @@ export const getApprovedDocumentsForProcurement = async (filter, options) => {
           customerRemarks: '$architectDocuments.customerRemarks',
           version: '$architectDocuments.version',
           submittedAt: '$architectDocuments.submittedAt',
-          procurementSentAt: '$architectDocuments.procurementSentAt',
+          sentToPlanningEngineerAt: '$architectDocuments.sentToPlanningEngineerAt',
           architect: '$architectDocuments.architect',
-          sentToProcurementBy: '$architectDocuments.sentToProcurementBy'
+          sentToPlanningEngineerBy: '$architectDocuments.sentToPlanningEngineerBy'
         }
       }
     },
@@ -1151,90 +1151,90 @@ export const getProjectDocumentsForProcurement = async (projectId, user) => {
 };
 
 export const getProjectById = async (projectId) => {
-    if (!isValidObjectId(projectId)) {
-        throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid project ID');
-    }
-    const project = await Project.findById(projectId)
-        .populate('lead')
-        .populate('requirement')
-        .populate({
-            path: 'proposals.architect',
-            select: 'name email',
-        })
-        .populate({
-            path: 'architectDocuments.architect',
-            select: 'name email',
-        })
-        .populate({
-            path: 'siteVisits',
-            populate: {
-                path: 'siteEngineer',
-                select: 'name email'
-            }
-        });
+  if (!isValidObjectId(projectId)) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid project ID');
+  }
+  const project = await Project.findById(projectId)
+    .populate('lead')
+    .populate('requirement')
+    .populate({
+      path: 'proposals.architect',
+      select: 'name email',
+    })
+    .populate({
+      path: 'architectDocuments.architect',
+      select: 'name email',
+    })
+    .populate({
+      path: 'siteVisits',
+      populate: {
+        path: 'siteEngineer',
+        select: 'name email'
+      }
+    });
 
-    if (!project) {
-        throw new ApiError(httpStatus.NOT_FOUND, 'Project not found');
-    }
+  if (!project) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Project not found');
+  }
 
-    // Manually populate sharedWith user data if requirement exists
-    if (project.requirement && project.requirement.sharedWith && project.requirement.sharedWith.length > 0) {
-        console.log('Manual population: Found sharedWith data', project.requirement.sharedWith);
-        
-        // Get all unique user IDs from sharedWith
-        const userIds = [...new Set([
-            ...project.requirement.sharedWith.map(share => share.user),
-            ...project.requirement.sharedWith.map(share => share.sharedBy)
-        ])].filter(id => id);
-        
-        console.log('Manual population: User IDs to fetch', userIds);
-        
-        if (userIds.length > 0) {
-            const users = await User.find({ _id: { $in: userIds } }).select('_id name email role');
-            console.log('Manual population: Found users', users);
-            
-            const userMap = users.reduce((map, user) => {
-                map[user._id.toString()] = user;
-                return map;
-            }, {});
-            
-            console.log('Manual population: User map', userMap);
-            
-            // Populate the sharedWith array
-            project.requirement.sharedWith = project.requirement.sharedWith.map(share => {
-                const populatedShare = {
-                    ...share.toObject(),
-                    user: userMap[share.user.toString()] || share.user,
-                    sharedBy: userMap[share.sharedBy.toString()] || share.sharedBy
-                };
-                console.log('Manual population: Populated share', populatedShare);
-                return populatedShare;
-            });
-        }
-    }
+  // Manually populate sharedWith user data if requirement exists
+  if (project.requirement && project.requirement.sharedWith && project.requirement.sharedWith.length > 0) {
+    console.log('Manual population: Found sharedWith data', project.requirement.sharedWith);
 
-    // Auto-sync project status with customer status
-    if (project.lead && project.lead.status) {
-        const customerStatus = project.lead.status;
-        const projectStatusMapping = {
-            [STATUS_ENUM.ACTIVE]: STATUS_ENUM.ACTIVE,
-            [STATUS_ENUM.INACTIVE]: STATUS_ENUM.CANCELLED,
-            [STATUS_ENUM.HOLD]: STATUS_ENUM.HOLD,
-            [STATUS_ENUM.COMPLETE]: STATUS_ENUM.COMPLETE,
-            [STATUS_ENUM.CANCELLED]: STATUS_ENUM.CANCELLED,
-            [STATUS_ENUM.INPROGRESS]: STATUS_ENUM.INPROGRESS,
-            [STATUS_ENUM.DRAFT]: STATUS_ENUM.DRAFT,
+    // Get all unique user IDs from sharedWith
+    const userIds = [...new Set([
+      ...project.requirement.sharedWith.map(share => share.user),
+      ...project.requirement.sharedWith.map(share => share.sharedBy)
+    ])].filter(id => id);
+
+    console.log('Manual population: User IDs to fetch', userIds);
+
+    if (userIds.length > 0) {
+      const users = await User.find({ _id: { $in: userIds } }).select('_id name email role');
+      console.log('Manual population: Found users', users);
+
+      const userMap = users.reduce((map, user) => {
+        map[user._id.toString()] = user;
+        return map;
+      }, {});
+
+      console.log('Manual population: User map', userMap);
+
+      // Populate the sharedWith array
+      project.requirement.sharedWith = project.requirement.sharedWith.map(share => {
+        const populatedShare = {
+          ...share.toObject(),
+          user: userMap[share.user.toString()] || share.user,
+          sharedBy: userMap[share.sharedBy.toString()] || share.sharedBy
         };
-
-        const expectedProjectStatus = projectStatusMapping[customerStatus] || STATUS_ENUM.DRAFT;
-
-        if (project.status !== expectedProjectStatus) {
-            project.status = expectedProjectStatus;
-            await project.save();
-        }
+        console.log('Manual population: Populated share', populatedShare);
+        return populatedShare;
+      });
     }
+  }
 
-    return project;
+  // Auto-sync project status with customer status
+  if (project.lead && project.lead.status) {
+    const customerStatus = project.lead.status;
+    const projectStatusMapping = {
+      [STATUS_ENUM.ACTIVE]: STATUS_ENUM.ACTIVE,
+      [STATUS_ENUM.INACTIVE]: STATUS_ENUM.CANCELLED,
+      [STATUS_ENUM.HOLD]: STATUS_ENUM.HOLD,
+      [STATUS_ENUM.COMPLETE]: STATUS_ENUM.COMPLETE,
+      [STATUS_ENUM.CANCELLED]: STATUS_ENUM.CANCELLED,
+      [STATUS_ENUM.INPROGRESS]: STATUS_ENUM.INPROGRESS,
+      [STATUS_ENUM.DRAFT]: STATUS_ENUM.DRAFT,
+    };
+
+    const expectedProjectStatus = projectStatusMapping[customerStatus] || STATUS_ENUM.DRAFT;
+
+    if (project.status !== expectedProjectStatus) {
+      project.status = expectedProjectStatus;
+      await project.save();
+    }
+  }
+
+  return project;
 };
 
 export const assignSiteEngineersService = async (projectId, siteEngineers) => {
@@ -1359,21 +1359,21 @@ export const getProjectsForUserAssignedInSiteworkService = async (userId, query)
  * @returns {Promise<Project>}
  */
 export const updateProjectStatusService = async (projectId, newStatus) => {
-    if (!isValidObjectId(projectId)) {
-        throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid project ID');
-    }
-    if (!STATUS_VALUES.includes(newStatus)) {
-        throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid status value');
-    }
+  if (!isValidObjectId(projectId)) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid project ID');
+  }
+  if (!STATUS_VALUES.includes(newStatus)) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid status value');
+  }
 
-    const project = await Project.findById(projectId);
-    if (!project) {
-        throw new ApiError(httpStatus.NOT_FOUND, 'Project not found');
-    }
+  const project = await Project.findById(projectId);
+  if (!project) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Project not found');
+  }
 
-    // Use the cascade service to update project and reflect to customer
-    const result = await updateProjectStatusWithReflection(projectId, newStatus);
-    return result.project;
+  // Use the cascade service to update project and reflect to customer
+  const result = await updateProjectStatusWithReflection(projectId, newStatus);
+  return result.project;
 };
 
 /**

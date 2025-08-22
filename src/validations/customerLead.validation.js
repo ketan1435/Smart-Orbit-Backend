@@ -84,14 +84,14 @@ export const createCustomerLead = {
     // For draft status: only email and projectName are required
     // For inprogress status (default): all fields are required
     leadSource: Joi.string().when('status', {
-        is: STATUS_ENUM.DRAFT,
-        then: Joi.string().allow('', null),
-        otherwise: Joi.string().required(),
+      is: STATUS_ENUM.DRAFT,
+      then: Joi.string().allow('', null),
+      otherwise: Joi.string().required(),
     }),
     customerName: Joi.string().when('status', {
-        is: STATUS_ENUM.DRAFT,
-        then: Joi.string().allow('', null),
-        otherwise: Joi.string().required(),
+      is: STATUS_ENUM.DRAFT,
+      then: Joi.string().allow('', null),
+      otherwise: Joi.string().required(),
     }),
     mobileNumber: Joi.string().when('status', {
       is: STATUS_ENUM.DRAFT,
@@ -108,7 +108,7 @@ export const createCustomerLead = {
     town: Joi.string().allow('', null), // Allow both town and townVillage for compatibility
     googleLocationLink: Joi.string().uri().allow('', null),
     password: Joi.string().custom(password),
-  
+
     requirements: Joi.when('status', {
       is: STATUS_ENUM.DRAFT,
       then: Joi.array().items(requirementSchemaDraft).min(1), // Only projectName required in requirements
@@ -141,33 +141,33 @@ export const getCustomerLead = {
 
 export const updateCustomerLead = {
   params: Joi.object().keys({
-        id: Joi.string().required().custom(objectId),
-    }),
-    body: Joi.object().keys({
-        leadSource: Joi.string(),
-        customerName: Joi.string(),
-        mobileNumber: Joi.string(),
-        alternateContactNumber: Joi.string().allow('', null),
-        whatsappNumber: Joi.string().allow('', null),
-        email: Joi.string().email(),
-        preferredLanguage: Joi.array().items(Joi.string()),
-        state: Joi.string(),
-        city: Joi.string(),
-        townVillage: Joi.string().allow('', null),
-        town: Joi.string().allow('', null), // Allow both town and townVillage for compatibility
-        status: Joi.string().valid(...STATUS_VALUES),
-        googleLocationLink: Joi.string().uri().allow('', null),
-        requirementsToUpdate: Joi.array().items(Joi.object({
-            _id: Joi.string().required(),
-            projectName: Joi.string(),
-            requirementType: Joi.string(),
-            otherRequirement: Joi.string().allow('', null),
-            requirementDescription: Joi.string(),
-            urgency: Joi.string().allow('', null),
-            budget: Joi.string().allow('', null),
-            scpData: Joi.object().allow(null),
-        })).optional(),
-    }).min(1),
+    id: Joi.string().required().custom(objectId),
+  }),
+  body: Joi.object().keys({
+    leadSource: Joi.string(),
+    customerName: Joi.string(),
+    mobileNumber: Joi.string(),
+    alternateContactNumber: Joi.string().allow('', null),
+    whatsappNumber: Joi.string().allow('', null),
+    email: Joi.string().email(),
+    preferredLanguage: Joi.array().items(Joi.string()),
+    state: Joi.string(),
+    city: Joi.string(),
+    townVillage: Joi.string().allow('', null),
+    town: Joi.string().allow('', null), // Allow both town and townVillage for compatibility
+    status: Joi.string().valid(...STATUS_VALUES),
+    googleLocationLink: Joi.string().uri().allow('', null),
+    requirementsToUpdate: Joi.array().items(Joi.object({
+      _id: Joi.string().required(),
+      projectName: Joi.string(),
+      requirementType: Joi.string(),
+      otherRequirement: Joi.string().allow('', null),
+      requirementDescription: Joi.string(),
+      urgency: Joi.string().allow('', null),
+      budget: Joi.string().allow('', null),
+      scpData: Joi.object().allow(null),
+    })).optional(),
+  }).min(1),
 };
 
 export const updateCustomerLeadStatus = {
@@ -186,6 +186,8 @@ export const shareRequirementWithUsers = {
   }),
   body: Joi.object({
     userIds: Joi.array().items(Joi.string()).required(),
+    documentId: Joi.string().optional(),
+    shouldSendToEngineer: Joi.boolean().optional(),
   }),
 };
 
@@ -208,7 +210,7 @@ export const updateScpData = {
     scpData: Joi.object().required(),
     files: Joi.array().items(Joi.object({
       fileType: Joi.string().required(),
-        key: Joi.string().required(),
+      key: Joi.string().required(),
       originalName: Joi.string(),
     })).optional(),
   }),

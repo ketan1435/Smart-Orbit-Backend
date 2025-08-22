@@ -1324,12 +1324,12 @@ export default router;
  *                     type: string
  *                   sentToCustomer:
  *                     type: boolean
- *                   sentToProcurement:
+ *                   sentToPlanningEngineer:
  *                     type: boolean
- *                   procurementSentAt:
+ *                   sentToPlanningEngineerAt:
  *                     type: string
  *                     format: date-time
- *                   sentToProcurementBy:
+ *                   sentToPlanningEngineerBy:
  *                     type: string
  *                   submittedAt:
  *                     type: string
@@ -1342,7 +1342,7 @@ export default router;
  *                     format: date-time
  *                   version:
  *                     type: number
- *                   isSharedWithAnyProcurementTeam:
+ *                   isSharedWithAnyPlanningEngineer:
  *                     type: boolean
  *                     description: Indicates if the document has been shared with any procurement team
  *                     example: true
@@ -1441,8 +1441,8 @@ export default router;
  *         name: sortBy
  *         schema:
  *           type: string
- *           example: procurementSentAt:desc
- *         description: Sorting order (e.g., procurementSentAt:desc, projectName:asc)
+ *           example: sentToPlanningEngineerAt:desc
+ *         description: Sorting order (e.g., sentToPlanningEngineerAt:desc, projectName:asc)
  *     responses:
  *       "200":
  *         description: Approved documents for procurement fetched successfully
@@ -1525,13 +1525,13 @@ export default router;
  *                               submittedAt:
  *                                 type: string
  *                                 format: date-time
- *                               procurementSentAt:
+ *                               sentToPlanningEngineerAt:
  *                                 type: string
  *                                 format: date-time
  *                               architect:
  *                                 type: object
  *                                 description: Document architect details
- *                               sentToProcurementBy:
+ *                               sentToPlanningEngineerBy:
  *                                 type: object
  *                                 description: Admin who sent to procurement
  *                     page:

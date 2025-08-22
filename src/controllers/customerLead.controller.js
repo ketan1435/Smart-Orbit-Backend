@@ -19,10 +19,10 @@ import {
   deleteFileFromRequirementService,
   deleteMultipleFilesFromRequirementService,
 } from '../services/customerLead.service.js';
-import { 
-  updateCustomerStatusWithCascade, 
-  recalculateCustomerStatus, 
-  getCustomerStatusSummary 
+import {
+  updateCustomerStatusWithCascade,
+  recalculateCustomerStatus,
+  getCustomerStatusSummary
 } from '../services/statusCascade.service.js';
 import ApiError from '../utils/ApiError.js';
 import httpStatus from 'http-status';
@@ -142,34 +142,34 @@ export const deactivateCustomerLeadController = catchAsync(async (req, res) => {
 export const updateCustomerLeadStatusController = catchAsync(async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
-  
+
   if (!status) {
     throw new ApiError(400, 'Status is required');
   }
-  
+
   const lead = await updateCustomerLeadStatusService(id, status);
-  res.status(200).json({ 
-    success: true, 
-    status: 1, 
+  res.status(200).json({
+    success: true,
+    status: 1,
     message: 'Customer lead status updated successfully',
-    data: lead 
+    data: lead
   });
 });
 
 export const updateCustomerAndProjectsStatusController = catchAsync(async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
-  
+
   if (!status) {
     throw new ApiError(400, 'Status is required');
   }
-  
+
   const result = await updateCustomerAndProjectsStatusService(id, status);
-  res.status(200).json({ 
-    success: true, 
-    status: 1, 
+  res.status(200).json({
+    success: true,
+    status: 1,
     message: `Customer status updated to ${status} and ${result.projectsUpdated} projects synchronized successfully`,
-    data: result 
+    data: result
   });
 });
 
@@ -273,13 +273,23 @@ export const exportCustomerLeadsController = catchAsync(async (req, res) => {
 
 export const shareRequirementForUserController = catchAsync(async (req, res) => {
   const { leadId, requirementId } = req.params;
-  const { userIds } = req.body;
+  const { userIds, documentId, shouldSendToEngineer } = req.body;
   const adminId = req.user.id;
 
-  const updatedRequirement = await shareRequirementWithUsersService(leadId, requirementId, userIds, adminId);
+  const updatedRequirement = await shareRequirementWithUsersService(
+    leadId,
+    requirementId,
+    userIds,
+    adminId,
+    documentId,
+    shouldSendToEngineer
+  );
+
   res.status(httpStatus.OK).json({
     status: 1,
-    message: 'Requirement shared successfully.',
+    message: shouldSendToEngineer
+      ? 'Requirement shared successfully and document sent to Planning Engineer.'
+      : 'Requirement shared successfully.',
     data: updatedRequirement,
   });
 });
@@ -427,7 +437,7 @@ export const updateCustomerStatusWithCascadeController = catchAsync(async (req, 
   }
 
   const result = await updateCustomerStatusWithCascade(id, status);
-  
+
   res.status(httpStatus.OK).json({
     status: 1,
     message: `Customer status updated to ${status}. ${result.projectsUpdated} projects also updated.`,
@@ -442,7 +452,7 @@ export const recalculateCustomerStatusController = catchAsync(async (req, res) =
   const { id } = req.params;
 
   const result = await recalculateCustomerStatus(id);
-  
+
   res.status(httpStatus.OK).json({
     status: 1,
     message: `Customer status recalculated to ${result.newCustomerStatus} based on ${result.projectsCount} projects.`,
@@ -457,7 +467,7 @@ export const getCustomerStatusSummaryController = catchAsync(async (req, res) =>
   const { id } = req.params;
 
   const result = await getCustomerStatusSummary(id);
-  
+
   res.status(httpStatus.OK).json({
     status: 1,
     message: 'Customer status summary retrieved successfully.',
