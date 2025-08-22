@@ -31,7 +31,7 @@ export const signup = {
       'string.email': 'Invalid email format',
     }),
     password: Joi.string().required(),
-    confirmPassword: Joi.string().required(),
+    confirmPassword: Joi.string().optional(),
     mobileNumber: Joi.string().optional(),
     role: Joi.string().optional(),
     profilePicture: Joi.string().optional(),

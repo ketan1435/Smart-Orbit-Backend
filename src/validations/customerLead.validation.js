@@ -108,10 +108,7 @@ export const createCustomerLead = {
     town: Joi.string().allow('', null), // Allow both town and townVillage for compatibility
     googleLocationLink: Joi.string().uri().allow('', null),
     password: Joi.string().custom(password),
-    confirmPassword: Joi.string().valid(Joi.ref('password')).when('password', {
-        is: Joi.exist(),
-        then: Joi.required(),
-    }),
+  
     requirements: Joi.when('status', {
       is: STATUS_ENUM.DRAFT,
       then: Joi.array().items(requirementSchemaDraft).min(1), // Only projectName required in requirements
