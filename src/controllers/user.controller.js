@@ -106,6 +106,11 @@ const getMySiteVisits = catchAsync(async (req, res) => {
 });
 
 const getSiteEngineers = catchAsync(async (req, res) => {
+  console.log('=== USER getSiteEngineers controller called ===');
+  console.log('Request URL:', req.originalUrl);
+  console.log('Request method:', req.method);
+  console.log('Request user:', req.user);
+  
   const filter = pick(req.query, ['name']);
   const options = pick(req.query, ['sortBy', 'limit', 'page']);
   // a site engineer should be active to be assigned a task

@@ -78,20 +78,10 @@ const bomSchema = new mongoose.Schema(
         title: {
             type: String,
             trim: true,
-            // validate: {
-            //     validator: function (value) {
-            //         // Title is required only if isReusable is true
-            //         if (this.isReusable && !value) {
-            //             return false;
-            //         }
-            //         return true;
-            //     },
-            //     message: 'Title is required for reusable BOMs'
-            // }
         },
         status: {
             type: String,
-            enum: ['draft', 'submitted', 'approved', 'rejected'],
+            enum: ['draft', 'submitted', 'approved', 'rejected', 'rough', 'site_engineer_review', 'site_engineer_updated', 'planning_review'],
             default: 'draft',
         },
         remarks: String,
@@ -112,6 +102,59 @@ const bomSchema = new mongoose.Schema(
         updatedAt: {
             type: Date,
             default: Date.now,
+        },
+        // New fields for site engineer flow
+        isRoughBOM: {
+            type: Boolean,
+            default: false,
+        },
+        assignedToSiteEngineer: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User',
+            default: null,
+        },
+        assignedAt: {
+            type: Date,
+            default: null,
+        },
+        siteEngineerRemarks: {
+            type: String,
+            default: null,
+        },
+        siteEngineerUpdatedAt: {
+            type: Date,
+            default: null,
+        },
+        updatedBySiteEngineer: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User',
+            default: null,
+        },
+        // Reference to the updated BOM created by site engineer
+        updatedBOMId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'BOM',
+            default: null,
+        },
+        // Reference to the original rough BOM (for updated BOMs)
+        originalRoughBOMId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'BOM',
+            default: null,
+        },
+        // Track if BOM has been sent to site engineer
+        sentToSiteEngineer: {
+            type: Boolean,
+            default: false,
+        },
+        sentToSiteEngineerAt: {
+            type: Date,
+            default: null,
+        },
+        sentToSiteEngineerBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User',
+            default: null,
         },
     },
     {

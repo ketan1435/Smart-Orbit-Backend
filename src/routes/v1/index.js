@@ -55,7 +55,7 @@ const defaultRoutes = [
     route: projectRoute,
   },
   {
-    path: '/',
+    path: '/boms',
     route: bomRoute,
   },
   {

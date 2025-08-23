@@ -18,8 +18,18 @@ const verifyCallback = (req, resolve, reject, requiredRights) => async (err, use
   req.user = user;
 
   if (requiredRights.length) {
-    const userRights = roleRights.get(user.role?.toLowerCase()) || [];
+    const userRights = roleRights.get(user.role) || [];
     const hasRequiredRights = requiredRights.every((requiredRight) => userRights.includes(requiredRight));
+    
+    console.log('Auth middleware debug:', {
+      userRole: user.role,
+      requiredRights,
+      userRights,
+      hasRequiredRights,
+      userId: req.params.userId,
+      user_id: user.id
+    });
+    
     if (!hasRequiredRights && req.params.userId !== user.id) {
       // Temporary fix: Allow all authenticated users to get projects
       if (requiredRights.includes('getProjects')) {
