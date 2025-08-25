@@ -813,7 +813,7 @@ export const getSiteEngineers = async (options, projectId = null) => {
 };
 
 /**
- * Create a finalized BOM with vendor assignments from quote analysis
+ * Update the original BOM with finalized vendor assignments from quote analysis
  * @param {string} projectId - The ID of the project
  * @param {string} originalBomId - The ID of the original BOM
  * @param {Array} finalizedItems - Array of items with vendor assignments and quote data
@@ -835,53 +835,52 @@ export const createFinalizedBOM = async (projectId, originalBomId, finalizedItem
 
     // Check user access (only planning engineers and admins can finalize BOMs)
     if (user.role !== 'admin' && user.role !== 'planning-engineer') {
-        throw new ApiError(httpStatus.FORBIDDEN, 'Only planning engineers and admins can create finalized BOMs');
+        throw new ApiError(httpStatus.FORBIDDEN, 'Only planning engineers and admins can finalize BOMs');
     }
 
-    // Get the highest version number for this project and increment
-    const lastBOM = await BOM.findOne({ projectId }).sort({ version: -1 });
-    const version = lastBOM ? lastBOM.version + 1 : 1;
-
     // Transform finalized items to BOM item format
-    const bomItems = finalizedItems.map(item => ({
-        itemName: item.itemName,
-        location: item.location,
-        vendor: item.vendor, // ObjectId of selected vendor
-        description: item.description,
-        category: item.category,
-        unit: item.unit,
-        quantity: item.quantity,
-        estimatedUnitCost: item.finalPrice || item.estimatedUnitCost, // Use final quote price
-        totalEstimatedCost: item.quantity * (item.finalPrice || item.estimatedUnitCost),
-        remarks: item.remarks,
-        addedBy: user.id
-    }));
+    const bomItems = finalizedItems.map(item => {
+        // Clean up empty strings and convert to proper values
+        const cleanItem = {
+            itemName: item.itemName,
+            description: item.description || undefined,
+            category: item.category,
+            unit: item.unit,
+            quantity: item.quantity,
+            estimatedUnitCost: item.finalPrice || item.estimatedUnitCost, // Use final quote price
+            totalEstimatedCost: item.quantity * (item.finalPrice || item.estimatedUnitCost),
+            remarks: item.remarks || undefined,
+            vendor: item.vendor || undefined, // ObjectId of selected vendor
+            addedBy: user.id
+        };
 
-    const finalizedBOMData = {
-        projectId,
-        version,
-        title: `${originalBOM.title || 'BOM'} - Finalized v${version}`,
-        status: 'draft', // Start as draft, can be submitted for approval later
-        items: bomItems,
-        createdBy: user.id,
-        sourceBOMId: originalBomId, // Reference to the original BOM
-        remarks: `Finalized BOM created from quote analysis of BOM v${originalBOM.version}`
-    };
+        // Remove undefined values
+        Object.keys(cleanItem).forEach(key => {
+            if (cleanItem[key] === undefined) {
+                delete cleanItem[key];
+            }
+        });
 
-    // Create the finalized BOM
-    const finalizedBOM = await BOM.create(finalizedBOMData);
-
-    // Update original BOM to reference the finalized version
-    await BOM.findByIdAndUpdate(originalBomId, {
-        updatedBOMId: finalizedBOM._id,
-        status: 'planning_review' // Mark original as under planning review
+        return cleanItem;
     });
 
-    return finalizedBOM.populate([
+    // Update the original BOM with finalized data
+    const updatedBOM = await BOM.findByIdAndUpdate(
+        originalBomId,
+        {
+            title: originalBOM.title ? `${originalBOM.title} - Finalized` : 'BOM - Finalized',
+            status: 'draft', // Reset to draft for final review
+            items: bomItems,
+            remarks: `BOM finalized with vendor assignments from quote analysis`,
+            updatedAt: new Date()
+        },
+        { new: true, runValidators: true }
+    );
+
+    return updatedBOM.populate([
         'createdBy',
         'projectId',
         'items.addedBy',
-        'items.vendor',
-        'sourceBOMId'
+        'items.vendor'
     ]);
 }; 

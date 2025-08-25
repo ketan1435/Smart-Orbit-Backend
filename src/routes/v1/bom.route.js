@@ -276,6 +276,131 @@ router
 
 /**
  * @swagger
+ * /boms/projects/{projectId}/finalized:
+ *   post:
+ *     summary: Finalize BOM with vendor assignments
+ *     description: Update the original BOM with vendor assignments from quote analysis
+ *     tags: [BOM]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Project ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - originalBomId
+ *               - finalizedItems
+ *             properties:
+ *               originalBomId:
+ *                 type: string
+ *                 description: ID of the original BOM to be finalized
+ *               finalizedItems:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   required:
+ *                     - itemName
+ *                     - category
+ *                     - unit
+ *                     - quantity
+ *                     - estimatedUnitCost
+ *                     - vendor
+ *                   properties:
+ *                     itemName:
+ *                       type: string
+ *                       description: Name of the item
+ *                     description:
+ *                       type: string
+ *                       description: Description of the item
+ *                     category:
+ *                       type: string
+ *                       enum: [Raw Materials, Hardware, Electrical, Plumbing, Finishing, Tools, Equipment, Other]
+ *                       description: Category of the item
+ *                     unit:
+ *                       type: string
+ *                       description: Unit of measurement
+ *                     quantity:
+ *                       type: number
+ *                       minimum: 0
+ *                       description: Quantity required
+ *                     estimatedUnitCost:
+ *                       type: number
+ *                       minimum: 0
+ *                       description: Original estimated cost per unit
+ *                     finalPrice:
+ *                       type: number
+ *                       minimum: 0
+ *                       description: Final price from selected quote
+ *                     remarks:
+ *                       type: string
+ *                       description: Additional remarks
+ *                     vendor:
+ *                       type: string
+ *                       description: Selected vendor ID
+ *                     selectedQuoteId:
+ *                       type: string
+ *                       description: ID of the selected quote
+ *                     brand:
+ *                       type: string
+ *                       description: Brand from quote
+ *                     grade:
+ *                       type: string
+ *                       description: Grade from quote
+ *                     warranty:
+ *                       type: string
+ *                       description: Warranty from quote
+ *                     certification:
+ *                       type: string
+ *                       description: Certification from quote
+ *                     deliveryTime:
+ *                       type: string
+ *                       description: Delivery time from quote
+ *                     paymentTerms:
+ *                       type: string
+ *                       description: Payment terms from quote
+ *                     vendorNotes:
+ *                       type: string
+ *                       description: Vendor notes from quote
+ *     responses:
+ *       "201":
+ *         description: BOM finalized successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: number
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: "BOM finalized successfully with vendor assignments"
+ *                 data:
+ *                   $ref: '#/components/schemas/BOM'
+ *       "400":
+ *         $ref: '#/components/responses/BadRequest'
+ *       "401":
+ *         $ref: '#/components/responses/Unauthorized'
+ *       "403":
+ *         $ref: '#/components/responses/Forbidden'
+ *       "404":
+ *         $ref: '#/components/responses/NotFound'
+ */
+router
+    .route('/projects/:projectId/finalized')
+    .post(auth(), bomController.createFinalizedBOM);
+
+/**
+ * @swagger
  * /projects/{projectId}/boms/{bomId}:
  *   get:
  *     summary: Get a specific BOM
@@ -1318,133 +1443,5 @@ router
 router
     .route('/site-engineers')
     .get(auth('getSiteEngineers'), bomController.getSiteEngineers);
-
-/**
- * @swagger
- * /boms/projects/{projectId}/finalized:
- *   post:
- *     summary: Create a finalized BOM with vendor assignments
- *     description: Create a new BOM based on quote analysis with selected vendors for each item
- *     tags: [BOM]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: projectId
- *         required: true
- *         schema:
- *           type: string
- *         description: Project ID
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - originalBomId
- *               - finalizedItems
- *             properties:
- *               originalBomId:
- *                 type: string
- *                 description: ID of the original BOM used for quote analysis
- *               finalizedItems:
- *                 type: array
- *                 items:
- *                   type: object
- *                   required:
- *                     - itemName
- *                     - category
- *                     - unit
- *                     - quantity
- *                     - estimatedUnitCost
- *                     - vendor
- *                   properties:
- *                     itemName:
- *                       type: string
- *                       description: Name of the item
- *                     description:
- *                       type: string
- *                       description: Description of the item
- *                     location:
- *                       type: string
- *                       description: Location (onsite, offsite, not decided)
- *                     category:
- *                       type: string
- *                       enum: [Raw Materials, Hardware, Electrical, Plumbing, Finishing, Tools, Equipment, Other]
- *                       description: Category of the item
- *                     unit:
- *                       type: string
- *                       description: Unit of measurement
- *                     quantity:
- *                       type: number
- *                       minimum: 0
- *                       description: Quantity required
- *                     estimatedUnitCost:
- *                       type: number
- *                       minimum: 0
- *                       description: Original estimated cost per unit
- *                     finalPrice:
- *                       type: number
- *                       minimum: 0
- *                       description: Final price from selected quote
- *                     remarks:
- *                       type: string
- *                       description: Additional remarks
- *                     vendor:
- *                       type: string
- *                       description: Selected vendor ID
- *                     selectedQuoteId:
- *                       type: string
- *                       description: ID of the selected quote
- *                     brand:
- *                       type: string
- *                       description: Brand from quote
- *                     grade:
- *                       type: string
- *                       description: Grade from quote
- *                     warranty:
- *                       type: string
- *                       description: Warranty from quote
- *                     certification:
- *                       type: string
- *                       description: Certification from quote
- *                     deliveryTime:
- *                       type: string
- *                       description: Delivery time from quote
- *                     paymentTerms:
- *                       type: string
- *                       description: Payment terms from quote
- *                     vendorNotes:
- *                       type: string
- *                       description: Vendor notes from quote
- *     responses:
- *       "201":
- *         description: Finalized BOM created successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 status:
- *                   type: number
- *                   example: 1
- *                 message:
- *                   type: string
- *                   example: "Finalized BOM created successfully"
- *                 data:
- *                   $ref: '#/components/schemas/BOM'
- *       "400":
- *         $ref: '#/components/responses/BadRequest'
- *       "401":
- *         $ref: '#/components/responses/Unauthorized'
- *       "403":
- *         $ref: '#/components/responses/Forbidden'
- *       "404":
- *         $ref: '#/components/responses/NotFound'
- */
-router
-    .route('/projects/:projectId/finalized')
-    .post(auth(), validate(bomValidation.createFinalizedBOM), bomController.createFinalizedBOM);
 
 export default router; 

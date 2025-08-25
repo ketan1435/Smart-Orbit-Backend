@@ -280,7 +280,21 @@ export const getSiteEngineers = catchAsync(async (req, res) => {
  * Create a finalized BOM with vendor assignments
  */
 export const createFinalizedBOM = catchAsync(async (req, res) => {
+    console.log('=== createFinalizedBOM controller called ===');
+    console.log('Request body:', JSON.stringify(req.body, null, 2));
+    console.log('Request params:', req.params);
+
     const { originalBomId, finalizedItems } = req.body;
+
+    console.log('Extracted data:', {
+        originalBomId,
+        finalizedItems: finalizedItems?.map(item => ({
+            itemName: item.itemName,
+            deliveryTime: item.deliveryTime,
+            deliveryTimeType: typeof item.deliveryTime
+        }))
+    });
+
     const finalizedBOM = await bomService.createFinalizedBOM(
         req.params.projectId,
         originalBomId,
@@ -289,7 +303,7 @@ export const createFinalizedBOM = catchAsync(async (req, res) => {
     );
     res.status(httpStatus.CREATED).send({
         status: 1,
-        message: 'Finalized BOM created successfully',
+        message: 'BOM finalized successfully with vendor assignments',
         data: finalizedBOM,
     });
 }); 

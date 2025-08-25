@@ -159,8 +159,8 @@ export const getAllBOMs = {
 // Finalized item schema for quote-based BOM creation
 const finalizedItemSchema = Joi.object({
     itemName: Joi.string().required().trim(),
-    description: Joi.string().optional(),
-    location: Joi.string().optional(),
+    description: Joi.string().optional().allow(null, '').empty(''),
+    location: Joi.string().optional().allow(null, '').empty(''),
     category: Joi.string()
         .valid(
             'Raw Materials',
@@ -177,17 +177,17 @@ const finalizedItemSchema = Joi.object({
     quantity: Joi.number().min(0).required(),
     estimatedUnitCost: Joi.number().min(0).required(),
     finalPrice: Joi.number().min(0).optional(), // Price from selected quote
-    remarks: Joi.string().optional(),
-    vendor: Joi.string().custom(objectId).required(), // Selected vendor ID
+    remarks: Joi.string().optional().allow(null, '').empty(''),
+    vendor: Joi.string().custom(objectId).optional().allow(null, '').empty(''), // Selected vendor ID
     // Quote details
-    selectedQuoteId: Joi.string().custom(objectId).optional(),
-    brand: Joi.string().optional(),
-    grade: Joi.string().optional(),
-    warranty: Joi.string().optional(),
-    certification: Joi.string().optional(),
-    deliveryTime: Joi.string().optional(),
-    paymentTerms: Joi.string().optional(),
-    vendorNotes: Joi.string().optional(),
+    selectedQuoteId: Joi.string().custom(objectId).optional().allow(null, '').empty(''),
+    brand: Joi.string().optional().allow(null, '').empty(''),
+    grade: Joi.string().optional().allow(null, '').empty(''),
+    warranty: Joi.string().optional().allow(null, '').empty(''),
+    certification: Joi.string().optional().allow(null, '').empty(''),
+    deliveryTime: Joi.string().optional().allow(null, '').empty(''),
+    paymentTerms: Joi.string().optional().allow(null, '').empty(''),
+    vendorNotes: Joi.string().optional().allow(null, '').empty(''),
 });
 
 export const createFinalizedBOM = {
