@@ -9,6 +9,11 @@ const bomItemSchema = new mongoose.Schema({
     location: {
         type: String,
     },
+    vendor: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Vendor',
+        default: null,
+    },
     description: String,
     category: {
         type: String,

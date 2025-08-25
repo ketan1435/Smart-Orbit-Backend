@@ -5,6 +5,7 @@ const bomItemSchema = Joi.object({
     itemName: Joi.string().required().trim(),
     description: Joi.string().optional(),
     location: Joi.string().optional(),
+    vendor: Joi.string().custom(objectId).optional(),
     category: Joi.string()
         .valid(
             'Raw Materials',
@@ -152,5 +153,49 @@ export const getAllBOMs = {
         sortBy: Joi.string(),
         limit: Joi.number().integer().min(1).max(100).default(50),
         page: Joi.number().integer().min(1).default(1),
+    }),
+};
+
+// Finalized item schema for quote-based BOM creation
+const finalizedItemSchema = Joi.object({
+    itemName: Joi.string().required().trim(),
+    description: Joi.string().optional(),
+    location: Joi.string().optional(),
+    category: Joi.string()
+        .valid(
+            'Raw Materials',
+            'Hardware',
+            'Electrical',
+            'Plumbing',
+            'Finishing',
+            'Tools',
+            'Equipment',
+            'Other'
+        )
+        .required(),
+    unit: Joi.string().required(),
+    quantity: Joi.number().min(0).required(),
+    estimatedUnitCost: Joi.number().min(0).required(),
+    finalPrice: Joi.number().min(0).optional(), // Price from selected quote
+    remarks: Joi.string().optional(),
+    vendor: Joi.string().custom(objectId).required(), // Selected vendor ID
+    // Quote details
+    selectedQuoteId: Joi.string().custom(objectId).optional(),
+    brand: Joi.string().optional(),
+    grade: Joi.string().optional(),
+    warranty: Joi.string().optional(),
+    certification: Joi.string().optional(),
+    deliveryTime: Joi.string().optional(),
+    paymentTerms: Joi.string().optional(),
+    vendorNotes: Joi.string().optional(),
+});
+
+export const createFinalizedBOM = {
+    params: Joi.object().keys({
+        projectId: Joi.string().custom(objectId).required(),
+    }),
+    body: Joi.object().keys({
+        originalBomId: Joi.string().custom(objectId).required(),
+        finalizedItems: Joi.array().items(finalizedItemSchema).min(1).required(),
     }),
 }; 

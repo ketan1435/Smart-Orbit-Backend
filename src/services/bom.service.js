@@ -110,9 +110,9 @@ export const getBOMById = async (projectId, bomId) => {
  * @returns {Promise<BOM>}
  */
 export const getBOMByIdForSiteEngineer = async (bomId, siteEngineerId) => {
-    const bom = await BOM.findOne({ 
-        _id: bomId, 
-        assignedToSiteEngineer: siteEngineerId 
+    const bom = await BOM.findOne({
+        _id: bomId,
+        assignedToSiteEngineer: siteEngineerId
     })
         .populate('createdBy', 'name email')
         .populate('projectId', 'projectName projectCode')
@@ -466,11 +466,11 @@ export const assignBOMToSiteEngineer = async (projectId, bomId, assignmentData, 
     bom.updatedAt = new Date();
 
     await bom.save();
-    
+
     // Send notification to site engineer
     try {
         const populatedBom = await bom.populate(['assignedToSiteEngineer', 'createdBy', 'projectId']);
-        
+
         await socketService.handleSystemNotification(
             [assignmentData.siteEngineerId],
             {
@@ -492,7 +492,7 @@ export const assignBOMToSiteEngineer = async (projectId, bomId, assignmentData, 
         console.error('Failed to send BOM assignment notification:', error);
         // Don't throw error as notification failure shouldn't break the assignment
     }
-    
+
     return bom.populate(['assignedToSiteEngineer', 'createdBy', 'projectId', 'sentToSiteEngineerBy']);
 };
 
@@ -505,15 +505,15 @@ export const assignBOMToSiteEngineer = async (projectId, bomId, assignmentData, 
  */
 export const getSiteEngineerBOMs = async (siteEngineerId, filter, options) => {
     console.log('getSiteEngineerBOMs called with:', { siteEngineerId, filter, options });
-    
+
     // Temporary fix: Update existing BOMs that are assigned but don't have isRoughBOM set
     try {
         const updateResult = await BOM.updateMany(
-            { 
+            {
                 assignedToSiteEngineer: siteEngineerId,
                 isRoughBOM: { $ne: true }
             },
-            { 
+            {
                 $set: { isRoughBOM: true }
             }
         );
@@ -523,13 +523,13 @@ export const getSiteEngineerBOMs = async (siteEngineerId, filter, options) => {
     } catch (error) {
         console.error('Error updating existing BOMs:', error);
     }
-    
+
     const { limit = 10, page = 1, sortBy } = options;
     const sort = sortBy
         ? { [sortBy.split(':')[0]]: sortBy.split(':')[1] === 'desc' ? -1 : 1 }
         : { assignedAt: -1 };
 
-    const bomFilter = { 
+    const bomFilter = {
         assignedToSiteEngineer: siteEngineerId,
         $or: [
             { isRoughBOM: true },
@@ -541,7 +541,7 @@ export const getSiteEngineerBOMs = async (siteEngineerId, filter, options) => {
     if (filter.status && filter.status.trim() !== '') {
         bomFilter.status = filter.status;
     }
-    
+
     if (filter.projectId && filter.projectId.trim() !== '' && mongoose.Types.ObjectId.isValid(filter.projectId)) {
         bomFilter.projectId = filter.projectId;
     }
@@ -559,12 +559,12 @@ export const getSiteEngineerBOMs = async (siteEngineerId, filter, options) => {
         .lean();
 
     console.log('Found BOMs:', boms.length);
-    console.log('BOMs:', boms.map(bom => ({ 
-        id: bom._id, 
-        title: bom.title, 
-        status: bom.status, 
+    console.log('BOMs:', boms.map(bom => ({
+        id: bom._id,
+        title: bom.title,
+        status: bom.status,
         isRoughBOM: bom.isRoughBOM,
-        assignedToSiteEngineer: bom.assignedToSiteEngineer 
+        assignedToSiteEngineer: bom.assignedToSiteEngineer
     })));
 
     // Debug: Check all BOMs assigned to this site engineer (without isRoughBOM filter)
@@ -613,7 +613,7 @@ export const updateBOMBySiteEngineer = async (projectId, bomId, updateData, user
     // Update other fields
     if (updateData.remarks) bom.remarks = updateData.remarks;
     if (updateData.siteEngineerRemarks) bom.siteEngineerRemarks = updateData.siteEngineerRemarks;
-    
+
     bom.siteEngineerUpdatedAt = new Date();
     bom.updatedBySiteEngineer = user.id;
     bom.updatedAt = new Date();
@@ -673,7 +673,7 @@ export const getRoughBOMsForPlanning = async (filter, options) => {
         ? { [sortBy.split(':')[0]]: sortBy.split(':')[1] === 'desc' ? -1 : 1 }
         : { createdAt: -1 };
 
-    const bomFilter = { 
+    const bomFilter = {
         status: 'planning_review',
         isRoughBOM: false,
     };
@@ -712,7 +712,7 @@ export const getRoughBOMsForPlanning = async (filter, options) => {
  */
 export const getSiteEngineers = async (options, projectId = null) => {
     console.log('getSiteEngineers service called with:', { options, projectId });
-    
+
     const { limit = 10, page = 1, sortBy } = options;
     const sort = sortBy
         ? { [sortBy.split(':')[0]]: sortBy.split(':')[1] === 'desc' ? -1 : 1 }
@@ -723,7 +723,7 @@ export const getSiteEngineers = async (options, projectId = null) => {
 
     if (projectId && projectId.trim() !== '' && mongoose.Types.ObjectId.isValid(projectId)) {
         console.log('Fetching site engineers for project:', projectId);
-        
+
         // Get project with populated requirement and sharedWith data
         const project = await Project.findById(projectId)
             .populate({
@@ -733,13 +733,13 @@ export const getSiteEngineers = async (options, projectId = null) => {
                     select: 'name email phone role'
                 }
             });
-        
-        console.log('Project found:', project ? 'Yes' : 'No', project ? { 
-            projectName: project.projectName, 
+
+        console.log('Project found:', project ? 'Yes' : 'No', project ? {
+            projectName: project.projectName,
             requirementId: project.requirement?._id,
-            sharedWithCount: project.requirement?.sharedWith?.length || 0 
+            sharedWithCount: project.requirement?.sharedWith?.length || 0
         } : null);
-        
+
         if (!project) {
             throw new ApiError(httpStatus.NOT_FOUND, 'Project not found');
         }
@@ -766,29 +766,29 @@ export const getSiteEngineers = async (options, projectId = null) => {
             }
             return null;
         }).filter(id => id !== null); // Remove any null values
-        
+
         console.log('Shared user IDs:', sharedUserIds);
-        
+
         // Filter to only get site engineers
-        users = await User.find({ 
+        users = await User.find({
             _id: { $in: sharedUserIds },
-            role: Roles.SITE_ENGINEER 
+            role: Roles.SITE_ENGINEER
         })
-        .select('name email phone role')
-        .sort(sort)
-        .skip((page - 1) * limit)
-        .limit(limit)
-        .lean();
+            .select('name email phone role')
+            .sort(sort)
+            .skip((page - 1) * limit)
+            .limit(limit)
+            .lean();
 
         console.log('Found site engineers in sharedWith:', users.length);
 
-        totalResults = await User.countDocuments({ 
+        totalResults = await User.countDocuments({
             _id: { $in: sharedUserIds },
-            role: Roles.SITE_ENGINEER 
+            role: Roles.SITE_ENGINEER
         });
     } else {
         console.log('Fetching all site engineers (no project filter)');
-        
+
         // Get all site engineers (fallback for backward compatibility)
         users = await User.find({ role: Roles.SITE_ENGINEER })
             .select('name email phone role')
@@ -807,7 +807,81 @@ export const getSiteEngineers = async (options, projectId = null) => {
         totalPages: Math.ceil(totalResults / limit),
         totalResults,
     };
-    
+
     console.log('getSiteEngineers returning:', result);
     return result;
+};
+
+/**
+ * Create a finalized BOM with vendor assignments from quote analysis
+ * @param {string} projectId - The ID of the project
+ * @param {string} originalBomId - The ID of the original BOM
+ * @param {Array} finalizedItems - Array of items with vendor assignments and quote data
+ * @param {Object} user - The authenticated user
+ * @returns {Promise<BOM>}
+ */
+export const createFinalizedBOM = async (projectId, originalBomId, finalizedItems, user) => {
+    // Verify project exists
+    const project = await Project.findById(projectId);
+    if (!project) {
+        throw new ApiError(httpStatus.NOT_FOUND, 'Project not found');
+    }
+
+    // Verify original BOM exists
+    const originalBOM = await BOM.findOne({ _id: originalBomId, projectId });
+    if (!originalBOM) {
+        throw new ApiError(httpStatus.NOT_FOUND, 'Original BOM not found');
+    }
+
+    // Check user access (only planning engineers and admins can finalize BOMs)
+    if (user.role !== 'admin' && user.role !== 'planning-engineer') {
+        throw new ApiError(httpStatus.FORBIDDEN, 'Only planning engineers and admins can create finalized BOMs');
+    }
+
+    // Get the highest version number for this project and increment
+    const lastBOM = await BOM.findOne({ projectId }).sort({ version: -1 });
+    const version = lastBOM ? lastBOM.version + 1 : 1;
+
+    // Transform finalized items to BOM item format
+    const bomItems = finalizedItems.map(item => ({
+        itemName: item.itemName,
+        location: item.location,
+        vendor: item.vendor, // ObjectId of selected vendor
+        description: item.description,
+        category: item.category,
+        unit: item.unit,
+        quantity: item.quantity,
+        estimatedUnitCost: item.finalPrice || item.estimatedUnitCost, // Use final quote price
+        totalEstimatedCost: item.quantity * (item.finalPrice || item.estimatedUnitCost),
+        remarks: item.remarks,
+        addedBy: user.id
+    }));
+
+    const finalizedBOMData = {
+        projectId,
+        version,
+        title: `${originalBOM.title || 'BOM'} - Finalized v${version}`,
+        status: 'draft', // Start as draft, can be submitted for approval later
+        items: bomItems,
+        createdBy: user.id,
+        sourceBOMId: originalBomId, // Reference to the original BOM
+        remarks: `Finalized BOM created from quote analysis of BOM v${originalBOM.version}`
+    };
+
+    // Create the finalized BOM
+    const finalizedBOM = await BOM.create(finalizedBOMData);
+
+    // Update original BOM to reference the finalized version
+    await BOM.findByIdAndUpdate(originalBomId, {
+        updatedBOMId: finalizedBOM._id,
+        status: 'planning_review' // Mark original as under planning review
+    });
+
+    return finalizedBOM.populate([
+        'createdBy',
+        'projectId',
+        'items.addedBy',
+        'items.vendor',
+        'sourceBOMId'
+    ]);
 }; 

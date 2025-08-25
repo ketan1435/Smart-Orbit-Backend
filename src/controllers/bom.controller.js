@@ -181,7 +181,7 @@ export const assignBOMToSiteEngineer = catchAsync(async (req, res) => {
 export const getSiteEngineerBOMs = catchAsync(async (req, res) => {
     const filter = pick(req.query, ['status', 'projectId']);
     const options = pick(req.query, ['sortBy', 'limit', 'page']);
-    
+
     // Clean up filter to remove empty values
     if (filter.projectId === '') {
         delete filter.projectId;
@@ -189,7 +189,7 @@ export const getSiteEngineerBOMs = catchAsync(async (req, res) => {
     if (filter.status === '') {
         delete filter.status;
     }
-    
+
     const result = await bomService.getSiteEngineerBOMs(req.user.id, filter, options);
     res.status(httpStatus.OK).send({
         status: 1,
@@ -228,7 +228,7 @@ export const submitUpdatedBOMToPlanning = catchAsync(async (req, res) => {
 export const getRoughBOMsForPlanning = catchAsync(async (req, res) => {
     const filter = pick(req.query, ['status', 'projectId']);
     const options = pick(req.query, ['sortBy', 'limit', 'page']);
-    
+
     // Clean up filter to remove empty values
     if (filter.projectId === '') {
         delete filter.projectId;
@@ -236,7 +236,7 @@ export const getRoughBOMsForPlanning = catchAsync(async (req, res) => {
     if (filter.status === '') {
         delete filter.status;
     }
-    
+
     const result = await bomService.getRoughBOMsForPlanning(filter, options);
     res.status(httpStatus.OK).send({
         status: 1,
@@ -254,24 +254,42 @@ export const getSiteEngineers = catchAsync(async (req, res) => {
     console.log('Request method:', req.method);
     console.log('Request headers:', req.headers);
     console.log('Request user:', req.user);
-    
+
     const options = pick(req.query, ['sortBy', 'limit', 'page']);
     let { projectId } = req.query; // Get projectId from query params
-    
+
     // Clean up projectId if it's empty
     if (projectId === '') {
         projectId = null;
     }
-    
+
     console.log('getSiteEngineers called with:', { options, projectId, user: req.user });
-    
+
     const result = await bomService.getSiteEngineers(options, projectId);
-    
+
     console.log('getSiteEngineers result:', result);
-    
+
     res.status(httpStatus.OK).send({
         status: 1,
         message: 'Site engineers fetched successfully',
         data: result,
+    });
+});
+
+/**
+ * Create a finalized BOM with vendor assignments
+ */
+export const createFinalizedBOM = catchAsync(async (req, res) => {
+    const { originalBomId, finalizedItems } = req.body;
+    const finalizedBOM = await bomService.createFinalizedBOM(
+        req.params.projectId,
+        originalBomId,
+        finalizedItems,
+        req.user
+    );
+    res.status(httpStatus.CREATED).send({
+        status: 1,
+        message: 'Finalized BOM created successfully',
+        data: finalizedBOM,
     });
 }); 
