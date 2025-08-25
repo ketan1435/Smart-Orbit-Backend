@@ -6,6 +6,9 @@ const bomItemSchema = new mongoose.Schema({
         required: true,
         trim: true,
     },
+    location: {
+        type: String,
+    },
     description: String,
     category: {
         type: String,

@@ -4,6 +4,7 @@ import { objectId } from './custom.validation.js';
 const bomItemSchema = Joi.object({
     itemName: Joi.string().required().trim(),
     description: Joi.string().optional(),
+    location: Joi.string().optional(),
     category: Joi.string()
         .valid(
             'Raw Materials',

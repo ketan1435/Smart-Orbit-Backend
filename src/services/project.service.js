@@ -1294,7 +1294,7 @@ export const getAssignedProjectsForSiteEngineerService = async (siteEngineerId, 
   const { page = 1, limit = 10, status } = query;
   const filter = {
     assignedSiteEngineer: siteEngineerId,
-    status: 'Open'
+    // status: 'Open'
   };
 
   if (status) {

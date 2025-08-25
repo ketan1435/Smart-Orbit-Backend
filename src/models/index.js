@@ -4,5 +4,6 @@ import CustomerLead from './customerLead.model.js';
 import SiteVisit from './siteVisit.model.js';
 import BOM from './bom.model.js';
 import ClientProposal from './clientProposal.model.js';
+import Quote from './quote.model.js';
 
-export { Token, User, CustomerLead, SiteVisit, BOM, ClientProposal };
+export { Token, User, CustomerLead, SiteVisit, BOM, ClientProposal, Quote };

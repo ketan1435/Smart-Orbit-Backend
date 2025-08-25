@@ -12,6 +12,7 @@ import projectRoute from './project.route.js';
 import bomRoute from './bom.route.js';
 import clientProposalRoute from './clientProposal.route.js';
 import vendorRoute from './vendor.route.js';
+import quoteRoute from './quote.route.js';
 import poRoute from './po.route.js';
 import siteworkRoute from './sitework.route.js';
 import projectAssignmentPaymentRoute from './projectAssignmentPayment.route.js';
@@ -65,6 +66,10 @@ const defaultRoutes = [
   {
     path: '/vendors',
     route: vendorRoute,
+  },
+  {
+    path: '/quotes',
+    route: quoteRoute,
   },
   {
     path: '/pos',

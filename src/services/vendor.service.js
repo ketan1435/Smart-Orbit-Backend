@@ -42,7 +42,7 @@ export const getVendorsDropdownService = async (query) => {
     if (isActive !== undefined) filter.isActive = isActive === 'true' || isActive === true;
 
     return Vendor.find(filter)
-        .select('_id name storeName')
+        .select('_id name storeName state city')
         .sort({ name: 1 });
 };
 
