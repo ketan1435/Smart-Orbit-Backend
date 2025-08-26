@@ -8,7 +8,7 @@ const allRoles = {
   'site-engineer': ['manageTasks', 'verifyWork', 'getProjects', 'manageSiteVisits', 'getSiteVisits', 'getSiteworks', 'manageSiteworks', 'getWorkers', 'manageWorkers', 'getSiteworkDocuments', 'manageSiteworkDocuments', 'manageWorkers', 'getUsers', 'getSiteEngineerBOMs', 'updateBOMBySiteEngineer', 'submitUpdatedBOMToPlanning', 'getBoms'],
   worker: ['manageTasks', 'getProjects', 'getSiteworks', 'manageSiteworks', 'getWorkers', 'manageWorkers', 'getSiteworkDocuments', 'manageSiteworkDocuments', 'manageWorkers'],
   'dispatch-installation': ['manageDispatch', 'getProjects'],
-  'scp-user': ['getProjects', 'getBoms', 'acceptProposal', 'rejectProposal'],
+  'scp-user': ['getProjects', 'getBoms', 'acceptProposal', 'rejectProposal','manageProjects'],
 };
 
 const roles = Object.keys(allRoles);
