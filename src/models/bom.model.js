@@ -57,6 +57,26 @@ const bomItemSchema = new mongoose.Schema({
         type: Date,
         default: Date.now,
     },
+    // New fields for finalized BOM items
+    vendor: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Vendor',
+        default: null,
+    },
+    finalizedAt: {
+        type: Date,
+        default: null,
+    },
+    finalizedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        default: null,
+    },
+    finalPrice: {
+        type: Number,
+        min: 0,
+        default: null,
+    },
 });
 
 const bomSchema = new mongoose.Schema(
@@ -89,7 +109,7 @@ const bomSchema = new mongoose.Schema(
         },
         status: {
             type: String,
-            enum: ['draft', 'submitted', 'approved', 'rejected', 'rough', 'site_engineer_review', 'site_engineer_updated', 'planning_review'],
+            enum: ['draft', 'submitted', 'approved', 'rejected', 'rough', 'site_engineer_review', 'site_engineer_updated', 'planning_review', 'finalized'],
             default: 'draft',
         },
         remarks: String,
@@ -164,11 +184,26 @@ const bomSchema = new mongoose.Schema(
             ref: 'User',
             default: null,
         },
+        // New fields for finalized BOM
+        finalizedAt: {
+            type: Date,
+            default: null,
+        },
+        finalizedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User',
+            default: null,
+        },
     },
     {
         timestamps: true,
     }
 );
+
+// Add indexes for better performance
+bomSchema.index({ projectId: 1, status: 1 });
+bomSchema.index({ finalizedAt: 1, status: 1 });
+bomSchema.index({ createdBy: 1, createdAt: -1 });
 
 const BOM = mongoose.model('BOM', bomSchema);
 export default BOM; 

@@ -64,6 +64,7 @@ export const queryBOMs = async (projectId, filter, options) => {
 
     const boms = await BOM.find(bomFilter)
         .populate('createdBy', 'name email')
+        .populate('items.vendor')
         .populate('projectId', 'projectName projectCode')
         .populate('items.addedBy', 'name email')
         .sort(sort)
@@ -298,7 +299,7 @@ export const getSubmittedBOMs = async (filter = {}, options) => {
         : { updatedAt: -1 };
 
     // Build filter object with status and optional createdBy
-    const mongoFilter = { status: { $in: ['submitted', 'approved', 'rejected', 'pending'] } };
+    const mongoFilter = { status: { $in: ['submitted', 'approved', 'rejected', 'pending', 'finalized'] } };
     if (filter.createdBy) {
         mongoFilter.createdBy = filter.createdBy;
     }
@@ -307,6 +308,7 @@ export const getSubmittedBOMs = async (filter = {}, options) => {
     }
     const boms = await BOM.find(mongoFilter)
         .populate('createdBy', 'name email')
+        .populate('items.vendor')
         .populate('projectId', 'projectName projectCode')
         .populate('items.addedBy', 'name email')
         .sort(sort)
@@ -821,6 +823,16 @@ export const getSiteEngineers = async (options, projectId = null) => {
  * @returns {Promise<BOM>}
  */
 export const createFinalizedBOM = async (projectId, originalBomId, finalizedItems, user) => {
+    console.log('=== createFinalizedBOM service called ===');
+    console.log('Project ID:', projectId);
+    console.log('Original BOM ID:', originalBomId);
+    console.log('Finalized Items Count:', finalizedItems?.length);
+    console.log('Finalized Items:', finalizedItems?.map(item => ({
+        itemName: item.itemName,
+        originalItemId: item.originalItemId,
+        vendor: item.vendor
+    })));
+
     // Verify project exists
     const project = await Project.findById(projectId);
     if (!project) {
@@ -833,45 +845,95 @@ export const createFinalizedBOM = async (projectId, originalBomId, finalizedItem
         throw new ApiError(httpStatus.NOT_FOUND, 'Original BOM not found');
     }
 
+    console.log('Original BOM Items:', originalBOM.items?.map(item => ({
+        _id: item._id,
+        itemName: item.itemName
+    })));
+
     // Check user access (only planning engineers and admins can finalize BOMs)
     if (user.role !== 'admin' && user.role !== 'planning-engineer') {
         throw new ApiError(httpStatus.FORBIDDEN, 'Only planning engineers and admins can finalize BOMs');
     }
 
-    // Transform finalized items to BOM item format
-    const bomItems = finalizedItems.map(item => {
-        // Clean up empty strings and convert to proper values
-        const cleanItem = {
-            itemName: item.itemName,
-            description: item.description || undefined,
-            category: item.category,
-            unit: item.unit,
-            quantity: item.quantity,
-            estimatedUnitCost: item.finalPrice || item.estimatedUnitCost, // Use final quote price
-            totalEstimatedCost: item.quantity * (item.finalPrice || item.estimatedUnitCost),
-            remarks: item.remarks || undefined,
-            vendor: item.vendor || undefined, // ObjectId of selected vendor
-            addedBy: user.id
-        };
+    // Create maps for different lookup strategies
+    const originalItemsMapById = new Map();
+    const originalItemsMapByName = new Map();
 
-        // Remove undefined values
-        Object.keys(cleanItem).forEach(key => {
-            if (cleanItem[key] === undefined) {
-                delete cleanItem[key];
-            }
-        });
-
-        return cleanItem;
+    originalBOM.items.forEach(item => {
+        originalItemsMapById.set(item._id.toString(), item);
+        originalItemsMapByName.set(item.itemName.toLowerCase().trim(), item);
     });
 
-    // Update the original BOM with finalized data
+    // Transform finalized items while preserving original IDs and structure
+    const bomItems = finalizedItems.map(finalizedItem => {
+        console.log(`Processing finalized item: ${finalizedItem.itemName}`);
+
+        // Try to find the corresponding original BOM item
+        let originalItem = null;
+
+        // First try by originalItemId if available
+        if (finalizedItem.originalItemId) {
+            console.log(`Trying to find by originalItemId: ${finalizedItem.originalItemId}`);
+            originalItem = originalItemsMapById.get(finalizedItem.originalItemId);
+        }
+
+        // If not found by ID, try by item name (case-insensitive)
+        if (!originalItem) {
+            const searchName = finalizedItem.itemName.toLowerCase().trim();
+            console.log(`Trying to find by name: "${searchName}"`);
+            originalItem = originalItemsMapByName.get(searchName);
+        }
+
+        if (!originalItem) {
+            console.log(`Available original items:`, Array.from(originalItemsMapByName.keys()));
+            throw new ApiError(
+                httpStatus.BAD_REQUEST,
+                `Original BOM item not found for: ${finalizedItem.itemName}. Please ensure the item name matches exactly.`
+            );
+        }
+
+        console.log(`Found original item: ${originalItem.itemName} (ID: ${originalItem._id})`);
+
+        // Preserve the original item ID and structure, only update necessary fields
+        const updatedItem = {
+            _id: originalItem._id, // CRITICAL: Preserve original ID for quote compatibility
+            itemName: originalItem.itemName,
+            description: finalizedItem.description || originalItem.description,
+            location: finalizedItem.location || originalItem.location, // Use finalized location if provided
+            category: originalItem.category,
+            unit: originalItem.unit,
+            quantity: originalItem.quantity,
+            estimatedUnitCost: finalizedItem.finalPrice || finalizedItem.estimatedUnitCost || originalItem.estimatedUnitCost,
+            totalEstimatedCost: originalItem.quantity * (finalizedItem.finalPrice || finalizedItem.estimatedUnitCost || originalItem.estimatedUnitCost),
+            remarks: finalizedItem.remarks || originalItem.remarks,
+            addedBy: originalItem.addedBy, // Preserve original addedBy
+            addedAt: originalItem.addedAt, // Preserve original timestamp
+            // Add new finalized fields
+            vendor: finalizedItem.vendor || null, // vendor is already the vendor ID string
+            finalizedAt: new Date(),
+            finalizedBy: user.id,
+            finalPrice: finalizedItem.finalPrice || finalizedItem.estimatedUnitCost,
+            // Preserve any other original fields that might exist
+            ...Object.fromEntries(
+                Object.entries(originalItem.toObject()).filter(([key]) =>
+                    !['_id', 'itemName', 'description', 'location', 'category', 'unit', 'quantity', 'estimatedUnitCost', 'totalEstimatedCost', 'remarks', 'addedBy', 'addedAt'].includes(key)
+                )
+            )
+        };
+
+        return updatedItem;
+    });
+
+    // Update the original BOM with finalized data while preserving item IDs
     const updatedBOM = await BOM.findByIdAndUpdate(
         originalBomId,
         {
             title: originalBOM.title ? `${originalBOM.title} - Finalized` : 'BOM - Finalized',
-            status: 'draft', // Reset to draft for final review
+            status: 'finalized', // Set status to finalized
             items: bomItems,
-            remarks: `BOM finalized with vendor assignments from quote analysis`,
+            remarks: `BOM finalized with vendor assignments from quote analysis on ${new Date().toLocaleDateString()}`,
+            finalizedAt: new Date(),
+            finalizedBy: user.id,
             updatedAt: new Date()
         },
         { new: true, runValidators: true }
@@ -881,6 +943,7 @@ export const createFinalizedBOM = async (projectId, originalBomId, finalizedItem
         'createdBy',
         'projectId',
         'items.addedBy',
-        'items.vendor'
+        'items.vendor',
+        'finalizedBy'
     ]);
 }; 
