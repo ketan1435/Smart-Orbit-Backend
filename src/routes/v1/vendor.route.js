@@ -149,7 +149,7 @@ router.get('/dropdown', getVendorsDropdown);
  *                 totalPages:
  *                   type: integer
  */
-router.get('/', auth(), getVendors);
+router.get('/', auth('manageVendors'), getVendors);
 
 /**
  * @swagger
@@ -246,7 +246,7 @@ router.get('/', auth(), getVendors);
  *                       type: string
  *                       format: date-time
  */
-router.post('/', auth(), createVendor);
+router.post('/', auth('manageVendors'), createVendor);
 
 /**
  * @swagger
@@ -280,7 +280,7 @@ router.post('/', auth(), createVendor);
  *       404:
  *         description: Vendor not found
  */
-router.patch('/:id/activate', auth(), activateVendor);
+router.patch('/:id/activate', auth('manageVendors'), activateVendor);
 
 /**
  * @swagger
@@ -314,6 +314,6 @@ router.patch('/:id/activate', auth(), activateVendor);
  *       404:
  *         description: Vendor not found
  */
-router.patch('/:id/deactivate', auth(), deactivateVendor);
+router.patch('/:id/deactivate', auth('manageVendors'), deactivateVendor);
 
 export default router; 

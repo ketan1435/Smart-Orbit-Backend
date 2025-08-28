@@ -64,7 +64,7 @@ const router = express.Router();
  *                 totalPages:
  *                   type: integer
  */
-router.get('/', auth(), getPOs);
+router.get('/', auth('procurement'), getPOs);
 
 /**
  * @swagger
@@ -168,7 +168,7 @@ router.get('/', auth(), getPOs);
  *                       type: string
  *                       format: date-time
  */
-router.post('/', auth(), createPO);
+router.post('/', auth('procurement'), createPO);
 
 // /**
 //  * @swagger
@@ -240,7 +240,7 @@ router.post('/', auth(), createPO);
  *       404:
  *         description: PO not found
  */
-router.patch('/:id/activate', auth(), activatePO);
+router.patch('/:id/activate', auth('procurement'), activatePO);
 
 /**
  * @swagger
@@ -276,6 +276,6 @@ router.patch('/:id/activate', auth(), activatePO);
  *       404:
  *         description: PO not found
  */
-router.patch('/:id/deactivate', auth(), deactivatePO);
+router.patch('/:id/deactivate', auth('procurement'), deactivatePO);
 
 export default router; 

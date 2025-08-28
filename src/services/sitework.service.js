@@ -75,8 +75,8 @@ export const updateSiteworkService = async (id, data, user) => {
 
 export const getSiteworksByProjectService = async (projectId, user) => {
     const filter = { project: projectId };
-    // If not admin or site engineer, restrict to assignedUsers
-    if (user.role !== 'Admin' && user.role !== 'site-engineer' && user.role !== Roles.USER) {
+    // If not admin, site engineer, or planning engineer, restrict to assignedUsers
+    if (user.role !== 'Admin' && user.role !== 'site-engineer' && user.role !== 'planning-engineer' && user.role !== Roles.USER) {
         filter["assignedUsers.user"] = user._id;
     }
     const siteworks = await Sitework.find(filter)
