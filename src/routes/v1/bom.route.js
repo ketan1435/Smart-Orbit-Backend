@@ -836,7 +836,7 @@ router
 
 /**
  * @swagger
- * /boms/procurement-team:
+ * /boms/planning-engineer:
  *   get:
  *     summary: Get procurement team members
  *     description: Retrieve all active procurement team members for filtering and selection purposes.

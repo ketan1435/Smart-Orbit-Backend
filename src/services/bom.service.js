@@ -342,7 +342,7 @@ export const reviewBOM = async (projectId, bomId, reviewData, user) => {
     }
 
     // Only allow review if BOM is in submitted status
-    if (bom.status !== 'submitted') {
+    if (bom.status !== 'submitted' && bom.status !== 'finalized ') {
         throw new ApiError(httpStatus.BAD_REQUEST, 'Can only review BOMs in submitted status');
     }
 
