@@ -112,6 +112,10 @@ export const queryProjects = async (filter, options, user = null) => {
     .populate('lead')
     .populate('requirement') // optional: populate requirement if needed
     .populate({
+      path: 'proposals.architect',
+      select: 'name email role'
+    })
+    .populate({
       path: 'siteVisits',
       populate: {
         path: 'siteEngineer',
@@ -252,7 +256,26 @@ export const getProposalsForProject = async (projectId) => {
     throw new ApiError(httpStatus.NOT_FOUND, 'Project not found');
   }
 
-  return project.proposals;
+  // Transform proposals to include all necessary fields
+  const proposals = project.proposals.map(proposal => ({
+    _id: proposal._id,
+    architect: proposal.architect,
+    email: proposal.email,
+    proposedCharges: proposal.proposedCharges,
+    deliveryTimelineDays: proposal.deliveryTimelineDays,
+    portfolioLink: proposal.portfolioLink,
+    remarks: proposal.remarks,
+    status: proposal.status,
+    adminRemark: proposal.adminRemark,
+    submittedAt: proposal.submittedAt,
+    acceptedAt: proposal.acceptedAt,
+    acceptedBy: proposal.acceptedBy,
+    acceptedByModel: proposal.acceptedByModel,
+    rejectedAt: proposal.rejectedAt,
+    withdrawnAt: proposal.withdrawnAt
+  }));
+
+  return proposals;
 };
 
 /**
@@ -826,7 +849,7 @@ export const rejectProposal = async (proposalId, adminUser, rejectData) => {
   proposal.status = 'Rejected';
   proposal.rejectedAt = new Date();
   proposal.rejectedBy = adminUser._id;
-  proposal.adminRemarks = rejectData.remarks || '';
+  proposal.adminRemark = rejectData.remarks || '';
 
   await project.save();
 
@@ -838,7 +861,7 @@ export const rejectProposal = async (proposalId, adminUser, rejectData) => {
     status: proposal.status,
     rejectedAt: proposal.rejectedAt,
     rejectedBy: adminUser._id,
-    adminRemarks: proposal.adminRemarks
+    adminRemark: proposal.adminRemark
   };
 };
 
