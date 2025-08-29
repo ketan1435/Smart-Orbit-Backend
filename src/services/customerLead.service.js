@@ -580,6 +580,9 @@ export const shareRequirementWithUsersService = async (leadId, requirementId, us
   const procurementUsers = users.filter(user => user.role === 'procurement-team');
   const otherUsers = users.filter(user => user.role !== 'procurement-team');
 
+  // Find the project associated with this requirement
+  const project = await Project.findOne({ requirement: requirementId });
+
   // Handle regular users (non-procurement)
   otherUsers.forEach(user => {
     const alreadyShared = requirement.sharedWith.some(share => share.user.toString() === user._id.toString());
@@ -590,14 +593,23 @@ export const shareRequirementWithUsersService = async (leadId, requirementId, us
         isSeen: false
       });
       updated = true;
+
+      // If user is a site engineer, automatically assign them to the project
+      if (user.role === 'site-engineer' && project) {
+        // Check if site engineer is not already assigned to this project
+        if (!project.assignedSiteEngineer.includes(user._id)) {
+          project.assignedSiteEngineer.push(user._id);
+          project.save().catch(error => {
+            logger.error(`Failed to assign site engineer ${user._id} to project ${project._id}:`, error);
+          });
+          logger.info(`Automatically assigned site engineer ${user._id} to project ${project._id} via requirement sharing`);
+        }
+      }
     }
   });
 
   // Handle procurement team members specially
   if (procurementUsers.length > 0) {
-    // Find the project associated with this requirement
-    const project = await Project.findOne({ requirement: requirementId });
-
     if (project) {
       // Check if there are any approved architect documents
       const approvedDocuments = project.architectDocuments.filter(doc =>
@@ -634,9 +646,6 @@ export const shareRequirementWithUsersService = async (leadId, requirementId, us
   // Handle automatic document sending to procurement if requested
   if (shouldSendToEngineer && documentId) {
     try {
-      // Find the project associated with this requirement
-      const project = await Project.findOne({ requirement: requirementId });
-
       if (project) {
         // Verify the document exists and meets criteria
         const document = project.architectDocuments.find(doc =>
