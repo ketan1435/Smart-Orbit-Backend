@@ -25,6 +25,9 @@ const router = express.Router();
  *         description:
  *           type: string
  *           description: Description of the item
+ *         brand:
+ *           type: string
+ *           description: Brand name of the item
  *         category:
  *           type: string
  *           enum: [Raw Materials, Hardware, Electrical, Plumbing, Finishing, Tools, Equipment, Other]

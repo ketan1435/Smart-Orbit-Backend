@@ -1,7 +1,7 @@
 {
   "apps": [
     {
-      "name": "app",
+      "name": "smart-orbiter-30-8",
       "script": "src/index.js",
       "instances": 1,
       "autorestart": true,

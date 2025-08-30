@@ -899,6 +899,7 @@ export const createFinalizedBOM = async (projectId, originalBomId, finalizedItem
             _id: originalItem._id, // CRITICAL: Preserve original ID for quote compatibility
             itemName: originalItem.itemName,
             description: finalizedItem.description || originalItem.description,
+            brand: finalizedItem.brand || originalItem.brand || null, // Include brand from finalized item or preserve original
             location: finalizedItem.location || originalItem.location, // Use finalized location if provided
             category: originalItem.category,
             unit: originalItem.unit,
@@ -916,7 +917,7 @@ export const createFinalizedBOM = async (projectId, originalBomId, finalizedItem
             // Preserve any other original fields that might exist
             ...Object.fromEntries(
                 Object.entries(originalItem.toObject()).filter(([key]) =>
-                    !['_id', 'itemName', 'description', 'location', 'category', 'unit', 'quantity', 'estimatedUnitCost', 'totalEstimatedCost', 'remarks', 'addedBy', 'addedAt'].includes(key)
+                    !['_id', 'itemName', 'description', 'brand', 'location', 'category', 'unit', 'quantity', 'estimatedUnitCost', 'totalEstimatedCost', 'remarks', 'addedBy', 'addedAt'].includes(key)
                 )
             )
         };

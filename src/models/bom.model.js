@@ -15,6 +15,7 @@ const bomItemSchema = new mongoose.Schema({
         default: null,
     },
     description: String,
+    brand: String,
     category: {
         type: String,
         enum: [
