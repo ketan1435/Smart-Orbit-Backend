@@ -43,7 +43,7 @@ export const createBOM = {
         remarks: Joi.string().optional(),
         projectId: Joi.string().custom(objectId).optional(),
         items: Joi.array().items(bomItemSchema).min(1).required(),
-    }),
+    }).unknown(true),
 };
 
 export const getBOMs = {

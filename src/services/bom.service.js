@@ -341,10 +341,12 @@ export const reviewBOM = async (projectId, bomId, reviewData, user) => {
         throw new ApiError(httpStatus.NOT_FOUND, 'BOM not found');
     }
 
-    // Only allow review if BOM is in submitted status
-    if (bom.status !== 'submitted' && bom.status !== 'finalized ') {
-        throw new ApiError(httpStatus.BAD_REQUEST, 'Can only review BOMs in submitted status');
+    // Only allow review if BOM is in submitted status or finalized status
+    const allowedStatuses = ['submitted', 'finalized'];
+    if (!allowedStatuses.includes(bom.status)) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Can only review BOMs in submitted status or finalized status');
     }
+
 
     const { status, adminRemarks } = reviewData;
 
