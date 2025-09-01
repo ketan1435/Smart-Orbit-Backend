@@ -94,8 +94,9 @@ export const createCustomerLeadService = async (req, session) => {
       project: project._id,
     }, { session });
 
-    // 5.1 Handle SCP user sharing if sendToScp is true
-    if (reqData.sendToScp && reqData.selectedScpUser) {
+    // 5.1 Handle SCP user sharing
+    // Share whenever an SCP user is selected during lead creation, regardless of sendToScp flag
+    if (reqData.selectedScpUser) {
       console.log('SCP sharing requested:', {
         sendToScp: reqData.sendToScp,
         selectedScpUser: reqData.selectedScpUser,
