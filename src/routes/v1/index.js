@@ -19,6 +19,7 @@ import projectAssignmentPaymentRoute from './projectAssignmentPayment.route.js';
 import walletTransactionRoute from './walletTransaction.route.js';
 import messageRoute from './message.route.js';
 import socketRoute from './socket.route.js';
+import attendanceRoute from './attendance.route.js';
 
 const router = express.Router();
 
@@ -94,6 +95,10 @@ const defaultRoutes = [
   {
     path: '/socket',
     route: socketRoute,
+  },
+  {
+    path: '/attendance',
+    route: attendanceRoute,
   },
   // {
   //   path: '/income',
