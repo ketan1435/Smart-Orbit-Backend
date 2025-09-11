@@ -8,6 +8,54 @@ import auth from '../../middlewares/auth.js';
 
 const router = express.Router();
 
+// IMPORTANT: Define specific routes BEFORE generic ":id" route to avoid route conflicts
+/**
+ * @swagger
+ * /files/signed-url/{key}:
+ *   get:
+ *     summary: Get a presigned URL for viewing an S3 file
+ *     description: "Generates a temporary, secure URL to view/download a file from S3. The URL expires in 1 hour."
+ *     tags: [Files]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: key
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: "The S3 key of the file to access"
+ *         example: "siteworks/68b58eb9c7efdb95a6de5d44/image.jpg"
+ *     responses:
+ *       200:
+ *         description: Successfully generated presigned URL.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 status:
+ *                   type: integer
+ *                   example: 1
+ *                 signedUrl:
+ *                   type: string
+ *                   description: "The presigned URL to access the file"
+ *       400:
+ *         description: Bad Request. File key is required.
+ *       401:
+ *         description: Unauthorized. The user is not authenticated.
+ *       500:
+ *         description: Internal Server Error. Failed to generate the signed URL.
+ */
+router.get(
+  '/signed-url/:key(*)',
+  auth(),
+  fileController.getSignedUrlController
+);
+
 router.get('/:id', async (req, res, next) => {
   try {
     // 1) Convert the :id into an ObjectId
