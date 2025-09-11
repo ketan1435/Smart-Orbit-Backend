@@ -135,3 +135,36 @@ export const getSentToMeProposals = catchAsync(async (req, res) => {
         data: result,
     });
 });
+
+export const convertToWorkOrder = catchAsync(async (req, res) => {
+    const clientProposal = await clientProposalService.convertToWorkOrder(
+        req.params.clientProposalId,
+        req.user.id
+    );
+    res.status(httpStatus.OK).send({
+        status: 1,
+        message: 'Client proposal converted to work order successfully',
+        data: clientProposal,
+    });
+});
+
+export const getWorkOrders = catchAsync(async (req, res) => {
+    const result = await clientProposalService.queryWorkOrders(req.query, req.query);
+    res.status(httpStatus.OK).send({
+        status: 1,
+        message: 'Work orders fetched successfully',
+        data: result,
+    });
+});
+
+export const sendWorkOrderToPlanningEngineer = catchAsync(async (req, res) => {
+    const clientProposal = await clientProposalService.sendWorkOrderToPlanningEngineer(
+        req.params.clientProposalId,
+        req.user.id
+    );
+    res.status(httpStatus.OK).send({
+        status: 1,
+        message: 'Work order sent to planning engineer successfully',
+        data: clientProposal,
+    });
+});

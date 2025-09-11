@@ -306,4 +306,17 @@ export const createFinalizedBOM = catchAsync(async (req, res) => {
         message: 'BOM finalized successfully with vendor assignments',
         data: finalizedBOM,
     });
+});
+
+/**
+ * Get finalized BOMs for selection
+ */
+export const getFinalizedBOMs = catchAsync(async (req, res) => {
+    const options = pick(req.query, ['limit', 'page', 'sortBy', 'projectId']);
+    const result = await bomService.getFinalizedBOMs(options);
+    res.status(httpStatus.OK).send({
+        status: 1,
+        message: 'Finalized BOMs fetched successfully',
+        data: result,
+    });
 }); 

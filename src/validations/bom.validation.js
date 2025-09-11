@@ -84,7 +84,8 @@ export const updateBOM = {
             remarks: Joi.string().optional(),
             items: Joi.array().items(bomItemSchema).min(1).optional(),
         })
-        .min(1),
+        .min(1)
+        .unknown(true),
 };
 
 export const updateBOMStatus = {
@@ -132,7 +133,11 @@ export const reviewBOM = {
     }),
     body: Joi.object().keys({
         status: Joi.string().valid('approved', 'rejected').required(),
-        adminRemarks: Joi.string().required(),
+        adminRemarks: Joi.string().when('status', {
+            is: 'approved',
+            then: Joi.optional().allow(null, ''),
+            otherwise: Joi.required()
+        }),
     }),
 };
 
@@ -198,5 +203,5 @@ export const createFinalizedBOM = {
     body: Joi.object().keys({
         originalBomId: Joi.string().custom(objectId).required(),
         finalizedItems: Joi.array().items(finalizedItemSchema).min(1).required(),
-    }),
+    }).unknown(true),
 }; 

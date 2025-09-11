@@ -316,6 +316,24 @@ const projectSchema = new mongoose.Schema(
         },
         proposals: [architectProposalSchema],
         architectDocuments: [architectDocumentSchema],
+
+        // Work Order to Planning Engineer fields
+        workOrderSentToPlanningEngineer: {
+            type: Boolean,
+            default: false,
+        },
+        workOrderSentToPlanningEngineerAt: {
+            type: Date,
+        },
+        workOrderSentToPlanningEngineerBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            refPath: 'workOrderSentToPlanningEngineerByModel',
+        },
+        workOrderSentToPlanningEngineerByModel: {
+            type: String,
+            enum: ['User', 'Admin'],
+        },
+
         createdBy: {
             type: mongoose.Schema.Types.ObjectId,
             refPath: 'createdByModel',

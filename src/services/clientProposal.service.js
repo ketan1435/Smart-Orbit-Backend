@@ -461,3 +461,114 @@ export const getProposalsSentToUser = async (userId, options) => {
         totalResults,
     };
 };
+
+/**
+ * Query for work orders (converted client proposals)
+ * @param {Object} filter - Mongo filter
+ * @param {Object} options - Query options
+ * @param {string} [options.sortBy] - Sort option in the format: sortField:(desc|asc)
+ * @param {number} [options.limit] - Maximum number of results per page (default = 10)
+ * @param {number} [options.page] - Current page (default = 1)
+ * @returns {Promise<QueryResult>}
+ */
+export const queryWorkOrders = async (filter = {}, options = {}) => {
+    const { limit = 10, page = 1, sortBy } = options;
+    const sort = sortBy
+        ? { [sortBy.split(':')[0]]: sortBy.split(':')[1] === 'desc' ? -1 : 1 }
+        : { convertedToWorkOrderAt: -1 };
+
+    const effectiveFilter = {
+        ...filter,
+        convertedToWorkOrder: true,
+    };
+
+    const workOrders = await ClientProposal.find(effectiveFilter)
+        .populate('project', 'projectName projectCode')
+        .populate('createdBy', 'name email')
+        .populate('updatedBy', 'name email')
+        .sort(sort)
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean();
+
+    const totalResults = await ClientProposal.countDocuments(effectiveFilter);
+
+    return {
+        results: workOrders,
+        page,
+        limit,
+        totalPages: Math.ceil(totalResults / limit),
+        totalResults,
+    };
+};
+
+/**
+ * Convert client proposal to work order
+ * @param {ObjectId} clientProposalId
+ * @param {ObjectId} userId
+ * @returns {Promise<ClientProposal>}
+ */
+export const convertToWorkOrder = async (clientProposalId, userId) => {
+    const clientProposal = await getClientProposalById(clientProposalId);
+
+    // Only allow conversion if proposal is approved
+    if (clientProposal.status !== 'approved') {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Only approved proposals can be converted to work orders');
+    }
+
+    // Check if already converted
+    if (clientProposal.convertedToWorkOrder) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'This proposal has already been converted to a work order');
+    }
+
+    // Determine user type for updatedBy
+    const { userType } = await getUserAndType(userId);
+
+    // Update proposal to mark as converted to work order
+    clientProposal.convertedToWorkOrder = true;
+    clientProposal.convertedToWorkOrderAt = new Date();
+    clientProposal.updatedBy = userId;
+    clientProposal.updatedByModel = userType;
+
+    await clientProposal.save();
+
+    return clientProposal.populate(['project', 'createdBy', 'updatedBy']);
+};
+
+/**
+ * Send work order to planning engineer
+ * @param {ObjectId} clientProposalId
+ * @param {ObjectId} userId
+ * @returns {Promise<ClientProposal>}
+ */
+export const sendWorkOrderToPlanningEngineer = async (clientProposalId, userId) => {
+    const clientProposal = await getClientProposalById(clientProposalId);
+
+    // Only allow sending if proposal is converted to work order
+    if (!clientProposal.convertedToWorkOrder) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Only converted work orders can be sent to planning engineers');
+    }
+
+    // Check if already sent to planning engineer
+    if (clientProposal.project.workOrderSentToPlanningEngineer) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'This work order has already been sent to planning engineer');
+    }
+
+    // Determine user type for updatedBy
+    const { userType } = await getUserAndType(userId);
+
+    // Update project to mark as sent to planning engineer
+    await Project.findByIdAndUpdate(clientProposal.project._id, {
+        workOrderSentToPlanningEngineer: true,
+        workOrderSentToPlanningEngineerAt: new Date(),
+        workOrderSentToPlanningEngineerBy: userId,
+        workOrderSentToPlanningEngineerByModel: userType,
+    });
+
+    // Update proposal's updatedBy fields
+    clientProposal.updatedBy = userId;
+    clientProposal.updatedByModel = userType;
+    await clientProposal.save();
+
+    return clientProposal.populate(['project', 'createdBy', 'updatedBy']);
+};

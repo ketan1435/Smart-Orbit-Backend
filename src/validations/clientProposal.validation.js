@@ -153,6 +153,32 @@ const customerReview = {
     }),
 };
 
+const convertToWorkOrder = {
+    params: Joi.object().keys({
+        clientProposalId: Joi.string().custom(objectId).required(),
+    }),
+};
+
+const getWorkOrders = {
+    query: Joi.object().keys({
+        project: Joi.string(),
+        'customerInfo.name': Joi.string(),
+        'customerInfo.email': Joi.string().email(),
+        proposalFor: Joi.string(),
+        projectLocation: Joi.string(),
+        projectType: Joi.string(),
+        sortBy: Joi.string(),
+        limit: Joi.number().integer(),
+        page: Joi.number().integer(),
+    }),
+};
+
+const sendWorkOrderToPlanningEngineer = {
+    params: Joi.object().keys({
+        clientProposalId: Joi.string().custom(objectId).required(),
+    }),
+};
+
 export default {
     createClientProposal,
     getClientProposals,
@@ -164,4 +190,7 @@ export default {
     getClientProposalPDF,
     sendToCustomer,
     customerReview,
+    convertToWorkOrder,
+    getWorkOrders,
+    sendWorkOrderToPlanningEngineer,
 }; 

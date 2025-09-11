@@ -1109,7 +1109,7 @@ export const getProjectsForProcurement = async (user, options) => {
   const projects = await Project.find({ _id: { $in: projectIds } })
     .populate('lead', 'customerName email mobileNumber')
     .populate('requirement', 'requirementType')
-    .select('_id projectName projectCode status createdAt')
+    .select('_id projectName projectCode status createdAt workOrderSentToPlanningEngineer workOrderSentToPlanningEngineerAt workOrderSentToPlanningEngineerBy')
     .sort(sort)
     .skip((page - 1) * limit)
     .limit(limit)

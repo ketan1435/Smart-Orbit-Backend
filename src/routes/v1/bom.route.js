@@ -1447,4 +1447,75 @@ router
     .route('/site-engineers')
     .get(auth('getSiteEngineers'), bomController.getSiteEngineers);
 
+/**
+ * @swagger
+ * /boms/finalized:
+ *   get:
+ *     summary: Get finalized BOMs for selection
+ *     description: Retrieve all finalized BOMs that can be used as templates for new BOMs.
+ *     tags: [BOM]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           default: 1
+ *         description: Page number
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           minimum: 1
+ *           maximum: 100
+ *           default: 10
+ *         description: Maximum number of BOMs
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *         description: Sort by query in the form of field:desc/asc (ex. finalizedAt:desc)
+ *       - in: query
+ *         name: projectId
+ *         schema:
+ *           type: string
+ *         description: Filter by project ID
+ *     responses:
+ *       "200":
+ *         description: Finalized BOMs fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: number
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: "Finalized BOMs fetched successfully"
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     results:
+ *                       type: array
+ *                       items:
+ *                         $ref: '#/components/schemas/BOM'
+ *                     page:
+ *                       type: number
+ *                     limit:
+ *                       type: number
+ *                     totalPages:
+ *                       type: number
+ *                     totalResults:
+ *                       type: number
+ *       "401":
+ *         $ref: '#/components/responses/Unauthorized'
+ */
+router
+    .route('/finalized')
+    .get(auth('getBoms'), bomController.getFinalizedBOMs);
+
 export default router; 

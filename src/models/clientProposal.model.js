@@ -54,6 +54,15 @@ const ClientProposalSchema = new Schema(
             default: 1,
         },
 
+        // Work Order conversion
+        convertedToWorkOrder: {
+            type: Boolean,
+            default: false,
+        },
+        convertedToWorkOrderAt: {
+            type: Date,
+        },
+
         // Metadata
         createdBy: {
             type: Schema.Types.ObjectId,

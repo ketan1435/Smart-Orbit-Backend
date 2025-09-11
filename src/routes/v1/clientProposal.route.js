@@ -116,6 +116,16 @@ const router = express.Router();
  *           default: 1
  *           description: Version number of the proposal
  *           example: 1
+ *         convertedToWorkOrder:
+ *           type: boolean
+ *           default: false
+ *           description: Whether the proposal has been converted to a work order
+ *           example: false
+ *         convertedToWorkOrderAt:
+ *           type: string
+ *           format: date-time
+ *           description: Timestamp when the proposal was converted to a work order
+ *           example: "2024-01-15T14:30:00.000Z"
  *         createdBy:
  *           type: string
  *           description: ID of the user who created the proposal
@@ -752,6 +762,63 @@ const router = express.Router();
  *         $ref: '#/components/responses/NotFound'
  */
 
+/**
+ * @swagger
+ * /client-proposals/{clientProposalId}/convert-to-work-order:
+ *   post:
+ *     summary: Convert client proposal to work order
+ *     description: Convert an approved client proposal to a work order. This marks the proposal as converted and records the conversion timestamp. Only approved proposals can be converted, and only the creator or admin can perform this action.
+ *     tags: [Client Proposals]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: clientProposalId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Client proposal ID
+ *         example: "507f1f77bcf86cd799439011"
+ *     responses:
+ *       "200":
+ *         description: Client proposal converted to work order successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: number
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: "Client proposal converted to work order successfully"
+ *                 data:
+ *                   $ref: '#/components/schemas/ClientProposal'
+ *       "400":
+ *         description: Bad request - proposal not approved or already converted
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: number
+ *                   example: 0
+ *                 message:
+ *                   type: string
+ *                   example: "Only approved proposals can be converted to work orders"
+ *                 data:
+ *                   type: null
+ *                   example: null
+ *       "401":
+ *         $ref: '#/components/responses/Unauthorized'
+ *       "403":
+ *         $ref: '#/components/responses/Forbidden'
+ *       "404":
+ *         $ref: '#/components/responses/NotFound'
+ */
+
 router
     .route('/')
     .post(
@@ -777,6 +844,90 @@ router
     .get(
         auth(),
         clientProposalController.getSentToMeProposals
+    );
+
+/**
+ * @swagger
+ * /client-proposals/work-orders:
+ *   get:
+ *     summary: Get work orders (converted client proposals)
+ *     description: Retrieve all client proposals that have been converted to work orders. Supports pagination, sorting, and filtering by fields such as project, customer name, and proposal details.
+ *     tags: [Client Proposals]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: project
+ *         schema:
+ *           type: string
+ *         description: Filter by project ID
+ *       - in: query
+ *         name: customerInfo.name
+ *         schema:
+ *           type: string
+ *         description: Filter by customer name
+ *       - in: query
+ *         name: customerInfo.email
+ *         schema:
+ *           type: string
+ *         description: Filter by customer email
+ *       - in: query
+ *         name: proposalFor
+ *         schema:
+ *           type: string
+ *         description: Filter by proposal purpose
+ *       - in: query
+ *         name: projectLocation
+ *         schema:
+ *           type: string
+ *         description: Filter by project location
+ *       - in: query
+ *         name: projectType
+ *         schema:
+ *           type: string
+ *         description: Filter by project type
+ *       - in: query
+ *         name: sortBy
+ *         schema:
+ *           type: string
+ *         description: Sort field and direction (e.g., convertedToWorkOrderAt:desc)
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: number
+ *         description: Number of items per page
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: number
+ *         description: Page number
+ *     responses:
+ *       "200":
+ *         description: Work orders retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: number
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: "Work orders fetched successfully"
+ *                 data:
+ *                   $ref: '#/components/schemas/ClientProposalList'
+ *       "401":
+ *         $ref: '#/components/responses/Unauthorized'
+ *       "403":
+ *         $ref: '#/components/responses/Forbidden'
+ */
+router
+    .route('/work-orders')
+    .get(
+        auth(),
+        validate(clientProposalValidation.getWorkOrders),
+        clientProposalController.getWorkOrders
     );
 
 router
@@ -835,6 +986,93 @@ router
         auth(),
         validate(clientProposalValidation.customerReview),
         clientProposalController.customerReview
+    );
+
+router
+    .route('/:clientProposalId/convert-to-work-order')
+    .post(
+        auth("convert-to-work-order"),
+        validate(clientProposalValidation.convertToWorkOrder),
+        clientProposalController.convertToWorkOrder
+    );
+
+/**
+ * @swagger
+ * /client-proposals/{clientProposalId}/send-to-planning-engineer:
+ *   post:
+ *     summary: Send work order to planning engineer
+ *     description: Send a converted work order to the planning engineer for procurement. This marks the project as sent to planning engineer and enables the planning engineer to see purchase orders for this project. Only administrators can perform this action.
+ *     tags: [Client Proposals]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: clientProposalId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Client proposal ID
+ *         example: "507f1f77bcf86cd799439011"
+ *     responses:
+ *       "200":
+ *         description: Work order sent to planning engineer successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: number
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: "Work order sent to planning engineer successfully"
+ *                 data:
+ *                   $ref: '#/components/schemas/ClientProposal'
+ *       "400":
+ *         description: Bad request - work order not converted or already sent
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: number
+ *                   example: 0
+ *                 message:
+ *                   type: string
+ *                   example: "Only converted work orders can be sent to planning engineers"
+ *                 data:
+ *                   type: null
+ *                   example: null
+ *       "401":
+ *         $ref: '#/components/responses/Unauthorized'
+ *       "403":
+ *         description: Forbidden - only administrators can send work orders
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: number
+ *                   example: 0
+ *                 message:
+ *                   type: string
+ *                   example: "Only administrators can send work orders to planning engineers"
+ *                 data:
+ *                   type: null
+ *                   example: null
+ *       "404":
+ *         $ref: '#/components/responses/NotFound'
+ */
+
+router
+    .route('/:clientProposalId/send-to-planning-engineer')
+    .post(
+        auth("send-to-planning-engineer"),
+        validate(clientProposalValidation.sendWorkOrderToPlanningEngineer),
+        clientProposalController.sendWorkOrderToPlanningEngineer
     );
 
 export default router;

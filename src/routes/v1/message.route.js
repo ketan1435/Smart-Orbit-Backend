@@ -31,6 +31,7 @@ router
 
 router
     .route('/mark-read')
+    
     .patch(auth(), messageController.markMessagesAsRead);
 
 router

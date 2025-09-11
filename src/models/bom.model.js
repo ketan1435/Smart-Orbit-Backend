@@ -137,6 +137,10 @@ const bomSchema = new mongoose.Schema(
             type: Boolean,
             default: false,
         },
+        isFinalized: {
+            type: Boolean,
+            default: false,
+        },
         assignedToSiteEngineer: {
             type: mongoose.Schema.Types.ObjectId,
             ref: 'User',

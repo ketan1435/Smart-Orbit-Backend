@@ -869,7 +869,11 @@ export const createFinalizedBOM = async (projectId, originalBomId, finalizedItem
     // Transform finalized items while preserving original IDs and structure
     const bomItems = finalizedItems.map(finalizedItem => {
         console.log(`Processing finalized item: ${finalizedItem.itemName}`);
-
+        console.log(`Finalized item vendor value:`, finalizedItem.vendor);
+        console.log(`Finalized item vendor type:`, typeof finalizedItem.vendor);
+        console.log(`Finalized item vendor is null:`, finalizedItem.vendor === null);
+        console.log(`Finalized item vendor is undefined:`, finalizedItem.vendor === undefined);
+        console.log(`Finalized item vendor is empty string:`, finalizedItem.vendor === '');
         // Try to find the corresponding original BOM item
         let originalItem = null;
 
@@ -912,17 +916,21 @@ export const createFinalizedBOM = async (projectId, originalBomId, finalizedItem
             addedBy: originalItem.addedBy, // Preserve original addedBy
             addedAt: originalItem.addedAt, // Preserve original timestamp
             // Add new finalized fields
-            vendor: finalizedItem.vendor || null, // vendor is already the vendor ID string
+            isFinalized: true,
+            vendor: finalizedItem.vendor, // vendor is already the vendor ID string
             finalizedAt: new Date(),
             finalizedBy: user.id,
             finalPrice: finalizedItem.finalPrice || finalizedItem.estimatedUnitCost,
             // Preserve any other original fields that might exist
             ...Object.fromEntries(
                 Object.entries(originalItem.toObject()).filter(([key]) =>
-                    !['_id', 'itemName', 'description', 'brand', 'location', 'category', 'unit', 'quantity', 'estimatedUnitCost', 'totalEstimatedCost', 'remarks', 'addedBy', 'addedAt'].includes(key)
+                    !['_id', 'itemName', 'description', 'brand', 'location', 'category', 'unit', 'quantity', 'estimatedUnitCost', 'totalEstimatedCost', 'remarks', 'addedBy', 'addedAt', 'vendor'].includes(key)
                 )
             )
         };
+
+        console.log(`Updated item vendor value:`, updatedItem.vendor);
+        console.log(`Updated item vendor type:`, typeof updatedItem.vendor);
 
         return updatedItem;
     });
@@ -949,4 +957,48 @@ export const createFinalizedBOM = async (projectId, originalBomId, finalizedItem
         'items.vendor',
         'finalizedBy'
     ]);
+};
+
+/**
+ * Get finalized BOMs for selection
+ * @param {Object} options - Query options
+ * @returns {Promise<Object>}
+ */
+export const getFinalizedBOMs = async (options = {}) => {
+    const { limit = 10, page = 1, sortBy, projectId } = options;
+    const sort = sortBy
+        ? { [sortBy.split(':')[0]]: sortBy.split(':')[1] === 'desc' ? -1 : 1 }
+        : { finalizedAt: -1 };
+
+    // Build filter for finalized BOMs
+    const filter = {
+        status: 'approved',
+        finalizedAt: { $exists: true, $ne: null }
+    };
+
+    // Add project filter if provided
+    if (projectId) {
+        filter.projectId = projectId;
+    }
+
+    const boms = await BOM.find(filter)
+        .populate('projectId', 'projectName projectCode')
+        .populate('createdBy', 'name email')
+        .populate('finalizedBy', 'name email')
+        .populate('items.vendor')
+        .select('_id title projectId status finalizedAt finalizedBy items')
+        .sort(sort)
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean();
+
+    const totalResults = await BOM.countDocuments(filter);
+
+    return {
+        results: boms,
+        page,
+        limit,
+        totalPages: Math.ceil(totalResults / limit),
+        totalResults,
+    };
 }; 
