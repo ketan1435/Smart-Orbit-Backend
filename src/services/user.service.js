@@ -288,9 +288,9 @@ export const createWorkerBySiteEngineerService = async (data, siteEngineerId) =>
     throw new ApiError(httpStatus.FORBIDDEN, 'Only site engineers can create workers');
   }
 
-  // Ensure the user being created has worker or fabricator role
-  if (!['worker', 'fabricator'].includes(data.role)) {
-    throw new ApiError(httpStatus.BAD_REQUEST, 'Site engineers can only create workers or fabricators');
+  // Ensure the user being created has worker, fabricator, or custom role
+  if (!['worker', 'fabricator', 'custom'].includes(data.role)) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Site engineers can only create workers, fabricators, or custom role users');
   }
 
   // Set the createdBy field to the site engineer
@@ -303,7 +303,7 @@ export const getWorkersBySiteEngineerService = async (siteEngineerId, query) => 
   const { page = 1, limit = 10, role, name, email, mobileNumber, isActive } = query;
   const filter = {
     createdBy: siteEngineerId,
-    role: { $in: ['worker', 'fabricator'] }
+    role: { $in: ['worker', 'fabricator', 'custom'] }
   };
 
   // if (role) filter.role = role;
@@ -315,7 +315,7 @@ export const getWorkersBySiteEngineerService = async (siteEngineerId, query) => 
   const skip = (parseInt(page) - 1) * parseInt(limit);
   const [users, total] = await Promise.all([
     User.find(filter)
-      .select('name email mobileNumber role isActive createdAt')
+      .select('name email mobileNumber role subRole state city region address education experience isActive createdAt')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit)),
@@ -344,9 +344,9 @@ export const updateWorkerBySiteEngineerService = async (workerId, siteEngineerId
     throw new ApiError(httpStatus.FORBIDDEN, 'You can only update workers you created');
   }
 
-  // Ensure the role remains worker or fabricator
-  if (data.role && !['worker', 'fabricator'].includes(data.role)) {
-    throw new ApiError(httpStatus.BAD_REQUEST, 'Site engineers can only assign worker or fabricator roles');
+  // Ensure the role remains worker, fabricator, or custom
+  if (data.role && !['worker', 'fabricator', 'custom'].includes(data.role)) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Site engineers can only assign worker, fabricator, or custom roles');
   }
 
   return User.findByIdAndUpdate(workerId, data, { new: true });
