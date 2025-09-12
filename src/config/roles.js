@@ -16,7 +16,23 @@ const allRoles = {
   'scp-user': ['getProjects', 'getBoms', 'acceptProposal', 'rejectProposal', 'manageProjects'],
 };
 
+// Function to get role permissions - handles custom roles by mapping them to fabricator permissions
+const getRolePermissions = (role, subRole = null) => {
+  // If role exists in predefined roles, return its permissions
+  if (allRoles[role]) {
+    return allRoles[role];
+  }
+  
+  // For custom role, return fabricator permissions (subRole is just for display/identification)
+  if (role === 'custom') {
+    return allRoles['fabricator'];
+  }
+  
+  // Fallback to fabricator permissions for any other case
+  return allRoles['fabricator'];
+};
+
 const roles = Object.keys(allRoles);
 const roleRights = new Map(Object.entries(allRoles));
 
-export { roles, roleRights };
+export { roles, roleRights, getRolePermissions };

@@ -71,6 +71,9 @@ export const queryUsers = async (filter, options) => {
         query[key] = { $in: value.map(role => new RegExp(`^${role}$`, 'i')) };
       } else if (['name', 'experience', 'region', 'education'].includes(key)) {
         query[key] = { $regex: value, $options: 'i' };
+      } else if (['state', 'city'].includes(key)) {
+        // Use exact matching for state and city (case-insensitive)
+        query[key] = { $regex: `^${value}$`, $options: 'i' };
       } else {
         query[key] = value;
       }
@@ -79,7 +82,7 @@ export const queryUsers = async (filter, options) => {
 
   const sortOption = sortBy ? { [sortBy.split(':')[0]]: sortBy.split(':')[1] === 'desc' ? -1 : 1 } : { createdAt: -1 };
 
-  const users = await User.find(query).sort(sortOption).skip(skip).limit(limit).populate('createdBy', 'name email role').select('name email role createdBy isActive experience education phoneNumber city state region address profilePicture documents');
+  const users = await User.find(query).sort(sortOption).skip(skip).limit(limit).populate('createdBy', 'name email role').select('name email role subRole createdBy isActive experience education phoneNumber city state region address profilePicture documents');
   const totalResults = await User.countDocuments(query);
 
   return {

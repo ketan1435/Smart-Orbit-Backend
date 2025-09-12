@@ -7,7 +7,12 @@ export const createUser = {
     email: Joi.string().required().email(),
     password: Joi.string().required().custom(password),
     name: Joi.string().required(),
-    role: Joi.string().required().valid(...roles),
+    role: Joi.string().required().valid(...roles, 'custom'),
+    subRole: Joi.string().when('role', {
+      is: 'custom',
+      then: Joi.string().required().min(1).max(50),
+      otherwise: Joi.string().optional()
+    }),
     phoneNumber: Joi.string(),
     state: Joi.string(),
     city: Joi.string(),
@@ -34,6 +39,8 @@ export const getUsers = {
     role: Joi.string(),
     experience: Joi.string(),
     region: Joi.string(),
+    state: Joi.string(),
+    city: Joi.string(),
     education: Joi.string(),
     sortBy: Joi.string(),
     limit: Joi.number().integer(),
@@ -54,7 +61,12 @@ export const updateUser = {
   body: Joi.object()
     .keys({
       email: Joi.string().email(),
-      role: Joi.string().valid(...roles),
+      role: Joi.string().valid(...roles, 'custom'),
+      subRole: Joi.string().when('role', {
+        is: 'custom',
+        then: Joi.string().required().min(1).max(50),
+        otherwise: Joi.string().optional()
+      }),
       password: Joi.string().custom(password),
       name: Joi.string(),
       phoneNumber: Joi.string(),

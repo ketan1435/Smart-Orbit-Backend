@@ -36,8 +36,30 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: roles,
       default: 'user',
+      validate: {
+        validator: function(value) {
+          // Allow predefined roles or 'custom' for custom roles
+          return roles.includes(value) || value === 'custom';
+        },
+        message: 'Role must be a predefined role or "custom"'
+      }
+    },
+    subRole: {
+      type: String,
+      required: function() {
+        return this.role === 'custom';
+      },
+      validate: {
+        validator: function(value) {
+          // If role is custom, subRole is required and must be a non-empty string
+          if (this.role === 'custom') {
+            return typeof value === 'string' && value.trim().length > 0;
+          }
+          return true; // subRole is optional for non-custom roles
+        },
+        message: 'SubRole is required when role is custom'
+      }
     },
     isEmailVerified: {
       type: Boolean,
