@@ -1,6 +1,8 @@
 import express from 'express';
 import { createPO, getPOs, activatePO, deactivatePO } from '../../controllers/po.controller.js';
 import auth from '../../middlewares/auth.js';
+import validate from '../../middlewares/validate.js';
+import * as poValidation from '../../validations/po.validation.js';
 
 const router = express.Router();
 
@@ -64,7 +66,7 @@ const router = express.Router();
  *                 totalPages:
  *                   type: integer
  */
-router.get('/', auth('procurement'), getPOs);
+router.get('/', auth('procurement'), validate(poValidation.getPOs), getPOs);
 
 /**
  * @swagger
@@ -89,6 +91,12 @@ router.get('/', auth('procurement'), getPOs);
  *               vendor:
  *                 type: string
  *                 description: Vendor ID
+ *               vendorName:
+ *                 type: string
+ *                 description: Vendor name
+ *               vendorWhatsappNumber:
+ *                 type: string
+ *                 description: Vendor WhatsApp number
  *               project:
  *                 type: string
  *                 description: Project ID
@@ -97,6 +105,12 @@ router.get('/', auth('procurement'), getPOs);
  *               description:
  *                 type: string
  *                 description: Optional description
+ *               notes:
+ *                 type: string
+ *                 description: Optional notes
+ *               originalBomId:
+ *                 type: string
+ *                 description: Original BOM ID (optional)
  *               documents:
  *                 type: array
  *                 items:
@@ -112,16 +126,80 @@ router.get('/', auth('procurement'), getPOs);
  *                       type: string
  *                       description: File type (e.g., pdf, document)
  *                 description: Array of file references (not binary)
+ *               items:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   required:
+ *                     - itemName
+ *                     - units
+ *                     - quantity
+ *                     - unitCost
+ *                   properties:
+ *                     itemName:
+ *                       type: string
+ *                       description: Name of the item
+ *                     units:
+ *                       type: string
+ *                       description: Unit of measurement
+ *                     quantity:
+ *                       type: number
+ *                       minimum: 0
+ *                       description: Quantity of the item
+ *                     unitCost:
+ *                       type: number
+ *                       minimum: 0
+ *                       description: Cost per unit
+ *                     originalBomItemId:
+ *                       type: string
+ *                       description: Original BOM item ID (optional)
+ *                     vendor:
+ *                       type: string
+ *                       description: Vendor ID for this item
+ *                     vendorName:
+ *                       type: string
+ *                       description: Vendor name for this item
+ *                     vendorWhatsappNumber:
+ *                       type: string
+ *                       description: Vendor WhatsApp number for this item
+ *                     selected:
+ *                       type: boolean
+ *                       default: true
+ *                       description: Whether this item is selected for the PO
+ *                 description: Array of PO items
  *           example:
  *             vendor: "64f31a7b7e5d6e001f7e1234"
+ *             vendorName: "John Doe"
+ *             vendorWhatsappNumber: "9876543210"
  *             project: "64f31a7b7e5d6e001f7e5678"
  *             name: "PO for Steel"
  *             description: "Urgent steel order"
+ *             notes: "Please deliver by end of week"
+ *             originalBomId: "64f31a7b7e5d6e001f7e9999"
  *             documents:
  *               - key: "uploads/tmp/po-files/uuid1.pdf"
  *                 fileType: "pdf"
  *               - key: "uploads/tmp/po-files/uuid2.pdf"
  *                 fileType: "pdf"
+ *             items:
+ *               - originalBomItemId: "64f31a7b7e5d6e001f7e8888"
+ *                 itemName: "Steel Rods"
+ *                 units: "kg"
+ *                 quantity: 100
+ *                 unitCost: 50.00
+ *                 vendor: "64f31a7b7e5d6e001f7e1234"
+ *                 vendorName: "John Doe"
+ *                 vendorWhatsappNumber: "9876543210"
+ *                 selected: true
+ *               - originalBomItemId: "64f31a7b7e5d6e001f7e8889"
+ *                 itemName: "Cement"
+ *                 units: "bags"
+ *                 quantity: 50
+ *                 unitCost: 300.00
+ *                 vendor: "64f31a7b7e5d6e001f7e1234"
+ *                 vendorName: "John Doe"
+ *                 vendorWhatsappNumber: "9876543210"
+ *                 selected: true
  *     responses:
  *       201:
  *         description: PO created successfully
@@ -168,7 +246,7 @@ router.get('/', auth('procurement'), getPOs);
  *                       type: string
  *                       format: date-time
  */
-router.post('/', auth('procurement'), createPO);
+router.post('/', auth('procurement'), validate(poValidation.createPO), createPO);
 
 // /**
 //  * @swagger
@@ -240,7 +318,7 @@ router.post('/', auth('procurement'), createPO);
  *       404:
  *         description: PO not found
  */
-router.patch('/:id/activate', auth('procurement'), activatePO);
+router.patch('/:id/activate', auth('procurement'), validate(poValidation.activatePO), activatePO);
 
 /**
  * @swagger
@@ -276,6 +354,6 @@ router.patch('/:id/activate', auth('procurement'), activatePO);
  *       404:
  *         description: PO not found
  */
-router.patch('/:id/deactivate', auth('procurement'), deactivatePO);
+router.patch('/:id/deactivate', auth('procurement'), validate(poValidation.deactivatePO), deactivatePO);
 
 export default router; 

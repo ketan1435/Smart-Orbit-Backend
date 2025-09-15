@@ -13,6 +13,8 @@ import {
 } from '../services/quote.service.js';
 import catchAsync from '../utils/catchAsync.js';
 import ApiError from '../utils/ApiError.js';
+import { logActivity } from '../middlewares/activityLog.middleware.js';
+import Quote from '../models/quote.model.js';
 
 /**
  * Create a new quote
@@ -106,7 +108,7 @@ const updateQuoteController = catchAsync(async (req, res) => {
 const deleteQuoteController = catchAsync(async (req, res) => {
     const { id } = req.params;
 
-    const result = await deleteQuote(id);
+    const result = await deleteQuote(req, id);
 
     res.status(200).json({
         status: 1,
@@ -159,7 +161,7 @@ const reviewQuoteController = catchAsync(async (req, res) => {
     const reviewData = req.body;
     const reviewerId = req.user.id;
 
-    const quote = await reviewQuote(id, reviewerId, reviewData);
+    const quote = await reviewQuote(req, id, reviewerId, reviewData);
 
     res.status(200).json({
         status: 1,
@@ -297,7 +299,192 @@ const submitQuoteController = catchAsync(async (req, res) => {
         throw new ApiError(403, 'You can only submit your own quotes');
     }
 
+    // Store original status for change detection
+    const originalStatus = quote.status;
+
     const updatedQuote = await updateQuote(id, { status: 'submitted' });
+
+    // Log the quote submission activity
+    try {
+        // Get populated data for logging
+        const populatedQuote = await Quote.findById(id)
+            .populate('vendorId', 'storeName name mobileNumber email address city state')
+            .populate('siteEngineerId', 'name email')
+            .populate('bomId', 'title status projectId')
+            .populate('projectId', 'projectName projectCode customerName')
+            .populate('reviewedBy', 'name email');
+
+        await logActivity(req, {
+            action: 'submit_quote',
+            targetModel: 'Quote',
+            targetId: id,
+            targetName: quote.quoteTitle || 'Quote',
+            description: `${req.user?.role === 'admin' ? 'Admin' : req.user?.role === 'site-engineer' ? 'Site Engineer' : req.user?.role === 'planning-engineer' ? 'Planning Engineer' : 'User'} ${req.user?.name || 'Unknown'} (${req.user?.email || 'unknown@example.com'}) submitted quote "${quote.quoteTitle}" for review to vendor: ${populatedQuote?.vendorId?.storeName || 'Unknown Vendor'}`,
+            changes: {
+                status: {
+                    from: originalStatus,
+                    to: 'submitted'
+                },
+                submittedAt: {
+                    from: null,
+                    to: new Date()
+                },
+                updatedAt: {
+                    from: quote.updatedAt,
+                    to: new Date()
+                }
+            },
+            previousValues: {
+                status: originalStatus,
+                submittedAt: null,
+                updatedAt: quote.updatedAt
+            },
+            newValues: {
+                status: 'submitted',
+                submittedAt: new Date(),
+                updatedAt: new Date()
+            },
+            metadata: {
+                projectId: populatedQuote?.projectId?._id,
+                user: {
+                    userId: req.user?._id,
+                    userName: req.user?.name,
+                    userEmail: req.user?.email,
+                    userRole: req.user?.role,
+                    userType: req.user?.role === 'admin' ? 'Admin' : req.user?.role === 'site-engineer' ? 'Site Engineer' : req.user?.role === 'planning-engineer' ? 'Planning Engineer' : 'User',
+                    userPhone: req.user?.phone
+                },
+                originalQuoteData: {
+                    quoteId: quote._id,
+                    quoteTitle: quote.quoteTitle,
+                    bomId: quote.bomId,
+                    projectId: quote.projectId,
+                    vendorId: quote.vendorId,
+                    siteEngineerId: quote.siteEngineerId,
+                    createdBy: quote.createdBy,
+                    creatorRole: quote.creatorRole,
+                    totalAmount: quote.totalAmount,
+                    currency: quote.currency,
+                    validityDays: quote.validityDays,
+                    validUntil: quote.validUntil,
+                    overallDeliveryTime: quote.overallDeliveryTime,
+                    overallDeliveryCost: quote.overallDeliveryCost,
+                    overallPaymentTerms: quote.overallPaymentTerms,
+                    overallCreditDays: quote.overallCreditDays,
+                    status: originalStatus,
+                    reviewedBy: quote.reviewedBy,
+                    reviewedAt: quote.reviewedAt,
+                    reviewNotes: quote.reviewNotes,
+                    siteEngineerNotes: quote.siteEngineerNotes,
+                    notes: quote.notes,
+                    isActive: quote.isActive,
+                    quoteItemsCount: quote.quoteItems?.length || 0,
+                    quoteAttachmentsCount: quote.quoteAttachments?.length || 0,
+                    createdAt: quote.createdAt,
+                    updatedAt: quote.updatedAt
+                },
+                submittedQuoteData: {
+                    quoteId: quote._id,
+                    quoteTitle: quote.quoteTitle,
+                    bomId: quote.bomId,
+                    projectId: quote.projectId,
+                    vendorId: quote.vendorId,
+                    siteEngineerId: quote.siteEngineerId,
+                    createdBy: quote.createdBy,
+                    creatorRole: quote.creatorRole,
+                    totalAmount: quote.totalAmount,
+                    currency: quote.currency,
+                    validityDays: quote.validityDays,
+                    validUntil: quote.validUntil,
+                    overallDeliveryTime: quote.overallDeliveryTime,
+                    overallDeliveryCost: quote.overallDeliveryCost,
+                    overallPaymentTerms: quote.overallPaymentTerms,
+                    overallCreditDays: quote.overallCreditDays,
+                    status: 'submitted',
+                    reviewedBy: quote.reviewedBy,
+                    reviewedAt: quote.reviewedAt,
+                    reviewNotes: quote.reviewNotes,
+                    siteEngineerNotes: quote.siteEngineerNotes,
+                    notes: quote.notes,
+                    isActive: quote.isActive,
+                    quoteItemsCount: quote.quoteItems?.length || 0,
+                    quoteAttachmentsCount: quote.quoteAttachments?.length || 0,
+                    createdAt: quote.createdAt,
+                    updatedAt: new Date()
+                },
+                projectData: {
+                    projectId: populatedQuote?.projectId?._id,
+                    projectName: populatedQuote?.projectId?.projectName,
+                    projectCode: populatedQuote?.projectId?.projectCode,
+                    customerName: populatedQuote?.projectId?.customerName
+                },
+                bomData: {
+                    bomId: populatedQuote?.bomId?._id,
+                    bomTitle: populatedQuote?.bomId?.title,
+                    bomStatus: populatedQuote?.bomId?.status
+                },
+                vendorData: {
+                    vendorId: populatedQuote?.vendorId?._id,
+                    vendorName: populatedQuote?.vendorId?.name,
+                    storeName: populatedQuote?.vendorId?.storeName,
+                    mobileNumber: populatedQuote?.vendorId?.mobileNumber,
+                    email: populatedQuote?.vendorId?.email,
+                    address: populatedQuote?.vendorId?.address,
+                    city: populatedQuote?.vendorId?.city,
+                    state: populatedQuote?.vendorId?.state
+                },
+                siteEngineerData: {
+                    siteEngineerId: populatedQuote?.siteEngineerId?._id,
+                    siteEngineerName: populatedQuote?.siteEngineerId?.name,
+                    siteEngineerEmail: populatedQuote?.siteEngineerId?.email
+                },
+                quoteSubmission: {
+                    quoteSubmitted: true,
+                    submittedBy: req.user?._id,
+                    submittedByModel: req.user?.role === 'admin' ? 'Admin' : req.user?.role === 'site-engineer' ? 'Site Engineer' : req.user?.role === 'planning-engineer' ? 'Planning Engineer' : 'User',
+                    submittedAt: new Date(),
+                    quoteTitle: quote.quoteTitle,
+                    vendorName: populatedQuote?.vendorId?.storeName,
+                    projectName: populatedQuote?.projectId?.projectName,
+                    totalAmount: quote.totalAmount,
+                    currency: quote.currency,
+                    validityDays: quote.validityDays,
+                    originalStatus: originalStatus,
+                    newStatus: 'submitted',
+                    statusChanged: originalStatus !== 'submitted',
+                    submissionComplete: true
+                },
+                submissionData: {
+                    submissionStatus: 'submitted',
+                    submissionTimestamp: new Date(),
+                    submissionComplete: true,
+                    awaitingReview: true,
+                    reviewRequired: true
+                },
+                financialData: {
+                    totalAmount: quote.totalAmount,
+                    currency: quote.currency,
+                    overallDeliveryCost: quote.overallDeliveryCost,
+                    overallPaymentTerms: quote.overallPaymentTerms,
+                    overallCreditDays: quote.overallCreditDays,
+                    validityDays: quote.validityDays,
+                    validUntil: quote.validUntil
+                },
+                workflow: {
+                    quoteSubmission: true,
+                    quoteManagement: true,
+                    procurementWorkflow: true,
+                    vendorQuotation: true,
+                    bomQuotation: true,
+                    siteEngineerSubmission: true,
+                    awaitingPlanningEngineerReview: true,
+                    submissionComplete: true
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error logging quote submission:', error);
+    }
 
     res.status(200).json({
         status: 1,
@@ -316,7 +503,7 @@ const acceptQuoteController = catchAsync(async (req, res) => {
     const { reviewNotes } = req.body;
     const reviewerId = req.user.id;
 
-    const quote = await reviewQuote(id, reviewerId, {
+    const quote = await reviewQuote(req, id, reviewerId, {
         status: 'accepted',
         reviewNotes
     });
@@ -338,7 +525,7 @@ const rejectQuoteController = catchAsync(async (req, res) => {
     const { reviewNotes } = req.body;
     const reviewerId = req.user.id;
 
-    const quote = await reviewQuote(id, reviewerId, {
+    const quote = await reviewQuote(req, id, reviewerId, {
         status: 'rejected',
         reviewNotes
     });

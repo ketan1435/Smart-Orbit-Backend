@@ -7,7 +7,7 @@ import pick from '../utils/pick.js';
  * Create a BOM for a project
  */
 export const createBOM = catchAsync(async (req, res) => {
-    const bom = await bomService.createBOM(req.params.projectId, req.body, req.user);
+    const bom = await bomService.createBOM(req, req.params.projectId, req.body, req.user);
     res.status(httpStatus.CREATED).send({
         status: 1,
         message: 'BOM created successfully',
@@ -57,7 +57,7 @@ export const getBOMForSiteEngineer = catchAsync(async (req, res) => {
  * Update a BOM
  */
 export const updateBOM = catchAsync(async (req, res) => {
-    const bom = await bomService.updateBOM(req.params.projectId, req.params.bomId, req.body, req.user);
+    const bom = await bomService.updateBOM(req, req.params.projectId, req.params.bomId, req.body, req.user);
     res.status(httpStatus.OK).send({
         status: 1,
         message: 'BOM updated successfully',
@@ -69,7 +69,7 @@ export const updateBOM = catchAsync(async (req, res) => {
  * Update BOM status
  */
 export const updateBOMStatus = catchAsync(async (req, res) => {
-    const bom = await bomService.updateBOMStatus(req.params.projectId, req.params.bomId, req.body, req.user);
+    const bom = await bomService.updateBOMStatus(req, req.params.projectId, req.params.bomId, req.body, req.user);
     res.status(httpStatus.OK).send({
         status: 1,
         message: 'BOM status updated successfully',
@@ -81,7 +81,7 @@ export const updateBOMStatus = catchAsync(async (req, res) => {
  * Delete a BOM
  */
 export const deleteBOM = catchAsync(async (req, res) => {
-    await bomService.deleteBOM(req.params.projectId, req.params.bomId, req.user);
+    await bomService.deleteBOM(req, req.params.projectId, req.params.bomId, req.user);
     res.status(httpStatus.NO_CONTENT).send();
 });
 
@@ -102,7 +102,7 @@ export const getReusableBOMs = catchAsync(async (req, res) => {
  * Submit BOM for admin review
  */
 export const submitBOM = catchAsync(async (req, res) => {
-    const bom = await bomService.submitBOM(req.params.projectId, req.params.bomId, req.user);
+    const bom = await bomService.submitBOM(req, req.params.projectId, req.params.bomId, req.user);
     res.status(httpStatus.OK).send({
         status: 1,
         message: 'BOM submitted for review successfully',
@@ -128,7 +128,7 @@ export const getSubmittedBOMs = catchAsync(async (req, res) => {
  * Review BOM (admin approve/reject)
  */
 export const reviewBOM = catchAsync(async (req, res) => {
-    const bom = await bomService.reviewBOM(req.params.projectId, req.params.bomId, req.body, req.user);
+    const bom = await bomService.reviewBOM(req, req.params.projectId, req.params.bomId, req.body, req.user);
     res.status(httpStatus.OK).send({
         status: 1,
         message: `BOM ${req.body.status} successfully`,
@@ -167,7 +167,7 @@ export const getProcurementTeam = catchAsync(async (req, res) => {
  * Assign BOM to site engineer
  */
 export const assignBOMToSiteEngineer = catchAsync(async (req, res) => {
-    const bom = await bomService.assignBOMToSiteEngineer(req.params.projectId, req.params.bomId, req.body, req.user);
+    const bom = await bomService.assignBOMToSiteEngineer(req, req.params.projectId, req.params.bomId, req.body, req.user);
     res.status(httpStatus.OK).send({
         status: 1,
         message: 'BOM assigned to site engineer successfully',
@@ -202,7 +202,7 @@ export const getSiteEngineerBOMs = catchAsync(async (req, res) => {
  * Update BOM by site engineer
  */
 export const updateBOMBySiteEngineer = catchAsync(async (req, res) => {
-    const bom = await bomService.updateBOMBySiteEngineer(req.params.projectId, req.params.bomId, req.body, req.user);
+    const bom = await bomService.updateBOMBySiteEngineer(req, req.params.projectId, req.params.bomId, req.body, req.user);
     res.status(httpStatus.OK).send({
         status: 1,
         message: 'BOM updated by site engineer successfully',
@@ -214,7 +214,7 @@ export const updateBOMBySiteEngineer = catchAsync(async (req, res) => {
  * Submit updated BOM to planning engineer
  */
 export const submitUpdatedBOMToPlanning = catchAsync(async (req, res) => {
-    const bom = await bomService.submitUpdatedBOMToPlanning(req.params.projectId, req.params.bomId, req.body, req.user);
+    const bom = await bomService.submitUpdatedBOMToPlanning(req, req.params.projectId, req.params.bomId, req.body, req.user);
     res.status(httpStatus.OK).send({
         status: 1,
         message: 'Updated BOM submitted to planning engineer successfully',
@@ -296,6 +296,7 @@ export const createFinalizedBOM = catchAsync(async (req, res) => {
     });
 
     const finalizedBOM = await bomService.createFinalizedBOM(
+        req,
         req.params.projectId,
         originalBomId,
         finalizedItems,

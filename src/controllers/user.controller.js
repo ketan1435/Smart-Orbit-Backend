@@ -6,7 +6,7 @@ import { userService } from '../services/index.js';
 import { createWorkerBySiteEngineerService, getWorkersBySiteEngineerService, updateWorkerBySiteEngineerService, activateWorkerBySiteEngineerService, deactivateWorkerBySiteEngineerService, getScpUsersService } from '../services/user.service.js';
 
 const createUser = catchAsync(async (req, res) => {
-  const user = await userService.createUser(req.body);
+  const user = await userService.createUser(req, req.body);
   res.status(httpStatus.CREATED).send({ status: 1, user });
 });
 
@@ -34,7 +34,7 @@ const updateUser = catchAsync(async (req, res) => {
 });
 
 const deleteUser = catchAsync(async (req, res) => {
-  await userService.deleteUserById(req.params.userId);
+  await userService.deleteUserById(req, req.params.userId);
   res.status(httpStatus.NO_CONTENT).send();
 });
 
@@ -47,12 +47,12 @@ const searchUsers = catchAsync(async (req, res) => {
 });
 
 export const activateUserController = catchAsync(async (req, res) => {
-  const user = await userService.activateUser(req.params.userId);
+  const user = await userService.activateUser(req, req.params.userId);
   res.send({ status: 1, user });
 });
 
 export const deactivateUserController = catchAsync(async (req, res) => {
-  const user = await userService.deactivateUser(req.params.userId);
+  const user = await userService.deactivateUser(req, req.params.userId);
   res.send({ status: 1, user });
 });
 
@@ -110,7 +110,7 @@ const getSiteEngineers = catchAsync(async (req, res) => {
   console.log('Request URL:', req.originalUrl);
   console.log('Request method:', req.method);
   console.log('Request user:', req.user);
-  
+
   const filter = pick(req.query, ['name']);
   const options = pick(req.query, ['sortBy', 'limit', 'page']);
   // a site engineer should be active to be assigned a task
@@ -119,7 +119,7 @@ const getSiteEngineers = catchAsync(async (req, res) => {
 });
 
 export const createWorker = catchAsync(async (req, res) => {
-  const worker = await createWorkerBySiteEngineerService(req.body, req.user.id);
+  const worker = await createWorkerBySiteEngineerService(req, req.body, req.user.id);
   res.status(httpStatus.CREATED).json({
     status: 1,
     message: 'User created successfully',
@@ -137,7 +137,7 @@ export const getMyWorkers = catchAsync(async (req, res) => {
 });
 
 export const updateWorker = catchAsync(async (req, res) => {
-  const worker = await updateWorkerBySiteEngineerService(req.params.id, req.user.id, req.body);
+  const worker = await updateWorkerBySiteEngineerService(req, req.params.id, req.user.id, req.body);
   if (!worker) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Worker not found');
   }
@@ -149,7 +149,7 @@ export const updateWorker = catchAsync(async (req, res) => {
 });
 
 export const activateWorker = catchAsync(async (req, res) => {
-  const worker = await activateWorkerBySiteEngineerService(req.params.id, req.user.id);
+  const worker = await activateWorkerBySiteEngineerService(req, req.params.id, req.user.id);
   if (!worker) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Worker not found');
   }
@@ -161,7 +161,7 @@ export const activateWorker = catchAsync(async (req, res) => {
 });
 
 export const deactivateWorker = catchAsync(async (req, res) => {
-  const worker = await deactivateWorkerBySiteEngineerService(req.params.id, req.user.id);
+  const worker = await deactivateWorkerBySiteEngineerService(req, req.params.id, req.user.id);
   if (!worker) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Worker not found');
   }
@@ -193,7 +193,7 @@ export const updateUserById = catchAsync(async (req, res) => {
     delete updateBody.password;
   }
 
-  const updatedUser = await userService.updateUserById(userId, updateBody);
+  const updatedUser = await userService.updateUserById(req, userId, updateBody);
   res.send({ status: 1, user: updatedUser });
 });
 
@@ -213,7 +213,7 @@ export const resetUserPasswordById = catchAsync(async (req, res) => {
     throw new ApiError(httpStatus.FORBIDDEN, 'Not authorized to reset passwords');
   }
 
-  const updatedUser = await userService.resetUserPasswordById(userId, password);
+  const updatedUser = await userService.resetUserPasswordById(req, userId, password);
   res.send({ status: 1, user: updatedUser });
 });
 

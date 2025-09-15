@@ -4,7 +4,7 @@ import ApiError from '../utils/ApiError.js';
 // import { setSelectedStoreService } from '../services/admin.service.js';
 
 export const registerAdmin = catchAsync(async (req, res) => {
-  const admin = await adminService.register(req.body);
+  const admin = await adminService.register(req, req.body);
   res.status(201).json({ status: 1, message: 'Admin registered successfully', admin });
 });
 

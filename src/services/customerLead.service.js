@@ -17,6 +17,7 @@ import { createUser } from './user.service.js';
 import ProjectAssignmentPayment from '../models/projectAssignmentPaymant.model.js';
 import { STATUS_ENUM, STATUS_VALUES } from '../config/enums/status.enum.js';
 import { updateCustomerStatusWithCascade } from './statusCascade.service.js';
+import { logActivity } from '../middlewares/activityLog.middleware.js';
 
 
 export const createCustomerLeadService = async (req, session) => {
@@ -93,6 +94,55 @@ export const createCustomerLeadService = async (req, session) => {
     await Requirement.findByIdAndUpdate(requirementId, {
       project: project._id,
     }, { session });
+
+    // Log requirement creation
+    try {
+      await logActivity(req, {
+        action: 'create',
+        targetModel: 'Requirement',
+        targetId: requirementId,
+        targetName: reqData.projectName,
+        description: `Created requirement: ${reqData.projectName} for customer lead: ${lead.customerName}`,
+        metadata: {
+          requirementData: {
+            projectName: reqData.projectName,
+            requirementType: reqData.requirementType,
+            urgency: reqData.urgency,
+            budget: reqData.budget,
+            fileCount: files.length
+          },
+          leadId: lead._id,
+          leadName: lead.customerName,
+          projectId: project._id
+        }
+      });
+    } catch (error) {
+      console.error('Error logging requirement creation:', error);
+    }
+
+    // Log project creation
+    try {
+      await logActivity(req, {
+        action: 'create',
+        targetModel: 'Project',
+        targetId: project._id,
+        targetName: reqData.projectName,
+        description: `Created project: ${reqData.projectName} for customer lead: ${lead.customerName}`,
+        metadata: {
+          projectId: project._id,
+          projectData: {
+            projectName: reqData.projectName,
+            budget: reqData.budget ? parseFloat(reqData.budget.replace(/[^0-9.-]+/g, '')) : 0,
+            status: 'draft'
+          },
+          leadId: lead._id,
+          leadName: lead.customerName,
+          requirementId: requirementId
+        }
+      });
+    } catch (error) {
+      console.error('Error logging project creation:', error);
+    }
 
     // 5.1 Handle SCP user sharing
     // Share whenever an SCP user is selected during lead creation, regardless of sendToScp flag
@@ -209,6 +259,34 @@ export const createCustomerLeadService = async (req, session) => {
       }
       await project.save({ session });
 
+      // Log site visits creation
+      try {
+        for (const siteVisit of createdSiteVisits) {
+          await logActivity(req, {
+            action: 'create',
+            targetModel: 'SiteVisit',
+            targetId: siteVisit._id,
+            targetName: `Site visit for ${reqData.projectName}`,
+            description: `Created site visit for project: ${reqData.projectName} with site engineer`,
+            metadata: {
+              siteVisitData: {
+                projectName: reqData.projectName,
+                siteEngineer: siteVisit.siteEngineer,
+                visitDate: siteVisit.visitDate,
+                visitStartDate: siteVisit.visitStartDate,
+                visitEndDate: siteVisit.visitEndDate,
+                hasRequirementEditAccess: siteVisit.hasRequirementEditAccess
+              },
+              leadId: lead._id,
+              leadName: lead.customerName,
+              requirementId: requirementId
+            }
+          });
+        }
+      } catch (error) {
+        console.error('Error logging site visit creation:', error);
+      }
+
       // 5.4 Add site engineers with edit access to requirement.sharedWith
       for (const siteEngineerId of siteEngineersToShare) {
         await Requirement.updateOne(
@@ -306,6 +384,36 @@ export const createCustomerLeadService = async (req, session) => {
     logger.error(`Failed to delete temporary file during cleanup: ${err.message}`);
   });
 
+  // Log the customer lead creation
+  try {
+    await logActivity(req, {
+      action: 'create',
+      targetModel: 'CustomerLead',
+      targetId: lead._id,
+      targetName: lead.customerName || 'Unknown Customer',
+      description: `Created customer lead: ${lead.customerName} (${lead.email})`,
+      metadata: {
+        leadData: {
+          customerName: lead.customerName,
+          email: lead.email,
+          mobileNumber: lead.mobileNumber,
+          state: lead.state,
+          city: lead.city,
+          townVillage: lead.townVillage,
+          status: lead.status,
+          leadSource: lead.leadSource
+        },
+        requirementsCount: requirements.length,
+        projectsCreated: requirements.length,
+        createdBy: req.user.id,
+        createdByModel: req.user.role === 'Admin' ? 'Admin' : 'User'
+      }
+    });
+  } catch (error) {
+    console.error('Error logging customer lead creation:', error);
+    // Don't throw error - logging should not break the main operation
+  }
+
   return {
     status: httpStatus.CREATED,
     body: { status: 1, message: 'Customer lead created successfully', data: lead },
@@ -370,6 +478,9 @@ export const updateCustomerLeadService = async (req, session) => {
     throw new ApiError(httpStatus.NOT_FOUND, 'Customer lead not found');
   }
 
+  // Store original lead data for change detection
+  const originalLead = { ...lead.toObject() };
+
   // Handle town field mapping
   const { town, requirementsToUpdate, ...restUpdateBody } = updateBody;
   if (town !== undefined) {
@@ -395,13 +506,20 @@ export const updateCustomerLeadService = async (req, session) => {
     'status',
   ];
 
+  // Track which fields are being updated
+  const updatedFields = {};
   for (const key of Object.keys(restUpdateBody)) {
     if (allowedFields.includes(key)) {
+      updatedFields[key] = {
+        from: originalLead[key],
+        to: restUpdateBody[key]
+      };
       lead[key] = restUpdateBody[key];
     }
   }
 
   // Handle requirement updates if provided
+  const updatedRequirements = [];
   if (requirementsToUpdate && Array.isArray(requirementsToUpdate)) {
     for (const reqUpdate of requirementsToUpdate) {
       const requirement = await Requirement.findById(reqUpdate._id);
@@ -414,17 +532,97 @@ export const updateCustomerLeadService = async (req, session) => {
         throw new ApiError(httpStatus.BAD_REQUEST, `Requirement ${reqUpdate._id} does not belong to this lead`);
       }
 
+      // Store original requirement data for change detection
+      const originalRequirement = { ...requirement.toObject() };
+
       // Update the requirement fields
       const { _id, ...updateFields } = reqUpdate;
       Object.assign(requirement, updateFields);
 
       await requirement.save({ session });
+
+      // Track requirement updates for logging
+      updatedRequirements.push({
+        requirementId: requirement._id,
+        projectName: requirement.projectName,
+        originalData: originalRequirement,
+        updatedData: requirement.toObject(),
+        changes: Object.keys(updateFields).reduce((acc, key) => {
+          if (originalRequirement[key] !== updateFields[key]) {
+            acc[key] = {
+              from: originalRequirement[key],
+              to: updateFields[key]
+            };
+          }
+          return acc;
+        }, {})
+      });
     }
   }
 
   // If status is being updated, use cascade logic
   if (isStatusUpdate) {
     const result = await updateCustomerStatusWithCascade(id, restUpdateBody.status, session);
+
+    // Log customer lead status update with cascade
+    try {
+      await logActivity(req, {
+        action: 'update',
+        targetModel: 'CustomerLead',
+        targetId: lead._id,
+        targetName: lead.customerName || 'Unknown Customer',
+        description: `Updated customer lead status: ${lead.customerName} - ${originalLead.status} → ${restUpdateBody.status} (cascade updated ${result.projectsUpdated} projects)`,
+        changes: updatedFields,
+        metadata: {
+          leadData: {
+            customerName: lead.customerName,
+            email: lead.email,
+            status: lead.status,
+            previousStatus: originalLead.status,
+            newStatus: restUpdateBody.status
+          },
+          statusUpdate: true,
+          cascadeUpdate: true,
+          projectsUpdated: result.projectsUpdated,
+          requirementsUpdated: updatedRequirements.length,
+          updatedFields: Object.keys(updatedFields),
+          updatedBy: req.user.id,
+          updatedByModel: req.user.role === 'Admin' ? 'Admin' : 'User'
+        }
+      });
+    } catch (error) {
+      console.error('Error logging customer lead status update:', error);
+    }
+
+    // Log individual requirement updates if any
+    for (const reqUpdate of updatedRequirements) {
+      try {
+        await logActivity(req, {
+          action: 'update',
+          targetModel: 'Requirement',
+          targetId: reqUpdate.requirementId,
+          targetName: reqUpdate.projectName,
+          description: `Updated requirement: ${reqUpdate.projectName} for customer lead: ${lead.customerName}`,
+          changes: reqUpdate.changes,
+          metadata: {
+            requirementData: {
+              projectName: reqUpdate.projectName,
+              requirementType: reqUpdate.updatedData.requirementType,
+              urgency: reqUpdate.updatedData.urgency,
+              budget: reqUpdate.updatedData.budget
+            },
+            leadId: lead._id,
+            leadName: lead.customerName,
+            updatedFields: Object.keys(reqUpdate.changes),
+            updatedBy: req.user.id,
+            updatedByModel: req.user.role === 'Admin' ? 'Admin' : 'User'
+          }
+        });
+      } catch (error) {
+        console.error('Error logging requirement update:', error);
+      }
+    }
+
     return {
       status: httpStatus.OK,
       body: {
@@ -437,6 +635,66 @@ export const updateCustomerLeadService = async (req, session) => {
   } else {
     // Regular update without status change
     await lead.save({ session });
+
+    // Log customer lead update
+    try {
+      await logActivity(req, {
+        action: 'update',
+        targetModel: 'CustomerLead',
+        targetId: lead._id,
+        targetName: lead.customerName || 'Unknown Customer',
+        description: `Updated customer lead: ${lead.customerName} (${lead.email})`,
+        changes: updatedFields,
+        metadata: {
+          leadData: {
+            customerName: lead.customerName,
+            email: lead.email,
+            mobileNumber: lead.mobileNumber,
+            state: lead.state,
+            city: lead.city,
+            townVillage: lead.townVillage,
+            status: lead.status,
+            leadSource: lead.leadSource
+          },
+          requirementsUpdated: updatedRequirements.length,
+          updatedFields: Object.keys(updatedFields),
+          updatedBy: req.user.id,
+          updatedByModel: req.user.role === 'Admin' ? 'Admin' : 'User'
+        }
+      });
+    } catch (error) {
+      console.error('Error logging customer lead update:', error);
+    }
+
+    // Log individual requirement updates if any
+    for (const reqUpdate of updatedRequirements) {
+      try {
+        await logActivity(req, {
+          action: 'update',
+          targetModel: 'Requirement',
+          targetId: reqUpdate.requirementId,
+          targetName: reqUpdate.projectName,
+          description: `Updated requirement: ${reqUpdate.projectName} for customer lead: ${lead.customerName}`,
+          changes: reqUpdate.changes,
+          metadata: {
+            requirementData: {
+              projectName: reqUpdate.projectName,
+              requirementType: reqUpdate.updatedData.requirementType,
+              urgency: reqUpdate.updatedData.urgency,
+              budget: reqUpdate.updatedData.budget
+            },
+            leadId: lead._id,
+            leadName: lead.customerName,
+            updatedFields: Object.keys(reqUpdate.changes),
+            updatedBy: req.user.id,
+            updatedByModel: req.user.role === 'Admin' ? 'Admin' : 'User'
+          }
+        });
+      } catch (error) {
+        console.error('Error logging requirement update:', error);
+      }
+    }
+
     return {
       status: httpStatus.OK,
       body: {
@@ -449,27 +707,81 @@ export const updateCustomerLeadService = async (req, session) => {
 };
 
 
-export const activateCustomerLeadService = async (id) => {
+export const activateCustomerLeadService = async (req, id) => {
   const lead = await getCustomerLeadByIdService(id);
   if (!lead) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Customer lead not found');
   }
+
+  const originalStatus = lead.status;
   lead.status = STATUS_ENUM.ACTIVE;
   await lead.save();
+
+  // Log the activation
+  try {
+    await logActivity(req, {
+      action: 'activate',
+      targetModel: 'CustomerLead',
+      targetId: lead._id,
+      targetName: lead.customerName || 'Unknown Customer',
+      description: `Activated customer lead: ${lead.customerName} (${lead.email})`,
+      metadata: {
+        leadData: {
+          customerName: lead.customerName,
+          email: lead.email,
+          previousStatus: originalStatus,
+          newStatus: STATUS_ENUM.ACTIVE
+        },
+        statusChange: true,
+        activatedBy: req.user.id,
+        activatedByModel: req.user.role === 'Admin' ? 'Admin' : 'User'
+      }
+    });
+  } catch (error) {
+    console.error('Error logging customer lead activation:', error);
+  }
+
   return lead;
 };
 
-export const deactivateCustomerLeadService = async (id) => {
+export const deactivateCustomerLeadService = async (req, id) => {
   const lead = await getCustomerLeadByIdService(id);
   if (!lead) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Customer lead not found');
   }
+
+  const originalStatus = lead.status;
   lead.status = STATUS_ENUM.INACTIVE;
   await lead.save();
+
+  // Log the deactivation
+  try {
+    await logActivity(req, {
+      action: 'deactivate',
+      targetModel: 'CustomerLead',
+      targetId: lead._id,
+      targetName: lead.customerName || 'Unknown Customer',
+      description: `Deactivated customer lead: ${lead.customerName} (${lead.email})`,
+      metadata: {
+        leadData: {
+          customerName: lead.customerName,
+          email: lead.email,
+          previousStatus: originalStatus,
+          newStatus: STATUS_ENUM.INACTIVE
+        },
+        statusChange: true,
+        deactivatedBy: req.user.id,
+        deactivatedByModel: req.user.role === 'Admin' ? 'Admin' : 'User'
+      }
+    });
+  } catch (error) {
+    console.error('Error logging customer lead deactivation:', error);
+  }
+
   return lead;
 };
 
-export const updateCustomerLeadStatusService = async (id, newStatus) => {
+export const updateCustomerLeadStatusService = async (req, id, newStatus) => {
   const lead = await getCustomerLeadByIdService(id);
   if (!lead) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Customer lead not found');
@@ -479,12 +791,44 @@ export const updateCustomerLeadStatusService = async (id, newStatus) => {
     throw new ApiError(httpStatus.BAD_REQUEST, `Invalid status. Must be one of: ${STATUS_VALUES.join(', ')}`);
   }
 
+  const originalStatus = lead.status;
   lead.status = newStatus;
   await lead.save();
+
+  // Log the status update
+  try {
+    await logActivity(req, {
+      action: 'update',
+      targetModel: 'CustomerLead',
+      targetId: lead._id,
+      targetName: lead.customerName || 'Unknown Customer',
+      description: `Updated customer lead status: ${lead.customerName} - ${originalStatus} → ${newStatus}`,
+      changes: {
+        status: {
+          from: originalStatus,
+          to: newStatus
+        }
+      },
+      metadata: {
+        leadData: {
+          customerName: lead.customerName,
+          email: lead.email,
+          previousStatus: originalStatus,
+          newStatus: newStatus
+        },
+        statusUpdate: true,
+        updatedBy: req.user.id,
+        updatedByModel: req.user.role === 'Admin' ? 'Admin' : 'User'
+      }
+    });
+  } catch (error) {
+    console.error('Error logging customer lead status update:', error);
+  }
+
   return lead;
 };
 
-export const updateCustomerAndProjectsStatusService = async (id, newStatus) => {
+export const updateCustomerAndProjectsStatusService = async (req, id, newStatus) => {
   const lead = await getCustomerLeadByIdService(id);
   if (!lead) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Customer lead not found');
@@ -493,6 +837,9 @@ export const updateCustomerAndProjectsStatusService = async (id, newStatus) => {
   if (!STATUS_VALUES.includes(newStatus)) {
     throw new ApiError(httpStatus.BAD_REQUEST, `Invalid status. Must be one of: ${STATUS_VALUES.join(', ')}`);
   }
+
+  // Store original status for change detection
+  const originalLeadStatus = lead.status;
 
   // Start a session for transaction
   const session = await mongoose.startSession();
@@ -519,6 +866,14 @@ export const updateCustomerAndProjectsStatusService = async (id, newStatus) => {
 
     const newProjectStatus = projectStatusMapping[newStatus] || STATUS_ENUM.DRAFT;
 
+    // Store original project statuses for change detection
+    const projectUpdates = projects.map(project => ({
+      projectId: project._id,
+      projectName: project.projectName,
+      originalStatus: project.status,
+      newStatus: newProjectStatus
+    }));
+
     // Update all projects
     if (projects.length > 0) {
       await Project.updateMany(
@@ -529,6 +884,75 @@ export const updateCustomerAndProjectsStatusService = async (id, newStatus) => {
     }
 
     await session.commitTransaction();
+
+    // Log customer lead status update with cascade
+    try {
+      await logActivity(req, {
+        action: 'update',
+        targetModel: 'CustomerLead',
+        targetId: lead._id,
+        targetName: lead.customerName || 'Unknown Customer',
+        description: `Updated customer lead status with cascade: ${lead.customerName} - ${originalLeadStatus} → ${newStatus} (updated ${projects.length} projects to ${newProjectStatus})`,
+        changes: {
+          status: {
+            from: originalLeadStatus,
+            to: newStatus
+          }
+        },
+        metadata: {
+          leadData: {
+            customerName: lead.customerName,
+            email: lead.email,
+            previousStatus: originalLeadStatus,
+            newStatus: newStatus
+          },
+          statusUpdate: true,
+          cascadeUpdate: true,
+          projectsUpdated: projects.length,
+          newProjectStatus: newProjectStatus,
+          projectUpdates: projectUpdates,
+          updatedBy: req.user.id,
+          updatedByModel: req.user.role === 'Admin' ? 'Admin' : 'User'
+        }
+      });
+    } catch (error) {
+      console.error('Error logging customer lead cascade status update:', error);
+    }
+
+    // Log individual project status updates
+    for (const projectUpdate of projectUpdates) {
+      try {
+        await logActivity(req, {
+          action: 'update',
+          targetModel: 'Project',
+          targetId: projectUpdate.projectId,
+          targetName: projectUpdate.projectName,
+          description: `Updated project status via customer lead cascade: ${projectUpdate.projectName} - ${projectUpdate.originalStatus} → ${projectUpdate.newStatus}`,
+          changes: {
+            status: {
+              from: projectUpdate.originalStatus,
+              to: projectUpdate.newStatus
+            }
+          },
+          metadata: {
+            projectData: {
+              projectName: projectUpdate.projectName,
+              previousStatus: projectUpdate.originalStatus,
+              newStatus: projectUpdate.newStatus
+            },
+            leadId: lead._id,
+            leadName: lead.customerName,
+            cascadeUpdate: true,
+            triggeredBy: 'CustomerLead',
+            triggeredById: lead._id,
+            updatedBy: req.user.id,
+            updatedByModel: req.user.role === 'Admin' ? 'Admin' : 'User'
+          }
+        });
+      } catch (error) {
+        console.error('Error logging project cascade status update:', error);
+      }
+    }
 
     return {
       customer: lead,
@@ -568,16 +992,25 @@ export const shareRequirementService = async (leadId, requirementId, userIdToSha
   return lead;
 };
 
-export const shareRequirementWithUsersService = async (leadId, requirementId, userIds, adminId, documentId = null, shouldSendToEngineer = false) => {
+export const shareRequirementWithUsersService = async (req, leadId, requirementId, userIds, adminId, documentId = null, shouldSendToEngineer = false) => {
   const requirement = await Requirement.findOne({ _id: requirementId, lead: leadId });
   if (!requirement) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Requirement not found for this lead');
   }
 
+  // Get lead information for logging
+  const lead = await getCustomerLeadByIdService(leadId);
+  if (!lead) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Customer lead not found');
+  }
+
   let updated = false;
+  const sharedUsers = [];
+  const skippedUsers = [];
+  const siteEngineerAssignments = [];
 
   // Check if any of the users are procurement team members
-  const users = await User.find({ _id: { $in: userIds } }).select('_id role');
+  const users = await User.find({ _id: { $in: userIds } }).select('_id role name email');
   const procurementUsers = users.filter(user => user.role === 'procurement-team');
   const otherUsers = users.filter(user => user.role !== 'procurement-team');
 
@@ -594,6 +1027,12 @@ export const shareRequirementWithUsersService = async (leadId, requirementId, us
         isSeen: false
       });
       updated = true;
+      sharedUsers.push({
+        userId: user._id,
+        userName: user.name,
+        userEmail: user.email,
+        role: user.role
+      });
 
       // If user is a site engineer, automatically assign them to the project
       if (user.role === 'site-engineer' && project) {
@@ -604,8 +1043,22 @@ export const shareRequirementWithUsersService = async (leadId, requirementId, us
             logger.error(`Failed to assign site engineer ${user._id} to project ${project._id}:`, error);
           });
           logger.info(`Automatically assigned site engineer ${user._id} to project ${project._id} via requirement sharing`);
+          siteEngineerAssignments.push({
+            userId: user._id,
+            userName: user.name,
+            projectId: project._id,
+            projectName: project.projectName
+          });
         }
       }
+    } else {
+      skippedUsers.push({
+        userId: user._id,
+        userName: user.name,
+        userEmail: user.email,
+        role: user.role,
+        reason: 'Already shared'
+      });
     }
   });
 
@@ -628,15 +1081,47 @@ export const shareRequirementWithUsersService = async (leadId, requirementId, us
               isSeen: false
             });
             updated = true;
+            sharedUsers.push({
+              userId: user._id,
+              userName: user.name,
+              userEmail: user.email,
+              role: user.role
+            });
+          } else {
+            skippedUsers.push({
+              userId: user._id,
+              userName: user.name,
+              userEmail: user.email,
+              role: user.role,
+              reason: 'Already shared'
+            });
           }
         });
       } else {
         // Log that procurement sharing was skipped due to no approved documents
         logger.info(`Procurement sharing skipped for requirement ${requirementId}: No approved architect documents found`);
+        procurementUsers.forEach(user => {
+          skippedUsers.push({
+            userId: user._id,
+            userName: user.name,
+            userEmail: user.email,
+            role: user.role,
+            reason: 'No approved architect documents'
+          });
+        });
       }
     } else {
       // Log that no project was found
       logger.warn(`No project found for requirement ${requirementId} when sharing with procurement team`);
+      procurementUsers.forEach(user => {
+        skippedUsers.push({
+          userId: user._id,
+          userName: user.name,
+          userEmail: user.email,
+          role: user.role,
+          reason: 'No project found'
+        });
+      });
     }
   }
 
@@ -645,6 +1130,8 @@ export const shareRequirementWithUsersService = async (leadId, requirementId, us
   }
 
   // Handle automatic document sending to procurement if requested
+  let documentSent = false;
+  let documentSendError = null;
   if (shouldSendToEngineer && documentId) {
     try {
       if (project) {
@@ -664,16 +1151,80 @@ export const shareRequirementWithUsersService = async (leadId, requirementId, us
 
           await sendDocumentToProcurement(project._id.toString(), documentId, admin);
           logger.info(`Document ${documentId} successfully sent to procurement`);
+          documentSent = true;
         } else {
           logger.warn(`Document ${documentId} not found or doesn't meet criteria for auto-sending to procurement`);
+          documentSendError = 'Document not found or doesn\'t meet criteria';
         }
       } else {
         logger.warn(`No project found for requirement ${requirementId} when trying to auto-send document to procurement`);
+        documentSendError = 'No project found';
       }
     } catch (error) {
       logger.error(`Failed to auto-send document ${documentId} to procurement:`, error);
+      documentSendError = error.message;
       // Don't throw the error - we don't want to fail the sharing operation because of this
       // The sharing was successful, the auto-send just failed
+    }
+  }
+
+  // Log the requirement sharing activity
+  try {
+    await logActivity(req, {
+      action: 'share',
+      targetModel: 'Requirement',
+      targetId: requirementId,
+      targetName: requirement.projectName,
+      description: `Shared requirement: ${requirement.projectName} with ${sharedUsers.length} users for customer lead: ${lead.customerName}`,
+      metadata: {
+        requirementData: {
+          projectName: requirement.projectName,
+          requirementType: requirement.requirementType,
+          urgency: requirement.urgency,
+          budget: requirement.budget
+        },
+        leadId: lead._id,
+        leadName: lead.customerName,
+        sharedUsers: sharedUsers,
+        skippedUsers: skippedUsers,
+        siteEngineerAssignments: siteEngineerAssignments,
+        documentSent: documentSent,
+        documentId: documentId,
+        documentSendError: documentSendError,
+        shouldSendToEngineer: shouldSendToEngineer,
+        projectId: project?._id,
+        projectName: project?.projectName,
+        sharedBy: adminId,
+        sharedByModel: req.user.role === 'Admin' ? 'Admin' : 'User'
+      }
+    });
+  } catch (error) {
+    console.error('Error logging requirement sharing:', error);
+  }
+
+  // Log individual user sharing if there are shared users
+  for (const sharedUser of sharedUsers) {
+    try {
+      await logActivity(req, {
+        action: 'share',
+        targetModel: 'User',
+        targetId: sharedUser.userId,
+        targetName: sharedUser.userName,
+        description: `Shared requirement: ${requirement.projectName} with user: ${sharedUser.userName} (${sharedUser.userEmail})`,
+        metadata: {
+          requirementId: requirementId,
+          requirementName: requirement.projectName,
+          leadId: lead._id,
+          leadName: lead.customerName,
+          userRole: sharedUser.role,
+          projectId: project?._id,
+          projectName: project?.projectName,
+          sharedBy: adminId,
+          sharedByModel: req.user.role === 'Admin' ? 'Admin' : 'User'
+        }
+      });
+    } catch (error) {
+      console.error('Error logging individual user sharing:', error);
     }
   }
 
@@ -688,14 +1239,20 @@ export const shareRequirementWithUsersService = async (leadId, requirementId, us
  * @param {string} adminId - The admin ID who is sharing
  * @returns {Promise<Object>}
  */
-export const shareRequirementWithScpUsersService = async (leadId, requirementId, scpUserIds, adminId) => {
+export const shareRequirementWithScpUsersService = async (req, leadId, requirementId, scpUserIds, adminId) => {
   const requirement = await Requirement.findOne({ _id: requirementId, lead: leadId });
   if (!requirement) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Requirement not found for this lead');
   }
 
+  // Get lead information for logging
+  const lead = await getCustomerLeadByIdService(leadId);
+  if (!lead) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Customer lead not found');
+  }
+
   // Check if all users are SCP users
-  const scpUsers = await User.find({ _id: { $in: scpUserIds } });
+  const scpUsers = await User.find({ _id: { $in: scpUserIds } }).select('_id role name email');
   if (scpUsers.length !== scpUserIds.length) {
     throw new ApiError(httpStatus.NOT_FOUND, 'One or more SCP users not found');
   }
@@ -707,17 +1264,40 @@ export const shareRequirementWithScpUsersService = async (leadId, requirementId,
   }
 
   let updated = false;
+  const sharedScpUsers = [];
+  const updatedScpUsers = [];
+  const skippedScpUsers = [];
 
   // Process each SCP user
   for (const scpUserId of scpUserIds) {
+    const scpUser = scpUsers.find(user => user._id.toString() === scpUserId);
+
     // Check if already shared
     const existingShare = requirement.sharedWith.find(share => share.user.toString() === scpUserId);
     if (existingShare) {
       // Update existing share to grant SCP update permissions
+      const hadScpPermissions = existingShare.canUpdateScpData;
       existingShare.canUpdateScpData = true;
       existingShare.sharedBy = adminId;
       existingShare.sharedAt = new Date();
       updated = true;
+
+      if (hadScpPermissions) {
+        skippedScpUsers.push({
+          userId: scpUser._id,
+          userName: scpUser.name,
+          userEmail: scpUser.email,
+          reason: 'Already had SCP permissions'
+        });
+      } else {
+        updatedScpUsers.push({
+          userId: scpUser._id,
+          userName: scpUser.name,
+          userEmail: scpUser.email,
+          previousPermissions: hadScpPermissions,
+          newPermissions: true
+        });
+      }
     } else {
       // Add new share with SCP update permissions
       requirement.sharedWith.push({
@@ -728,11 +1308,111 @@ export const shareRequirementWithScpUsersService = async (leadId, requirementId,
         scpDataUpdated: false
       });
       updated = true;
+
+      sharedScpUsers.push({
+        userId: scpUser._id,
+        userName: scpUser.name,
+        userEmail: scpUser.email,
+        permissions: {
+          canUpdateScpData: true,
+          scpDataUpdated: false
+        }
+      });
     }
   }
 
   if (updated) {
     await requirement.save();
+  }
+
+  // Log the SCP requirement sharing activity
+  try {
+    await logActivity(req, {
+      action: 'share',
+      targetModel: 'Requirement',
+      targetId: requirementId,
+      targetName: requirement.projectName,
+      description: `Shared requirement with SCP users: ${requirement.projectName} - ${sharedScpUsers.length} new shares, ${updatedScpUsers.length} permission updates for customer lead: ${lead.customerName}`,
+      metadata: {
+        requirementData: {
+          projectName: requirement.projectName,
+          requirementType: requirement.requirementType,
+          urgency: requirement.urgency,
+          budget: requirement.budget
+        },
+        leadId: lead._id,
+        leadName: lead.customerName,
+        scpSharing: true,
+        sharedScpUsers: sharedScpUsers,
+        updatedScpUsers: updatedScpUsers,
+        skippedScpUsers: skippedScpUsers,
+        totalScpUsers: scpUserIds.length,
+        newShares: sharedScpUsers.length,
+        permissionUpdates: updatedScpUsers.length,
+        skipped: skippedScpUsers.length,
+        projectId: requirement.project,
+        sharedBy: adminId,
+        sharedByModel: req.user.role === 'Admin' ? 'Admin' : 'User'
+      }
+    });
+  } catch (error) {
+    console.error('Error logging SCP requirement sharing:', error);
+  }
+
+  // Log individual SCP user sharing if there are new shares
+  for (const scpUser of sharedScpUsers) {
+    try {
+      await logActivity(req, {
+        action: 'share',
+        targetModel: 'User',
+        targetId: scpUser.userId,
+        targetName: scpUser.userName,
+        description: `Shared requirement with SCP user: ${requirement.projectName} - ${scpUser.userName} (${scpUser.userEmail}) with SCP update permissions`,
+        metadata: {
+          requirementId: requirementId,
+          requirementName: requirement.projectName,
+          leadId: lead._id,
+          leadName: lead.customerName,
+          userRole: 'scp-user',
+          scpPermissions: scpUser.permissions,
+          sharedBy: adminId,
+          sharedByModel: req.user.role === 'Admin' ? 'Admin' : 'User'
+        }
+      });
+    } catch (error) {
+      console.error('Error logging individual SCP user sharing:', error);
+    }
+  }
+
+  // Log individual SCP user permission updates if there are updates
+  for (const scpUser of updatedScpUsers) {
+    try {
+      await logActivity(req, {
+        action: 'update',
+        targetModel: 'User',
+        targetId: scpUser.userId,
+        targetName: scpUser.userName,
+        description: `Updated SCP permissions for user: ${requirement.projectName} - ${scpUser.userName} (${scpUser.userEmail})`,
+        changes: {
+          canUpdateScpData: {
+            from: scpUser.previousPermissions,
+            to: scpUser.newPermissions
+          }
+        },
+        metadata: {
+          requirementId: requirementId,
+          requirementName: requirement.projectName,
+          leadId: lead._id,
+          leadName: lead.customerName,
+          userRole: 'scp-user',
+          permissionUpdate: true,
+          updatedBy: adminId,
+          updatedByModel: req.user.role === 'Admin' ? 'Admin' : 'User'
+        }
+      });
+    } catch (error) {
+      console.error('Error logging SCP user permission update:', error);
+    }
   }
 
   return requirement;
@@ -746,10 +1426,22 @@ export const shareRequirementWithScpUsersService = async (leadId, requirementId,
  * @param {Object} scpData - The updated SCP data
  * @returns {Promise<Object>}
  */
-export const updateScpDataByScpUserService = async (leadId, requirementId, scpUserId, scpData, files = []) => {
+export const updateScpDataByScpUserService = async (req, leadId, requirementId, scpUserId, scpData, files = []) => {
   const requirement = await Requirement.findOne({ _id: requirementId, lead: leadId });
   if (!requirement) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Requirement not found for this lead');
+  }
+
+  // Get lead information for logging
+  const lead = await getCustomerLeadByIdService(leadId);
+  if (!lead) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Customer lead not found');
+  }
+
+  // Get SCP user information for logging
+  const scpUser = await User.findById(scpUserId).select('_id name email role');
+  if (!scpUser) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'SCP user not found');
   }
 
   // Remove permission validation - SCP users now have full access to update SCP data
@@ -761,6 +1453,10 @@ export const updateScpDataByScpUserService = async (leadId, requirementId, scpUs
   if (!userShare) {
     throw new ApiError(httpStatus.FORBIDDEN, 'You are not shared with this requirement');
   }
+
+  // Store original SCP data for change detection
+  const originalScpData = { ...requirement.scpData };
+  const originalFiles = [...requirement.files];
 
   // Process files if provided with better error handling
   const tempFileKeysToDelete = [];
@@ -852,6 +1548,107 @@ export const updateScpDataByScpUserService = async (leadId, requirementId, scpUs
     }
   }
 
+  // Detect changes in SCP data
+  const scpDataChanges = {};
+  Object.keys(scpData).forEach(key => {
+    if (originalScpData[key] !== scpData[key]) {
+      scpDataChanges[key] = {
+        from: originalScpData[key],
+        to: scpData[key]
+      };
+    }
+  });
+
+  // Detect file changes
+  const fileChanges = {
+    filesAdded: newlyCopiedFiles.length,
+    filesExisting: existingFiles.length,
+    totalFiles: allFiles.length,
+    previousFileCount: originalFiles.length
+  };
+
+  // Log the SCP data update activity
+  try {
+    await logActivity(req, {
+      action: 'update',
+      targetModel: 'Requirement',
+      targetId: requirementId,
+      targetName: requirement.projectName,
+      description: `Updated SCP data: ${requirement.projectName} by SCP user: ${scpUser.name} for customer lead: ${lead.customerName}`,
+      changes: scpDataChanges,
+      metadata: {
+        requirementData: {
+          projectName: requirement.projectName,
+          requirementType: requirement.requirementType,
+          urgency: requirement.urgency,
+          budget: requirement.budget
+        },
+        leadId: lead._id,
+        leadName: lead.customerName,
+        scpDataUpdate: true,
+        scpUser: {
+          userId: scpUser._id,
+          userName: scpUser.name,
+          userEmail: scpUser.email,
+          userRole: scpUser.role
+        },
+        scpDataChanges: Object.keys(scpDataChanges),
+        fileChanges: fileChanges,
+        newlyCopiedFiles: newlyCopiedFiles.map(file => ({
+          fileType: file.fileType,
+          originalName: file.originalName,
+          key: file.key
+        })),
+        existingFiles: existingFiles.map(file => ({
+          fileType: file.fileType,
+          originalName: file.originalName,
+          key: file.key
+        })),
+        updatedFields: Object.keys(scpData),
+        lastUpdatedBy: scpUserId,
+        lastUpdatedAt: new Date(),
+        updatedBy: scpUserId,
+        updatedByModel: 'SCPUser'
+      }
+    });
+  } catch (error) {
+    console.error('Error logging SCP data update:', error);
+  }
+
+  // Log individual file operations if there are new files
+  for (const newFile of newlyCopiedFiles) {
+    try {
+      await logActivity(req, {
+        action: 'upload',
+        targetModel: 'File',
+        targetId: newFile.key,
+        targetName: newFile.originalName,
+        description: `Uploaded SCP file: ${newFile.originalName} (${newFile.fileType}) for requirement: ${requirement.projectName}`,
+        metadata: {
+          requirementId: requirementId,
+          requirementName: requirement.projectName,
+          leadId: lead._id,
+          leadName: lead.customerName,
+          fileData: {
+            fileType: newFile.fileType,
+            originalName: newFile.originalName,
+            key: newFile.key,
+            uploadedAt: newFile.uploadedAt
+          },
+          scpUser: {
+            userId: scpUser._id,
+            userName: scpUser.name,
+            userEmail: scpUser.email
+          },
+          uploadedBy: scpUserId,
+          uploadedByModel: 'SCPUser'
+        }
+      });
+    } catch (error) {
+      console.error('Error logging SCP file upload:', error);
+    }
+  }
+
   return requirement;
 };
 
@@ -864,11 +1661,26 @@ export const updateScpDataByScpUserService = async (leadId, requirementId, scpUs
  * @param {Array} files - Array of files to upload
  * @returns {Promise<Requirement>}
  */
-export const updateScpDataByAdminService = async (leadId, requirementId, adminId, scpData, files = []) => {
+export const updateScpDataByAdminService = async (req, leadId, requirementId, adminId, scpData, files = []) => {
   const requirement = await Requirement.findOne({ _id: requirementId, lead: leadId });
   if (!requirement) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Requirement not found for this lead');
   }
+
+  // Get lead information for logging
+  const lead = await getCustomerLeadByIdService(leadId);
+  if (!lead) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Customer lead not found');
+  }
+
+  // Get admin information for logging
+  const admin = await User.findById(adminId).select('_id name email role');
+  if (!admin) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Admin user not found');
+  }
+
+  // Store original SCP data for change detection
+  const originalScpData = { ...requirement.scpData };
 
   // Process files if provided with better error handling (Admin Service)
   // const tempFileKeysToDelete = [];
@@ -957,6 +1769,109 @@ export const updateScpDataByAdminService = async (leadId, requirementId, adminId
   //   }
   // }
 
+  // Detect changes in SCP data
+  const scpDataChanges = {};
+  Object.keys(scpData).forEach(key => {
+    if (originalScpData[key] !== scpData[key]) {
+      scpDataChanges[key] = {
+        from: originalScpData[key],
+        to: scpData[key]
+      };
+    }
+  });
+
+  // Detect file changes
+  // const fileChanges = {
+  //   filesAdded: newlyCopiedFiles.length,
+  //   filesExisting: existingFiles.length,
+  //   totalFiles: allFiles.length,
+  //   previousFileCount: requirement.files.length - allFiles.length + existingFiles.length
+  // };
+
+  // Log the admin SCP data update activity
+  try {
+    await logActivity(req, {
+      action: 'update',
+      targetModel: 'Requirement',
+      targetId: requirementId,
+      targetName: requirement.projectName,
+      description: `Updated SCP data by admin: ${requirement.projectName} - ${admin.name} for customer lead: ${lead.customerName}`,
+      changes: scpDataChanges,
+      metadata: {
+        projectId: requirement.project,
+        requirementData: {
+          projectName: requirement.projectName,
+          requirementType: requirement.requirementType,
+          urgency: requirement.urgency,
+          budget: requirement.budget
+        },
+        leadId: lead._id,
+        leadName: lead.customerName,
+        scpDataUpdate: true,
+        adminUpdate: true,
+        admin: {
+          userId: admin._id,
+          userName: admin.name,
+          userEmail: admin.email,
+          userRole: admin.role
+        },
+        scpDataChanges: Object.keys(scpDataChanges),
+        fileChanges: fileChanges,
+        // newlyCopiedFiles: newlyCopiedFiles.map(file => ({
+        //   fileType: file.fileType,
+        //   originalName: file.originalName,
+        //   key: file.key
+        // })),
+        // existingFiles: existingFiles.map(file => ({
+        //   fileType: file.fileType,
+        //   originalName: file.originalName,
+        //   key: file.key
+        // })),
+        updatedFields: Object.keys(scpData),
+        lastUpdatedBy: adminId,
+        lastUpdatedAt: new Date(),
+        updatedBy: adminId,
+        updatedByModel: 'Admin'
+      }
+    });
+  } catch (error) {
+    console.error('Error logging admin SCP data update:', error);
+  }
+
+  // Log individual file operations if there are new files
+  // for (const newFile of newlyCopiedFiles) {
+  //   try {
+  //     await logActivity(req, {
+  //       action: 'upload',
+  //       targetModel: 'File',
+  //       targetId: newFile.key,
+  //       targetName: newFile.originalName,
+  //       description: `Uploaded SCP file by admin: ${newFile.originalName} (${newFile.fileType}) for requirement: ${requirement.projectName}`,
+  //       metadata: {
+  //         requirementId: requirementId,
+  //         requirementName: requirement.projectName,
+  //         leadId: lead._id,
+  //         leadName: lead.customerName,
+  //         fileData: {
+  //           fileType: newFile.fileType,
+  //           originalName: newFile.originalName,
+  //           key: newFile.key,
+  //           uploadedAt: newFile.uploadedAt
+  //         },
+  //         admin: {
+  //           userId: admin._id,
+  //           userName: admin.name,
+  //           userEmail: admin.email
+  //         },
+  //         uploadedBy: adminId,
+  //         uploadedByModel: 'Admin'
+  //       }
+  //     });
+  //   } catch (error) {
+  //     console.error('Error logging admin SCP file upload:', error);
+  //   }
+  // }
+
   return requirement;
 };
 
@@ -968,10 +1883,22 @@ export const updateScpDataByAdminService = async (leadId, requirementId, adminId
  * @param {string} userId - The user ID performing the deletion
  * @returns {Promise<Requirement>}
  */
-export const deleteFileFromRequirementService = async (leadId, requirementId, fileKey, userId) => {
+export const deleteFileFromRequirementService = async (req, leadId, requirementId, fileKey, userId) => {
   const requirement = await Requirement.findOne({ _id: requirementId, lead: leadId });
   if (!requirement) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Requirement not found for this lead');
+  }
+
+  // Get lead information for logging
+  const lead = await getCustomerLeadByIdService(leadId);
+  if (!lead) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Customer lead not found');
+  }
+
+  // Get user information for logging
+  const user = await User.findById(userId).select('_id name email role');
+  if (!user) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
   }
 
   // Find the file in the requirement's files array
@@ -981,6 +1908,17 @@ export const deleteFileFromRequirementService = async (leadId, requirementId, fi
   }
 
   const fileToDelete = requirement.files[fileIndex];
+
+  // Store file information for logging before deletion
+  const fileInfo = {
+    fileType: fileToDelete.fileType,
+    originalName: fileToDelete.originalName,
+    key: fileToDelete.key,
+    uploadedAt: fileToDelete.uploadedAt
+  };
+
+  // Store file count before deletion for change tracking
+  const filesBeforeDeletion = requirement.files.length;
 
   try {
     // Delete the file from S3
@@ -994,6 +1932,52 @@ export const deleteFileFromRequirementService = async (leadId, requirementId, fi
     requirement.scpData.lastUpdatedAt = new Date();
 
     await requirement.save();
+
+    // Log the file deletion activity
+    try {
+      await logActivity(req, {
+        action: 'delete',
+        targetModel: 'File',
+        targetId: fileKey,
+        targetName: fileToDelete.originalName,
+        description: `Deleted SCP file: ${fileToDelete.originalName} (${fileToDelete.fileType}) from requirement: ${requirement.projectName}`,
+        changes: {
+          fileDeleted: {
+            from: fileInfo,
+            to: null
+          },
+          fileCount: {
+            from: filesBeforeDeletion,
+            to: requirement.files.length
+          }
+        },
+        metadata: {
+          requirementData: {
+            projectName: requirement.projectName,
+            requirementType: requirement.requirementType,
+            urgency: requirement.urgency,
+            budget: requirement.budget
+          },
+          leadId: lead._id,
+          leadName: lead.customerName,
+          fileDeletion: true,
+          fileInfo: fileInfo,
+          user: {
+            userId: user._id,
+            userName: user.name,
+            userEmail: user.email,
+            userRole: user.role
+          },
+          fileCountBefore: filesBeforeDeletion,
+          fileCountAfter: requirement.files.length,
+          deletedBy: userId,
+          deletedAt: new Date(),
+          deletedByModel: user.role === 'admin' ? 'Admin' : 'User'
+        }
+      });
+    } catch (error) {
+      console.error('Error logging file deletion:', error);
+    }
 
     return requirement;
   } catch (error) {
@@ -1010,10 +1994,22 @@ export const deleteFileFromRequirementService = async (leadId, requirementId, fi
  * @param {string} userId - The user ID performing the deletion
  * @returns {Promise<Requirement>}
  */
-export const deleteMultipleFilesFromRequirementService = async (leadId, requirementId, fileKeys, userId) => {
+export const deleteMultipleFilesFromRequirementService = async (req, leadId, requirementId, fileKeys, userId) => {
   const requirement = await Requirement.findOne({ _id: requirementId, lead: leadId });
   if (!requirement) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Requirement not found for this lead');
+  }
+
+  // Get lead information for logging
+  const lead = await getCustomerLeadByIdService(leadId);
+  if (!lead) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Customer lead not found');
+  }
+
+  // Get user information for logging
+  const user = await User.findById(userId).select('_id name email role');
+  if (!user) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
   }
 
   if (!Array.isArray(fileKeys) || fileKeys.length === 0) {
@@ -1027,6 +2023,18 @@ export const deleteMultipleFilesFromRequirementService = async (leadId, requirem
   if (invalidFileKeys.length > 0) {
     throw new ApiError(httpStatus.BAD_REQUEST, `Files not found: ${invalidFileKeys.join(', ')}`);
   }
+
+  // Store file information for logging before deletion
+  const filesToDelete = requirement.files.filter(file => fileKeys.includes(file.key));
+  const fileInfoBeforeDeletion = filesToDelete.map(file => ({
+    fileType: file.fileType,
+    originalName: file.originalName,
+    key: file.key,
+    uploadedAt: file.uploadedAt
+  }));
+
+  // Store file count before deletion for change tracking
+  const filesBeforeDeletion = requirement.files.length;
 
   const deletedFiles = [];
   const failedDeletions = [];
@@ -1050,6 +2058,108 @@ export const deleteMultipleFilesFromRequirementService = async (leadId, requirem
   requirement.scpData.lastUpdatedAt = new Date();
 
   await requirement.save();
+
+  // Log the bulk file deletion activity
+  try {
+    await logActivity(req, {
+      action: 'bulk_delete',
+      targetModel: 'File',
+      targetId: requirementId,
+      targetName: `Multiple files from ${requirement.projectName}`,
+      description: `Bulk deleted ${deletedFiles.length} files from requirement: ${requirement.projectName}`,
+      changes: {
+        filesDeleted: {
+          from: fileInfoBeforeDeletion,
+          to: []
+        },
+        fileCount: {
+          from: filesBeforeDeletion,
+          to: requirement.files.length
+        },
+        deletionResults: {
+          totalRequested: fileKeys.length,
+          totalDeleted: deletedFiles.length,
+          totalFailed: failedDeletions.length
+        }
+      },
+      metadata: {
+        requirementData: {
+          projectName: requirement.projectName,
+          requirementType: requirement.requirementType,
+          urgency: requirement.urgency,
+          budget: requirement.budget
+        },
+        leadId: lead._id,
+        leadName: lead.customerName,
+        bulkFileDeletion: true,
+        filesDeleted: deletedFiles,
+        filesFailed: failedDeletions,
+        fileInfoBeforeDeletion: fileInfoBeforeDeletion,
+        user: {
+          userId: user._id,
+          userName: user.name,
+          userEmail: user.email,
+          userRole: user.role
+        },
+        fileCountBefore: filesBeforeDeletion,
+        fileCountAfter: requirement.files.length,
+        deletedBy: userId,
+        deletedAt: new Date(),
+        deletedByModel: user.role === 'admin' ? 'Admin' : 'User',
+        deletionSummary: {
+          totalRequested: fileKeys.length,
+          totalDeleted: deletedFiles.length,
+          totalFailed: failedDeletions.length,
+          successRate: `${Math.round((deletedFiles.length / fileKeys.length) * 100)}%`
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error logging bulk file deletion:', error);
+  }
+
+  // Log individual file deletion for each successfully deleted file
+  for (const fileKey of deletedFiles) {
+    const fileInfo = fileInfoBeforeDeletion.find(f => f.key === fileKey);
+    if (fileInfo) {
+      try {
+        await logActivity(req, {
+          action: 'delete',
+          targetModel: 'File',
+          targetId: fileKey,
+          targetName: fileInfo.originalName,
+          description: `Deleted file: ${fileInfo.originalName} (${fileInfo.fileType}) from requirement: ${requirement.projectName}`,
+          changes: {
+            fileDeleted: {
+              from: fileInfo,
+              to: null
+            }
+          },
+          metadata: {
+            requirementId: requirementId,
+            requirementName: requirement.projectName,
+            leadId: lead._id,
+            leadName: lead.customerName,
+            fileDeletion: true,
+            fileInfo: fileInfo,
+            user: {
+              userId: user._id,
+              userName: user.name,
+              userEmail: user.email,
+              userRole: user.role
+            },
+            deletedBy: userId,
+            deletedAt: new Date(),
+            deletedByModel: user.role === 'admin' ? 'Admin' : 'User',
+            partOfBulkOperation: true,
+            bulkOperationId: requirementId
+          }
+        });
+      } catch (error) {
+        console.error('Error logging individual file deletion:', error);
+      }
+    }
+  }
 
   return {
     requirement,

@@ -33,6 +33,7 @@ const envVarsSchema = Joi.object()
     AWS_ACCESS_KEY_ID: Joi.string().required().description('AWS access key ID'),
     AWS_SECRET_ACCESS_KEY: Joi.string().required().description('AWS secret access key'),
     AWS_S3_BUCKET: Joi.string().required().description('AWS S3 bucket'),
+    N8N_WEBHOOK_URL: Joi.string().required().description('N8N webhook URL for WhatsApp messages'),
   })
   .unknown();
 
@@ -74,6 +75,9 @@ const config = {
       },
     },
     from: envVars.EMAIL_FROM,
+  },
+  n8n: {
+    webhookUrl: envVars.N8N_WEBHOOK_URL,
   },
 };
 

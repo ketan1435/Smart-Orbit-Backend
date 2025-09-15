@@ -170,7 +170,7 @@ export const queryProjects = async (filter, options, user = null) => {
  * @param {Object} proposalBody - The proposal details
  * @returns {Promise<Project>}
  */
-export const addArchitectProposal = async (projectId, architect, proposalBody) => {
+export const addArchitectProposal = async (req, projectId, architect, proposalBody) => {
   const project = await Project.findById(projectId);
   if (!project) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Project not found');
@@ -184,13 +184,74 @@ export const addArchitectProposal = async (projectId, architect, proposalBody) =
   //   throw new ApiError(httpStatus.BAD_REQUEST, 'You have already submitted a proposal for this project.');
   // }
 
+  // Store original project data for logging
+  const originalProposalsCount = project.proposals.length;
+  const originalProposals = [...project.proposals];
+
   // Create and add the new proposal
-  project.proposals.push({
+  const newProposal = {
     ...proposalBody,
     architect: architect.id,
-  });
+  };
 
+  project.proposals.push(newProposal);
   await project.save();
+
+  // Get the newly added proposal (last one in the array)
+  const addedProposal = project.proposals[project.proposals.length - 1];
+
+  // Log the architect proposal submission activity
+  try {
+    await logActivity(req, {
+      action: 'submit_proposal',
+      targetModel: 'Project',
+      targetId: project._id,
+      targetName: project.projectName,
+      description: `Architect ${architect.name} (${architect.email}) submitted proposal for project: ${project.projectName}`,
+      changes: {
+        proposals: {
+          from: originalProposalsCount,
+          to: project.proposals.length
+        }
+      },
+      metadata: {
+        projectId: project._id,
+        projectData: {
+          projectId: project._id,
+          projectName: project.projectName,
+          projectCode: project.projectCode,
+          status: project.status,
+          customerName: project.customerName,
+          requirementType: project.requirementType
+        },
+        architect: {
+          userId: architect.id,
+          userName: architect.name,
+          userEmail: architect.email,
+          userRole: architect.role
+        },
+        proposalData: {
+          proposalId: addedProposal._id,
+          email: addedProposal.email,
+          proposedCharges: addedProposal.proposedCharges,
+          deliveryTimelineDays: addedProposal.deliveryTimelineDays,
+          portfolioLink: addedProposal.portfolioLink,
+          remarks: addedProposal.remarks,
+          status: addedProposal.status || 'Pending',
+          submittedAt: addedProposal.submittedAt || new Date()
+        },
+        proposalSubmission: true,
+        proposalCount: project.proposals.length,
+        originalProposalCount: originalProposalsCount,
+        submittedBy: architect.id,
+        submittedByModel: 'Architect',
+        submittedAt: new Date()
+      }
+    });
+  } catch (error) {
+    console.error('Error logging architect proposal submission:', error);
+  }
+
   return project;
 };
 
@@ -201,7 +262,7 @@ export const addArchitectProposal = async (projectId, architect, proposalBody) =
  * @param {Object} adminUser - The user accepting the proposal
  * @returns {Promise<Project>}
  */
-export const acceptArchitectProposal = async (projectId, proposalId, adminUser) => {
+export const acceptArchitectProposal = async (req, projectId, proposalId, adminUser) => {
   const project = await Project.findById(projectId);
   if (!project) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Project not found');
@@ -216,6 +277,19 @@ export const acceptArchitectProposal = async (projectId, proposalId, adminUser) 
     throw new ApiError(httpStatus.BAD_REQUEST, `Cannot accept a proposal with status '${proposalToAccept.status}'`);
   }
 
+  // Store original data for logging
+  const originalProposalStatus = proposalToAccept.status;
+  const originalProjectArchitect = project.architect;
+  const originalProposalData = {
+    status: proposalToAccept.status,
+    email: proposalToAccept.email,
+    proposedCharges: proposalToAccept.proposedCharges,
+    deliveryTimelineDays: proposalToAccept.deliveryTimelineDays,
+    portfolioLink: proposalToAccept.portfolioLink,
+    remarks: proposalToAccept.remarks,
+    architect: proposalToAccept.architect
+  };
+
   // Accept the chosen proposal
   proposalToAccept.status = 'Accepted';
   proposalToAccept.acceptedBy = adminUser._id;
@@ -229,6 +303,7 @@ export const acceptArchitectProposal = async (projectId, proposalId, adminUser) 
     assignedAmount: proposalToAccept.proposedCharges,
   });
 
+  // --- commented out for now ---
   // Reject all other pending proposals
   // project.proposals.forEach((p) => {
   //   if (p.id !== proposalId && (p.status === 'Pending' || p.status === 'Responded')) {
@@ -238,6 +313,67 @@ export const acceptArchitectProposal = async (projectId, proposalId, adminUser) 
   // });
 
   await project.save();
+
+  // Log the architect proposal acceptance activity
+  try {
+    await logActivity(req, {
+      action: 'accept_proposal',
+      targetModel: 'Project',
+      targetId: project._id,
+      targetName: project.projectName,
+      description: `Admin ${adminUser.name} (${adminUser.email}) accepted architect proposal for project: ${project.projectName}`,
+      changes: {
+        proposalStatus: {
+          from: originalProposalStatus,
+          to: 'Accepted'
+        },
+        projectArchitect: {
+          from: originalProjectArchitect,
+          to: proposalToAccept.architect
+        }
+      },
+      metadata: {
+        projectId: project._id,
+        projectData: {
+          projectId: project._id,
+          projectName: project.projectName,
+          projectCode: project.projectCode,
+          status: project.status,
+          customerName: project.customerName,
+          requirementType: project.requirementType,
+          architect: project.architect
+        },
+        adminUser: {
+          userId: adminUser._id,
+          userName: adminUser.name,
+          userEmail: adminUser.email,
+          userRole: adminUser.role
+        },
+        proposalData: {
+          proposalId: proposalToAccept._id,
+          email: proposalToAccept.email,
+          proposedCharges: proposalToAccept.proposedCharges,
+          deliveryTimelineDays: proposalToAccept.deliveryTimelineDays,
+          portfolioLink: proposalToAccept.portfolioLink,
+          remarks: proposalToAccept.remarks,
+          architect: proposalToAccept.architect,
+          status: proposalToAccept.status,
+          acceptedAt: proposalToAccept.acceptedAt
+        },
+        originalProposalData,
+        proposalAcceptance: true,
+        architectAssignment: true,
+        paymentAssignment: true,
+        assignedAmount: proposalToAccept.proposedCharges,
+        acceptedBy: adminUser._id,
+        acceptedByModel: adminUser.constructor.modelName,
+        acceptedAt: new Date()
+      }
+    });
+  } catch (error) {
+    console.error('Error logging architect proposal acceptance:', error);
+  }
+
   return project;
 };
 
@@ -286,7 +422,7 @@ export const getProposalsForProject = async (projectId) => {
  * @param {Object} session - Mongoose session for transaction
  * @returns {Promise<Project>}
  */
-export const submitArchitectDocument = async (projectId, architect, documentData, session) => {
+export const submitArchitectDocument = async (req, projectId, architect, documentData, session) => {
   const project = await Project.findById(projectId).session(session);
   if (!project) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Project not found');
@@ -296,6 +432,10 @@ export const submitArchitectDocument = async (projectId, architect, documentData
   if (!project.architect || project.architect.toString() !== architect.id.toString()) {
     throw new ApiError(httpStatus.FORBIDDEN, 'You are not assigned to this project as an architect');
   }
+
+  // Store original data for logging
+  const originalDocumentsCount = project.architectDocuments ? project.architectDocuments.length : 0;
+  const originalDocuments = project.architectDocuments ? [...project.architectDocuments] : [];
 
   // Determine the version number (increment from the last version if exists)
   let version = 1;
@@ -345,6 +485,113 @@ export const submitArchitectDocument = async (projectId, architect, documentData
     // Delete temporary files after successful save
     for (const file of processedFiles) {
       await storage.deleteFile(file.tmpKey);
+    }
+
+    // Get the newly added document (last one in the array)
+    const addedDocument = project.architectDocuments[project.architectDocuments.length - 1];
+
+    // Log the architect document submission activity
+    try {
+      await logActivity(req, {
+        action: 'submit_document',
+        targetModel: 'Project',
+        targetId: project._id,
+        targetName: project.projectName,
+        description: `Architect ${architect.name} (${architect.email}) submitted document version ${version} for project: ${project.projectName}`,
+        changes: {
+          architectDocuments: {
+            from: originalDocumentsCount,
+            to: project.architectDocuments.length
+          },
+          documentVersion: {
+            from: version - 1,
+            to: version
+          }
+        },
+        metadata: {
+          projectId: project._id,
+          projectData: {
+            projectId: project._id,
+            projectName: project.projectName,
+            projectCode: project.projectCode,
+            status: project.status,
+            customerName: project.customerName,
+            requirementType: project.requirementType,
+            architect: project.architect
+          },
+          architect: {
+            userId: architect.id,
+            userName: architect.name,
+            userEmail: architect.email,
+            userRole: architect.role
+          },
+          documentData: {
+            documentId: addedDocument._id,
+            version: addedDocument.version,
+            notes: addedDocument.notes,
+            architect: addedDocument.architect,
+            filesCount: addedDocument.files.length,
+            files: addedDocument.files.map(file => ({
+              fileType: file.fileType,
+              key: file.key,
+              uploadedAt: file.uploadedAt
+            }))
+          },
+          originalDocumentsCount,
+          newDocumentsCount: project.architectDocuments.length,
+          documentSubmission: true,
+          documentVersion: version,
+          filesUploaded: processedFiles.length,
+          fileTypes: processedFiles.map(file => file.fileType),
+          submittedBy: architect.id,
+          submittedByModel: 'Architect',
+          submittedAt: new Date()
+        }
+      });
+
+      // Log individual file uploads
+      for (const file of processedFiles) {
+        await logActivity(req, {
+          action: 'upload',
+          targetModel: 'Project',
+          targetId: project._id,
+          targetName: project.projectName,
+          description: `Architect ${architect.name} uploaded ${file.fileType} file for project: ${project.projectName} (version ${version})`,
+          changes: {
+            files: {
+              from: null,
+              to: {
+                fileType: file.fileType,
+                key: file.permanentKey,
+                uploadedAt: new Date()
+              }
+            }
+          },
+          metadata: {
+            projectId: project._id,
+            projectData: {
+              projectId: project._id,
+              projectName: project.projectName,
+              projectCode: project.projectCode
+            },
+            architect: {
+              userId: architect.id,
+              userName: architect.name,
+              userEmail: architect.email
+            },
+            fileUpload: true,
+            fileType: file.fileType,
+            fileKey: file.permanentKey,
+            tmpKey: file.tmpKey,
+            documentVersion: version,
+            uploadedBy: architect.id,
+            uploadedByModel: 'Architect',
+            uploadedAt: new Date()
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Error logging architect document submission:', error);
     }
 
     return project;
@@ -413,7 +660,7 @@ export const getArchitectDocuments = async (projectId) => {
  * @param {Object} admin - The authenticated admin user
  * @returns {Promise<Project>}
  */
-export const reviewArchitectDocument = async (projectId, documentId, reviewData, admin) => {
+export const reviewArchitectDocument = async (req, projectId, documentId, reviewData, admin) => {
   const project = await Project.findById(projectId);
   if (!project) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Project not found');
@@ -427,12 +674,96 @@ export const reviewArchitectDocument = async (projectId, documentId, reviewData,
     throw new ApiError(httpStatus.NOT_FOUND, 'Document not found');
   }
 
+  // Store original document data for logging
+  const originalDocument = {
+    adminStatus: project.architectDocuments[documentIndex].adminStatus,
+    adminRemarks: project.architectDocuments[documentIndex].adminRemarks,
+    adminReviewedAt: project.architectDocuments[documentIndex].adminReviewedAt,
+    version: project.architectDocuments[documentIndex].version,
+    notes: project.architectDocuments[documentIndex].notes,
+    architect: project.architectDocuments[documentIndex].architect,
+    filesCount: project.architectDocuments[documentIndex].files.length
+  };
+
   // Update the document with admin review
   project.architectDocuments[documentIndex].adminStatus = reviewData.status;
   project.architectDocuments[documentIndex].adminRemarks = reviewData.remarks || '';
   project.architectDocuments[documentIndex].adminReviewedAt = new Date();
 
   await project.save();
+
+  // Get the updated document for logging
+  const updatedDocument = project.architectDocuments[documentIndex];
+
+  // Log the architect document review activity
+  try {
+    await logActivity(req, {
+      action: 'review_document',
+      targetModel: 'Project',
+      targetId: project._id,
+      targetName: project.projectName,
+      description: `Admin ${admin.name} (${admin.email}) ${reviewData.status.toLowerCase()} architect document version ${updatedDocument.version} for project: ${project.projectName}`,
+      changes: {
+        adminStatus: {
+          from: originalDocument.adminStatus,
+          to: reviewData.status
+        },
+        adminRemarks: {
+          from: originalDocument.adminRemarks,
+          to: reviewData.remarks || ''
+        },
+        adminReviewedAt: {
+          from: originalDocument.adminReviewedAt,
+          to: new Date()
+        }
+      },
+      metadata: {
+        projectId: project._id,
+        projectData: {
+          projectId: project._id,
+          projectName: project.projectName,
+          projectCode: project.projectCode,
+          status: project.status,
+          customerName: project.customerName,
+          requirementType: project.requirementType,
+          architect: project.architect
+        },
+        adminUser: {
+          userId: admin._id,
+          userName: admin.name,
+          userEmail: admin.email,
+          userRole: admin.role
+        },
+        documentData: {
+          documentId: updatedDocument._id,
+          version: updatedDocument.version,
+          notes: updatedDocument.notes,
+          architect: updatedDocument.architect,
+          filesCount: updatedDocument.files.length,
+          adminStatus: updatedDocument.adminStatus,
+          adminRemarks: updatedDocument.adminRemarks,
+          adminReviewedAt: updatedDocument.adminReviewedAt
+        },
+        originalDocumentData: originalDocument,
+        reviewData: {
+          status: reviewData.status,
+          remarks: reviewData.remarks || '',
+          reviewedAt: new Date()
+        },
+        documentReview: true,
+        reviewStatus: reviewData.status,
+        documentVersion: updatedDocument.version,
+        reviewedBy: admin._id,
+        reviewedByModel: admin.constructor.modelName,
+        reviewedAt: new Date(),
+        isApproved: reviewData.status === 'Approved',
+        isRejected: reviewData.status === 'Rejected'
+      }
+    });
+  } catch (error) {
+    console.error('Error logging architect document review:', error);
+  }
+
   return project;
 };
 
@@ -443,7 +774,7 @@ export const reviewArchitectDocument = async (projectId, documentId, reviewData,
  * @param {Object} admin - The authenticated admin user
  * @returns {Promise<Project>}
  */
-export const sendDocumentToCustomer = async (projectId, documentId, admin) => {
+export const sendDocumentToCustomer = async (req, projectId, documentId, admin) => {
   const project = await Project.findById(projectId);
   if (!project) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Project not found');
@@ -467,10 +798,68 @@ export const sendDocumentToCustomer = async (projectId, documentId, admin) => {
     );
   }
 
+  // Store original document data for logging
+  const originalSentToCustomer = document.sentToCustomer;
+
   // Mark document as sent to customer
   project.architectDocuments[documentIndex].sentToCustomer = true;
 
   await project.save();
+
+  // Log the document sending to customer activity
+  try {
+    await logActivity(req, {
+      action: 'send_to_customer',
+      targetModel: 'Project',
+      targetId: project._id,
+      targetName: project.projectName,
+      description: `Admin ${admin.name} (${admin.email}) sent architect document version ${document.version} to customer for project: ${project.projectName}`,
+      changes: {
+        sentToCustomer: {
+          from: originalSentToCustomer,
+          to: true
+        }
+      },
+      metadata: {
+        projectId: project._id,
+        projectData: {
+          projectId: project._id,
+          projectName: project.projectName,
+          projectCode: project.projectCode,
+          status: project.status,
+          customerName: project.customerName,
+          requirementType: project.requirementType,
+          architect: project.architect
+        },
+        adminUser: {
+          userId: admin._id,
+          userName: admin.name,
+          userEmail: admin.email,
+          userRole: admin.role
+        },
+        documentData: {
+          documentId: document._id,
+          version: document.version,
+          notes: document.notes,
+          architect: document.architect,
+          filesCount: document.files.length,
+          adminStatus: document.adminStatus,
+          adminRemarks: document.adminRemarks,
+          adminReviewedAt: document.adminReviewedAt,
+          sentToCustomer: true
+        },
+        documentWorkflow: true,
+        documentVersion: document.version,
+        sentBy: admin._id,
+        sentByModel: admin.constructor.modelName,
+        sentAt: new Date(),
+        customerNotification: true
+      }
+    });
+  } catch (error) {
+    console.error('Error logging document send to customer:', error);
+  }
+
   return project;
 };
 
@@ -481,7 +870,7 @@ export const sendDocumentToCustomer = async (projectId, documentId, admin) => {
  * @param {Object} reviewData - The review data including status and remarks
  * @returns {Promise<Project>}
  */
-export const customerReviewDocument = async (projectId, documentId, reviewData) => {
+export const customerReviewDocument = async (req, projectId, documentId, reviewData) => {
   const project = await Project.findById(projectId);
   if (!project) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Project not found');
@@ -505,12 +894,102 @@ export const customerReviewDocument = async (projectId, documentId, reviewData) 
     );
   }
 
+  // Store original document data for logging
+  const originalDocument = {
+    customerStatus: document.customerStatus,
+    customerRemarks: document.customerRemarks,
+    customerReviewedAt: document.customerReviewedAt,
+    version: document.version,
+    notes: document.notes,
+    architect: document.architect,
+    filesCount: document.files.length,
+    adminStatus: document.adminStatus,
+    sentToCustomer: document.sentToCustomer
+  };
+
   // Update the document with customer review
   project.architectDocuments[documentIndex].customerStatus = reviewData.status;
   project.architectDocuments[documentIndex].customerRemarks = reviewData.remarks || '';
   project.architectDocuments[documentIndex].customerReviewedAt = new Date();
 
   await project.save();
+
+  // Get the updated document for logging
+  const updatedDocument = project.architectDocuments[documentIndex];
+
+  // Log the customer document review activity
+  try {
+    await logActivity(req, {
+      action: 'customer_review',
+      targetModel: 'Project',
+      targetId: project._id,
+      targetName: project.projectName,
+      description: `Customer ${reviewData.status.toLowerCase()} architect document version ${updatedDocument.version} for project: ${project.projectName}`,
+      changes: {
+        customerStatus: {
+          from: originalDocument.customerStatus,
+          to: reviewData.status
+        },
+        customerRemarks: {
+          from: originalDocument.customerRemarks,
+          to: reviewData.remarks || ''
+        },
+        customerReviewedAt: {
+          from: originalDocument.customerReviewedAt,
+          to: new Date()
+        }
+      },
+      metadata: {
+        projectId: project._id,
+        projectData: {
+          projectId: project._id,
+          projectName: project.projectName,
+          projectCode: project.projectCode,
+          status: project.status,
+          customerName: project.customerName,
+          requirementType: project.requirementType,
+          architect: project.architect
+        },
+        customer: {
+          // Note: Customer info might not be available in req.user for customer endpoints
+          // This would need to be populated based on your authentication setup
+          customerName: project.customerName,
+          customerEmail: project.customerEmail || 'N/A'
+        },
+        documentData: {
+          documentId: updatedDocument._id,
+          version: updatedDocument.version,
+          notes: updatedDocument.notes,
+          architect: updatedDocument.architect,
+          filesCount: updatedDocument.files.length,
+          adminStatus: updatedDocument.adminStatus,
+          adminRemarks: updatedDocument.adminRemarks,
+          adminReviewedAt: updatedDocument.adminReviewedAt,
+          customerStatus: updatedDocument.customerStatus,
+          customerRemarks: updatedDocument.customerRemarks,
+          customerReviewedAt: updatedDocument.customerReviewedAt,
+          sentToCustomer: updatedDocument.sentToCustomer
+        },
+        originalDocumentData: originalDocument,
+        reviewData: {
+          status: reviewData.status,
+          remarks: reviewData.remarks || '',
+          reviewedAt: new Date()
+        },
+        documentWorkflow: true,
+        customerReview: true,
+        reviewStatus: reviewData.status,
+        documentVersion: updatedDocument.version,
+        reviewedAt: new Date(),
+        isApproved: reviewData.status === 'Approved',
+        isRejected: reviewData.status === 'Rejected',
+        workflowComplete: reviewData.status === 'Approved'
+      }
+    });
+  } catch (error) {
+    console.error('Error logging customer document review:', error);
+  }
+
   return project;
 };
 
@@ -771,7 +1250,7 @@ export const getMyProposals = async (user, options) => {
  * @param {Object} user - The authenticated architect user
  * @returns {Promise<Object>}
  */
-export const deleteMyProposal = async (proposalId, user) => {
+export const deleteMyProposal = async (req, proposalId, user) => {
   // Find the project that contains this proposal
   const project = await Project.findOne({
     'proposals._id': proposalId,
@@ -797,9 +1276,68 @@ export const deleteMyProposal = async (proposalId, user) => {
     );
   }
 
+  // Store original proposal data for logging
+  const originalProposal = {
+    proposalId: proposal._id,
+    email: proposal.email,
+    proposedCharges: proposal.proposedCharges,
+    deliveryTimelineDays: proposal.deliveryTimelineDays,
+    portfolioLink: proposal.portfolioLink,
+    remarks: proposal.remarks,
+    architect: proposal.architect,
+    status: proposal.status,
+    submittedAt: proposal.submittedAt
+  };
+
+  const originalProposalsCount = project.proposals.length;
+
   // Remove the proposal from the project
   project.proposals = project.proposals.filter(p => p._id.toString() !== proposalId);
   await project.save();
+
+  // Log the proposal deletion activity
+  try {
+    await logActivity(req, {
+      action: 'delete_proposal',
+      targetModel: 'Project',
+      targetId: project._id,
+      targetName: project.projectName,
+      description: `Architect ${user.name} (${user.email}) deleted their proposal for project: ${project.projectName}`,
+      changes: {
+        proposals: {
+          from: originalProposalsCount,
+          to: project.proposals.length
+        }
+      },
+      metadata: {
+        projectId: project._id,
+        projectData: {
+          projectId: project._id,
+          projectName: project.projectName,
+          projectCode: project.projectCode,
+          status: project.status,
+          customerName: project.customerName,
+          requirementType: project.requirementType,
+          architect: project.architect
+        },
+        architect: {
+          userId: user._id,
+          userName: user.name,
+          userEmail: user.email,
+          userRole: user.role
+        },
+        deletedProposalData: originalProposal,
+        originalProposalsCount,
+        newProposalsCount: project.proposals.length,
+        proposalDeletion: true,
+        deletedBy: user._id,
+        deletedByModel: 'Architect',
+        deletedAt: new Date()
+      }
+    });
+  } catch (error) {
+    console.error('Error logging proposal deletion:', error);
+  }
 
   return {
     deletedProposalId: proposalId,
@@ -815,7 +1353,7 @@ export const deleteMyProposal = async (proposalId, user) => {
  * @param {Object} rejectData - Rejection data including remarks
  * @returns {Promise<Object>}
  */
-export const rejectProposal = async (proposalId, adminUser, rejectData) => {
+export const rejectProposal = async (req, proposalId, adminUser, rejectData) => {
   // Find the project that contains this proposal
   const project = await Project.findOne({
     'proposals._id': proposalId
@@ -845,6 +1383,20 @@ export const rejectProposal = async (proposalId, adminUser, rejectData) => {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Cannot reject a withdrawn proposal');
   }
 
+  // Store original proposal data for logging
+  const originalProposal = {
+    status: proposal.status,
+    adminRemark: proposal.adminRemark,
+    rejectedAt: proposal.rejectedAt,
+    rejectedBy: proposal.rejectedBy,
+    email: proposal.email,
+    proposedCharges: proposal.proposedCharges,
+    deliveryTimelineDays: proposal.deliveryTimelineDays,
+    portfolioLink: proposal.portfolioLink,
+    remarks: proposal.remarks,
+    architect: proposal.architect
+  };
+
   // Update the proposal status
   proposal.status = 'Rejected';
   proposal.rejectedAt = new Date();
@@ -852,6 +1404,77 @@ export const rejectProposal = async (proposalId, adminUser, rejectData) => {
   proposal.adminRemark = rejectData.remarks || '';
 
   await project.save();
+
+  // Log the proposal rejection activity
+  try {
+    await logActivity(req, {
+      action: 'reject_proposal',
+      targetModel: 'Project',
+      targetId: project._id,
+      targetName: project.projectName,
+      description: `Admin ${adminUser.name} (${adminUser.email}) rejected architect proposal for project: ${project.projectName}`,
+      changes: {
+        proposalStatus: {
+          from: originalProposal.status,
+          to: 'Rejected'
+        },
+        adminRemark: {
+          from: originalProposal.adminRemark,
+          to: rejectData.remarks || ''
+        },
+        rejectedAt: {
+          from: originalProposal.rejectedAt,
+          to: new Date()
+        },
+        rejectedBy: {
+          from: originalProposal.rejectedBy,
+          to: adminUser._id
+        }
+      },
+      metadata: {
+        projectId: project._id,
+        projectData: {
+          projectId: project._id,
+          projectName: project.projectName,
+          projectCode: project.projectCode,
+          status: project.status,
+          customerName: project.customerName,
+          requirementType: project.requirementType,
+          architect: project.architect
+        },
+        adminUser: {
+          userId: adminUser._id,
+          userName: adminUser.name,
+          userEmail: adminUser.email,
+          userRole: adminUser.role
+        },
+        proposalData: {
+          proposalId: proposal._id,
+          email: proposal.email,
+          proposedCharges: proposal.proposedCharges,
+          deliveryTimelineDays: proposal.deliveryTimelineDays,
+          portfolioLink: proposal.portfolioLink,
+          remarks: proposal.remarks,
+          architect: proposal.architect,
+          status: proposal.status,
+          adminRemark: proposal.adminRemark,
+          rejectedAt: proposal.rejectedAt,
+          rejectedBy: proposal.rejectedBy
+        },
+        originalProposalData: originalProposal,
+        rejectData: {
+          remarks: rejectData.remarks || '',
+          rejectedAt: new Date()
+        },
+        proposalRejection: true,
+        rejectedBy: adminUser._id,
+        rejectedByModel: adminUser.constructor.modelName,
+        rejectedAt: new Date()
+      }
+    });
+  } catch (error) {
+    console.error('Error logging proposal rejection:', error);
+  }
 
   return {
     proposalId: proposalId,
@@ -872,7 +1495,7 @@ export const rejectProposal = async (proposalId, adminUser, rejectData) => {
  * @param {Object} admin - The authenticated admin user
  * @returns {Promise<Project>}
  */
-export const sendDocumentToProcurement = async (projectId, documentId, admin) => {
+export const sendDocumentToProcurement = async (req, projectId, documentId, admin) => {
   const project = await Project.findById(projectId);
   if (!project) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Project not found');
@@ -911,12 +1534,87 @@ export const sendDocumentToProcurement = async (projectId, documentId, admin) =>
     );
   }
 
+  // Store original document data for logging
+  const originalSentToPlanningEngineer = document.sentToPlanningEngineer;
+  const originalSentToPlanningEngineerAt = document.sentToPlanningEngineerAt;
+  const originalSentToPlanningEngineerBy = document.sentToPlanningEngineerBy;
+
   // Mark document as sent to procurement
   project.architectDocuments[documentIndex].sentToPlanningEngineer = true;
   project.architectDocuments[documentIndex].sentToPlanningEngineerAt = new Date();
   project.architectDocuments[documentIndex].sentToPlanningEngineerBy = admin._id;
 
   await project.save();
+
+  // Log the document sending to procurement activity
+  try {
+    await logActivity(req, {
+      action: 'send_to_procurement',
+      targetModel: 'Project',
+      targetId: project._id,
+      targetName: project.projectName,
+      description: `Admin ${admin.name} (${admin.email}) sent approved architect document version ${document.version} to procurement for project: ${project.projectName}`,
+      changes: {
+        sentToPlanningEngineer: {
+          from: originalSentToPlanningEngineer,
+          to: true
+        },
+        sentToPlanningEngineerAt: {
+          from: originalSentToPlanningEngineerAt,
+          to: new Date()
+        },
+        sentToPlanningEngineerBy: {
+          from: originalSentToPlanningEngineerBy,
+          to: admin._id
+        }
+      },
+      metadata: {
+        projectId: project._id,
+        projectData: {
+          projectId: project._id,
+          projectName: project.projectName,
+          projectCode: project.projectCode,
+          status: project.status,
+          customerName: project.customerName,
+          requirementType: project.requirementType,
+          architect: project.architect
+        },
+        adminUser: {
+          userId: admin._id,
+          userName: admin.name,
+          userEmail: admin.email,
+          userRole: admin.role
+        },
+        documentData: {
+          documentId: document._id,
+          version: document.version,
+          notes: document.notes,
+          architect: document.architect,
+          filesCount: document.files.length,
+          adminStatus: document.adminStatus,
+          adminRemarks: document.adminRemarks,
+          adminReviewedAt: document.adminReviewedAt,
+          customerStatus: document.customerStatus,
+          customerRemarks: document.customerRemarks,
+          customerReviewedAt: document.customerReviewedAt,
+          sentToCustomer: document.sentToCustomer,
+          sentToPlanningEngineer: true,
+          sentToPlanningEngineerAt: new Date(),
+          sentToPlanningEngineerBy: admin._id
+        },
+        documentWorkflow: true,
+        procurementWorkflow: true,
+        documentVersion: document.version,
+        sentBy: admin._id,
+        sentByModel: admin.constructor.modelName,
+        sentAt: new Date(),
+        procurementNotification: true
+      }
+    });
+  } catch (error) {
+    console.error('Error logging document send to procurement:', error);
+  }
+
   return project;
 };
 
@@ -1260,10 +1958,10 @@ export const getProjectById = async (projectId) => {
   return project;
 };
 
-export const assignSiteEngineersService = async (projectId, siteEngineers) => {
+export const assignSiteEngineersService = async (req, projectId, siteEngineers) => {
   try {
     // Step 1: Get current assigned site engineers
-    const project = await Project.findById(projectId).select('assignedSiteEngineer');
+    const project = await Project.findById(projectId).select('assignedSiteEngineer projectName projectCode status customerName requirementType architect');
     if (!project) throw new Error('Project not found');
 
     const existingEngineerIds = project.assignedSiteEngineer.map(id => id.toString());
@@ -1273,9 +1971,66 @@ export const assignSiteEngineersService = async (projectId, siteEngineers) => {
       eng => !existingEngineerIds.includes(eng.userId.toString())
     );
 
+    // Store original data for logging
+    const originalAssignedEngineers = [...project.assignedSiteEngineer];
+    const originalEngineersCount = project.assignedSiteEngineer.length;
+
     if (newEngineers.length === 0) {
       // No new engineers to add; return the fully populated project
-      return await Project.findById(projectId).populate('assignedSiteEngineer', 'name email role');
+      const populatedProject = await Project.findById(projectId).populate('assignedSiteEngineer', 'name email role');
+
+      // Log that no new engineers were added
+      try {
+        await logActivity(req, {
+          action: 'assign_site_engineers',
+          targetModel: 'Project',
+          targetId: project._id,
+          targetName: project.projectName,
+          description: `Admin ${req.user.name} (${req.user.email}) attempted to assign site engineers to project: ${project.projectName} - No new engineers added (all already assigned)`,
+          changes: {
+            assignedSiteEngineers: {
+              from: originalEngineersCount,
+              to: originalEngineersCount
+            }
+          },
+          metadata: {
+            projectId: project._id,
+            projectData: {
+              projectId: project._id,
+              projectName: project.projectName,
+              projectCode: project.projectCode,
+              status: project.status,
+              customerName: project.customerName,
+              requirementType: project.requirementType,
+              architect: project.architect
+            },
+            adminUser: {
+              userId: req.user._id,
+              userName: req.user.name,
+              userEmail: req.user.email,
+              userRole: req.user.role
+            },
+            siteEngineersData: {
+              requestedEngineers: siteEngineers,
+              newEngineers: [],
+              existingEngineers: originalAssignedEngineers,
+              totalEngineers: originalEngineersCount,
+              engineersAdded: 0,
+              engineersSkipped: siteEngineers.length
+            },
+            assignmentDetails: {
+              noNewAssignments: true,
+              allAlreadyAssigned: true,
+              assignmentAttempted: true,
+              assignmentResult: 'no_changes'
+            }
+          }
+        });
+      } catch (error) {
+        console.error('Error logging site engineer assignment (no changes):', error);
+      }
+
+      return populatedProject;
     }
 
     const newEngineerIds = newEngineers.map(eng => eng.userId);
@@ -1288,7 +2043,7 @@ export const assignSiteEngineersService = async (projectId, siteEngineers) => {
     ).populate('assignedSiteEngineer', 'name email role');
 
     // Step 4: Create project assignment payments only for newly added engineers
-    await Promise.all(newEngineers.map(engineer =>
+    const createdPayments = await Promise.all(newEngineers.map(engineer =>
       ProjectAssignmentPayment.create({
         project: projectId,
         siteEngineer: engineer.userId,
@@ -1296,6 +2051,66 @@ export const assignSiteEngineersService = async (projectId, siteEngineers) => {
         perDayAmount: engineer.perDayAmount,
       })
     ));
+
+    // Log the site engineer assignment activity
+    try {
+      await logActivity(req, {
+        action: 'assign_site_engineers',
+        targetModel: 'Project',
+        targetId: project._id,
+        targetName: project.projectName,
+        description: `Admin ${req.user.name} (${req.user.email}) assigned ${newEngineers.length} site engineer(s) to project: ${project.projectName}`,
+        changes: {
+          assignedSiteEngineers: {
+            from: originalEngineersCount,
+            to: updatedProject.assignedSiteEngineer.length
+          }
+        },
+        metadata: {
+          projectId: project._id,
+          projectData: {
+            projectId: project._id,
+            projectName: project.projectName,
+            projectCode: project.projectCode,
+            status: project.status,
+            customerName: project.customerName,
+            requirementType: project.requirementType,
+            architect: project.architect
+          },
+          adminUser: {
+            userId: req.user._id,
+            userName: req.user.name,
+            userEmail: req.user.email,
+            userRole: req.user.role
+          },
+          siteEngineersData: {
+            requestedEngineers: siteEngineers,
+            newEngineers: newEngineers.map(eng => ({
+              userId: eng.userId,
+              assignedAmount: eng.assignmentAmount,
+              perDayAmount: eng.perDayAmount
+            })),
+            existingEngineers: originalAssignedEngineers,
+            totalEngineers: updatedProject.assignedSiteEngineer.length,
+            engineersAdded: newEngineers.length,
+            engineersSkipped: siteEngineers.length - newEngineers.length
+          },
+          assignmentDetails: {
+            assignmentSuccessful: true,
+            newAssignments: newEngineers.length,
+            totalAssignments: updatedProject.assignedSiteEngineer.length,
+            assignmentResult: 'success'
+          },
+          paymentDetails: {
+            paymentsCreated: createdPayments.length,
+            totalAssignedAmount: newEngineers.reduce((sum, eng) => sum + (eng.assignmentAmount || 0), 0),
+            averagePerDayAmount: newEngineers.reduce((sum, eng) => sum + (eng.perDayAmount || 0), 0) / newEngineers.length
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Error logging site engineer assignment:', error);
+    }
 
     return updatedProject;
   } catch (error) {
@@ -1381,7 +2196,7 @@ export const getProjectsForUserAssignedInSiteworkService = async (userId, query)
  * @param {Object} user
  * @returns {Promise<Project>}
  */
-export const updateProjectStatusService = async (projectId, newStatus) => {
+export const updateProjectStatusService = async (req, projectId, newStatus) => {
   if (!isValidObjectId(projectId)) {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid project ID');
   }
@@ -1389,13 +2204,72 @@ export const updateProjectStatusService = async (projectId, newStatus) => {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Invalid status value');
   }
 
-  const project = await Project.findById(projectId);
+  const project = await Project.findById(projectId).select('projectName projectCode status customerName requirementType architect assignedSiteEngineer');
   if (!project) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Project not found');
   }
 
+  // Store original status for logging
+  const originalStatus = project.status;
+
   // Use the cascade service to update project and reflect to customer
   const result = await updateProjectStatusWithReflection(projectId, newStatus);
+
+  // Log the project status update activity
+  try {
+    await logActivity(req, {
+      action: 'update_project_status',
+      targetModel: 'Project',
+      targetId: project._id,
+      targetName: project.projectName,
+      description: `${req.user.role === 'admin' ? 'Admin' : 'User'} ${req.user.name} (${req.user.email}) updated project status from '${originalStatus}' to '${newStatus}' for project: ${project.projectName}`,
+      changes: {
+        status: {
+          from: originalStatus,
+          to: newStatus
+        }
+      },
+      metadata: {
+        projectId: project._id,
+        projectData: {
+          projectId: project._id,
+          projectName: project.projectName,
+          projectCode: project.projectCode,
+          status: newStatus,
+          customerName: project.customerName,
+          requirementType: project.requirementType,
+          architect: project.architect,
+          assignedSiteEngineers: project.assignedSiteEngineer.length
+        },
+        user: {
+          userId: req.user._id,
+          userName: req.user.name,
+          userEmail: req.user.email,
+          userRole: req.user.role
+        },
+        statusUpdate: {
+          originalStatus,
+          newStatus,
+          statusChanged: originalStatus !== newStatus,
+          statusTransition: `${originalStatus} → ${newStatus}`,
+          updatedAt: new Date()
+        },
+        cascadeUpdate: {
+          customerReflection: true,
+          projectUpdated: true,
+          statusCascade: true
+        },
+        workflow: {
+          statusUpdate: true,
+          projectWorkflow: true,
+          customerNotification: true
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error logging project status update:', error);
+  }
+
   return result.project;
 };
 
