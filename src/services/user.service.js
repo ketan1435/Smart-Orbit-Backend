@@ -162,6 +162,9 @@ export const queryUsers = async (filter, options) => {
         query[key] = { $in: value.map(role => new RegExp(`^${role}$`, 'i')) };
       } else if (['name', 'experience', 'region', 'education'].includes(key)) {
         query[key] = { $regex: value, $options: 'i' };
+      } else if (['state', 'city'].includes(key)) {
+        // Use exact matching for state and city (case-insensitive)
+        query[key] = { $regex: `^${value}$`, $options: 'i' };
       } else {
         query[key] = value;
       }
@@ -170,7 +173,7 @@ export const queryUsers = async (filter, options) => {
 
   const sortOption = sortBy ? { [sortBy.split(':')[0]]: sortBy.split(':')[1] === 'desc' ? -1 : 1 } : { createdAt: -1 };
 
-  const users = await User.find(query).sort(sortOption).skip(skip).limit(limit).populate('createdBy', 'name email role').select('name email role createdBy isActive experience education phoneNumber city state region address profilePicture documents');
+  const users = await User.find(query).sort(sortOption).skip(skip).limit(limit).populate('createdBy', 'name email role').select('name email role subRole createdBy isActive experience education phoneNumber city state region address profilePicture documents');
   const totalResults = await User.countDocuments(query);
 
   return {
@@ -683,9 +686,9 @@ export const createWorkerBySiteEngineerService = async (req, data, siteEngineerI
     throw new ApiError(httpStatus.FORBIDDEN, 'Only site engineers can create workers');
   }
 
-  // Ensure the user being created has worker or fabricator role
-  if (!['worker', 'fabricator'].includes(data.role)) {
-    throw new ApiError(httpStatus.BAD_REQUEST, 'Site engineers can only create workers or fabricators');
+  // Ensure the user being created has worker, fabricator, or custom role
+  if (!['worker', 'fabricator', 'custom'].includes(data.role)) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Site engineers can only create workers, fabricators, or custom role users');
   }
 
   // Set the createdBy field to the site engineer
@@ -828,7 +831,7 @@ export const getWorkersBySiteEngineerService = async (siteEngineerId, query) => 
   const { page = 1, limit = 10, role, name, email, mobileNumber, isActive } = query;
   const filter = {
     createdBy: siteEngineerId,
-    role: { $in: ['worker', 'fabricator'] }
+    role: { $in: ['worker', 'fabricator', 'custom'] }
   };
 
   // if (role) filter.role = role;
@@ -840,7 +843,7 @@ export const getWorkersBySiteEngineerService = async (siteEngineerId, query) => 
   const skip = (parseInt(page) - 1) * parseInt(limit);
   const [users, total] = await Promise.all([
     User.find(filter)
-      .select('name email mobileNumber role isActive createdAt')
+      .select('name email mobileNumber role subRole state city region address education experience isActive createdAt')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit)),
@@ -869,9 +872,9 @@ export const updateWorkerBySiteEngineerService = async (req, workerId, siteEngin
     throw new ApiError(httpStatus.FORBIDDEN, 'You can only update workers you created');
   }
 
-  // Ensure the role remains worker or fabricator
-  if (data.role && !['worker', 'fabricator'].includes(data.role)) {
-    throw new ApiError(httpStatus.BAD_REQUEST, 'Site engineers can only assign worker or fabricator roles');
+  // Ensure the role remains worker, fabricator, or custom
+  if (data.role && !['worker', 'fabricator', 'custom'].includes(data.role)) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Site engineers can only assign worker, fabricator, or custom roles');
   }
 
   // Store original worker data for change detection

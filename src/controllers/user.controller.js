@@ -11,7 +11,7 @@ const createUser = catchAsync(async (req, res) => {
 });
 
 const getUsers = catchAsync(async (req, res) => {
-  const filter = pick(req.query, ['name', 'role', 'experience', 'region', 'education', 'isActive']);
+  const filter = pick(req.query, ['name', 'role', 'experience', 'region', 'education', 'isActive', 'state', 'city']);
   if (filter.role && typeof filter.role === 'string') {
     filter.role = filter.role.split(',').map(role => role.trim());
   }

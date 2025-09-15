@@ -4,6 +4,7 @@ import ApiError from '../utils/ApiError.js';
 import { mongoose, isValidObjectId } from 'mongoose';
 import Requirement from '../models/requirement.model.js';
 import User from '../models/user.model.js';
+import Admin from '../models/admin.model.js';
 import httpStatus from 'http-status';
 import storage from '../factory/storage.factory.js';
 import Sitework from '../models/sitework.model.js';
@@ -2161,7 +2162,10 @@ export const getAssignedProjectsForSiteEngineerService = async (siteEngineerId, 
 
 export const getProjectsForUserAssignedInSiteworkService = async (userId, query) => {
   // 1. Find all siteworks where user is assigned
-  const siteworks = await Sitework.find({ "assignedUsers.user": userId }).select('project');
+  const siteworks = await Sitework.find({ "assignedUsers.user": userId })
+    .select('project name attachment')
+    .sort({ createdAt: -1 });
+  
   const projectIds = [...new Set(siteworks.map(sw => sw.project.toString()))];
   if (projectIds.length === 0) {
     return { data: [], page: 1, limit: 10, total: 0, totalPages: 0 };
@@ -2180,8 +2184,28 @@ export const getProjectsForUserAssignedInSiteworkService = async (userId, query)
     Project.countDocuments({ _id: { $in: projectIds } })
   ]);
 
+  // 3. Populate attachment.uploadedBy for each sitework
+  for (const sitework of siteworks) {
+    if (sitework.attachment && sitework.attachment.uploadedBy) {
+      if (sitework.attachment.uploadedByModel === 'Admin') {
+        sitework.attachment.uploadedBy = await Admin.findById(sitework.attachment.uploadedBy).select('adminName email role');
+      } else if (sitework.attachment.uploadedByModel === 'User') {
+        sitework.attachment.uploadedBy = await User.findById(sitework.attachment.uploadedBy).select('name email role');
+      }
+    }
+  }
+
+  // 4. Attach siteworks with attachments to each project
+  const projectsWithSiteworks = projects.map(project => {
+    const projectSiteworks = siteworks.filter(sw => sw.project.toString() === project._id.toString());
+    return {
+      ...project.toObject(),
+      siteworks: projectSiteworks
+    };
+  });
+
   return {
-    data: projects,
+    data: projectsWithSiteworks,
     page: parseInt(page),
     limit: parseInt(limit),
     total,

@@ -7,7 +7,12 @@ export const createUser = {
     email: Joi.string().required().email(),
     password: Joi.string().required().custom(password),
     name: Joi.string().required(),
-    role: Joi.string().required().valid(...roles),
+    role: Joi.string().required().valid(...roles, 'custom'),
+    subRole: Joi.string().when('role', {
+      is: 'custom',
+      then: Joi.string().required().min(1).max(50),
+      otherwise: Joi.string().optional()
+    }),
     phoneNumber: Joi.string(),
     state: Joi.string(),
     city: Joi.string(),
@@ -34,6 +39,8 @@ export const getUsers = {
     role: Joi.string(),
     experience: Joi.string(),
     region: Joi.string(),
+    state: Joi.string(),
+    city: Joi.string(),
     education: Joi.string(),
     sortBy: Joi.string(),
     limit: Joi.number().integer(),
@@ -54,7 +61,12 @@ export const updateUser = {
   body: Joi.object()
     .keys({
       email: Joi.string().email(),
-      role: Joi.string().valid(...roles),
+      role: Joi.string().valid(...roles, 'custom'),
+      subRole: Joi.string().when('role', {
+        is: 'custom',
+        then: Joi.string().required().min(1).max(50),
+        otherwise: Joi.string().optional()
+      }),
       password: Joi.string().custom(password),
       name: Joi.string(),
       phoneNumber: Joi.string(),
@@ -99,10 +111,18 @@ export const searchUsers = {
 
 export const createWorkerOrFabricatorSchema = Joi.object({
   name: Joi.string().required(),
+  email: Joi.string().email().required(),
+  password: Joi.string().min(6).required(),
   mobileNumber: Joi.string().optional(),
-  role: Joi.string().valid('worker', 'fabricator').required(),
+  role: Joi.string().valid('worker', 'fabricator', 'custom').required(),
+  subRole: Joi.string().when('role', {
+    is: 'custom',
+    then: Joi.string().required().min(1).max(50),
+    otherwise: Joi.string().optional()
+  }),
   phoneNumber: Joi.string().optional(),
   city: Joi.string().optional(),
+  state: Joi.string().optional(),
   region: Joi.string().optional(),
   address: Joi.string().optional(),
   education: Joi.string().optional(),
@@ -116,6 +136,35 @@ export const createWorkerOrFabricatorSchema = Joi.object({
   ).optional(),
 });
 
+export const createWorkerBySiteEngineer = {
+  body: Joi.object().keys({
+    name: Joi.string().required(),
+    email: Joi.string().email().required(),
+    password: Joi.string().min(6).required(),
+    mobileNumber: Joi.string().optional(),
+    role: Joi.string().valid('worker', 'fabricator', 'custom').required(),
+    subRole: Joi.string().when('role', {
+      is: 'custom',
+      then: Joi.string().required().min(1).max(50),
+      otherwise: Joi.string().optional()
+    }),
+    phoneNumber: Joi.string().optional(),
+    city: Joi.string().optional(),
+    state: Joi.string().optional(),
+    region: Joi.string().optional(),
+    address: Joi.string().optional(),
+    education: Joi.string().optional(),
+    experience: Joi.string().optional(),
+    documents: Joi.array().items(
+      Joi.object({
+        fileType: Joi.string().valid('image', 'pdf', 'document').required(),
+        key: Joi.string().required(),
+        uploadedAt: Joi.date().optional()
+      })
+    ).optional(),
+  }),
+};
+
 export const updateWorkerBySiteEngineer = {
   params: Joi.object().keys({
     id: Joi.string().custom(objectId).required(),
@@ -124,7 +173,12 @@ export const updateWorkerBySiteEngineer = {
     name: Joi.string().optional(),
     email: Joi.string().email().optional(),
     mobileNumber: Joi.string().optional(),
-    role: Joi.string().valid('worker', 'fabricator').optional(),
+    role: Joi.string().valid('worker', 'fabricator', 'custom').optional(),
+    subRole: Joi.string().when('role', {
+      is: 'custom',
+      then: Joi.string().required().min(1).max(50),
+      otherwise: Joi.string().optional()
+    }),
     documents: Joi.array().items(
       Joi.object({
         fileType: Joi.string().valid('image', 'pdf', 'document').required(),

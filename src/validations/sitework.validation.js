@@ -14,6 +14,13 @@ export const createSitework = {
             assignmentAmount: Joi.number().required(),
             perDayAmount: Joi.number().required()
         })).required(),
+        attachment: Joi.object().keys({
+            files: Joi.array().items(Joi.object().keys({
+                key: Joi.string().required(),
+                fileType: Joi.string().required(),
+            })).optional(),
+            note: Joi.string().allow('').optional(),
+        }).optional(),
     }),
 };
 
@@ -32,6 +39,13 @@ export const updateSitework = {
         startDate: Joi.date(),
         endDate: Joi.date(),
         status: Joi.string().valid('not-started', 'in-progress', 'completed', 'cancelled'),
+        attachment: Joi.object().keys({
+            files: Joi.array().items(Joi.object().keys({
+                key: Joi.string().required(),
+                fileType: Joi.string().required(),
+            })).optional(),
+            note: Joi.string().allow('').optional(),
+        }).optional(),
     }),
 };
 

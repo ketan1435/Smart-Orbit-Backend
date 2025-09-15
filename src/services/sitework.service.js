@@ -11,7 +11,35 @@ import Roles from '../config/enums/roles.enum.js';
 import { logActivity } from '../middlewares/activityLog.middleware.js';
 
 
+
 export const createSiteworkService = async (req, data, user) => {
+    // Handle attachment upload if provided
+    let attachmentData = null;
+    if (data.attachment && data.attachment.files && data.attachment.files.length > 0) {
+        const copiedFiles = [];
+        try {
+            for (const file of data.attachment.files) {
+                const fileName = file.key.split('/').pop();
+                const permanentKey = `siteworks/attachments/${data.project}/${uuidv4()}-${fileName}`;
+                await storage.copyFile(file.key, permanentKey);
+                copiedFiles.push({ ...file, key: permanentKey });
+            }
+        } catch (err) {
+            // Cleanup any copied files
+            await Promise.all(copiedFiles.map(f => storage.deleteFile(f.key)));
+            throw err;
+        }
+
+        attachmentData = {
+            files: copiedFiles,
+            uploadedBy: user.id,
+            uploadedByModel: user.role === 'Admin' ? 'Admin' : 'User',
+            note: data.attachment.note || '',
+        };
+
+        // Delete tmp files
+        await Promise.all(data.attachment.files.map(f => storage.deleteFile(f.key)));
+    }
     // Get project details for logging
     const project = await Project.findById(data.project).populate('architect', 'name email');
     if (!project) {
@@ -27,6 +55,7 @@ export const createSiteworkService = async (req, data, user) => {
         endDate: data.endDate,
         status: data.status,
         assignedUsers: data.assignedUsers,
+        attachment: attachmentData,
         createdBy: user.id,
         createdByModel: user.role === 'Admin' ? 'Admin' : 'User',
         isActive: true,
@@ -388,8 +417,19 @@ export const getSiteworksByProjectService = async (projectId, user) => {
     }
     const siteworks = await Sitework.find(filter)
         .sort({ sequence: 1, createdAt: 1 })
-        .select('name description status startDate endDate assignedUsers sequence isActive siteworkDocuments')
+        .select('name description status startDate endDate assignedUsers sequence isActive siteworkDocuments attachment')
         .populate('assignedUsers', 'name email role');
+
+    // Populate attachment.uploadedBy for each sitework
+    for (const sitework of siteworks) {
+        if (sitework.attachment && sitework.attachment.uploadedBy) {
+            if (sitework.attachment.uploadedByModel === 'Admin') {
+                sitework.attachment.uploadedBy = await Admin.findById(sitework.attachment.uploadedBy).select('adminName email role');
+            } else if (sitework.attachment.uploadedByModel === 'User') {
+                sitework.attachment.uploadedBy = await User.findById(sitework.attachment.uploadedBy).select('name email role');
+            }
+        }
+    }
 
     if (user.role === Roles.USER) {
         siteworks.forEach(sitework => {

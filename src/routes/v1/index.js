@@ -21,6 +21,7 @@ import messageRoute from './message.route.js';
 import socketRoute from './socket.route.js';
 import attendanceRoute from './attendance.route.js';
 import activityLogRoute from './activityLog.route.js';
+import remarkRoute from './remark.route.js';
 
 const router = express.Router();
 
@@ -104,6 +105,10 @@ const defaultRoutes = [
   {
     path: '/activity-logs',
     route: activityLogRoute,
+  },
+  {
+    path: '/remarks',
+    route: remarkRoute,
   },
   // {
   //   path: '/income',

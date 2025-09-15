@@ -94,6 +94,30 @@ const siteworkSchema = new mongoose.Schema({
         type: [documentSchema],
         default: [],
     },
+    // Attachment field for shared documents with assigned workers
+    attachment: {
+        files: {
+            type: [fileSchema],
+            default: [],
+        },
+        uploadedAt: {
+            type: Date,
+            default: Date.now,
+        },
+        uploadedBy: { 
+            type: mongoose.Schema.Types.ObjectId, 
+            refPath: 'attachment.uploadedByModel', 
+            required: false 
+        },
+        uploadedByModel: {
+            type: String,
+            enum: ['User', 'Admin'],
+        },
+        note: { 
+            type: String, 
+            trim: true 
+        },
+    },
     assignedUsers: [{
         user: {
             type: mongoose.Schema.Types.ObjectId, ref: 'User'
