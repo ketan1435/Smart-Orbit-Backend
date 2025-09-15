@@ -1,5 +1,5 @@
 import express from 'express';
-import { createPO, getPOs, activatePO, deactivatePO } from '../../controllers/po.controller.js';
+import { createPO, getPOs, activatePO, deactivatePO, markItemsAsDelivered } from '../../controllers/po.controller.js';
 import auth from '../../middlewares/auth.js';
 import validate from '../../middlewares/validate.js';
 import * as poValidation from '../../validations/po.validation.js';
@@ -355,5 +355,133 @@ router.patch('/:id/activate', auth('procurement'), validate(poValidation.activat
  *         description: PO not found
  */
 router.patch('/:id/deactivate', auth('procurement'), validate(poValidation.deactivatePO), deactivatePO);
+
+/**
+ * @swagger
+ * /pos/{id}/mark-delivered:
+ *   patch:
+ *     summary: Mark specific PO items as delivered
+ *     tags: [POs]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The PO ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - itemIndices
+ *             properties:
+ *               itemIndices:
+ *                 type: array
+ *                 items:
+ *                   type: integer
+ *                   minimum: 0
+ *                 minItems: 1
+ *                 description: Array of item indices to mark as delivered (0-based)
+ *             example:
+ *               itemIndices: [0, 2, 4]
+ *     responses:
+ *       200:
+ *         description: Items marked as delivered successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: Successfully marked 3 items as delivered
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     po:
+ *                       type: object
+ *                       description: Updated PO with marked items
+ *                     itemsMarked:
+ *                       type: array
+ *                       description: Items that were newly marked as delivered
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           index:
+ *                             type: integer
+ *                           itemName:
+ *                             type: string
+ *                           quantity:
+ *                             type: number
+ *                           units:
+ *                             type: string
+ *                     alreadyDeliveredItems:
+ *                       type: array
+ *                       description: Items that were already marked as delivered
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           index:
+ *                             type: integer
+ *                           itemName:
+ *                             type: string
+ *                           quantity:
+ *                             type: number
+ *                           units:
+ *                             type: string
+ *                     summary:
+ *                       type: object
+ *                       properties:
+ *                         totalRequested:
+ *                           type: integer
+ *                           description: Total number of items requested to be marked
+ *                         newlyMarked:
+ *                           type: integer
+ *                           description: Number of items newly marked as delivered
+ *                         alreadyDelivered:
+ *                           type: integer
+ *                           description: Number of items that were already delivered
+ *                         totalDelivered:
+ *                           type: integer
+ *                           description: Total number of delivered items in the PO
+ *                         totalItems:
+ *                           type: integer
+ *                           description: Total number of items in the PO
+ *       400:
+ *         description: Bad request - invalid item indices
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 0
+ *                 message:
+ *                   type: string
+ *                   example: Invalid item indices: 5, 6. Valid range: 0-4
+ *       404:
+ *         description: PO not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 0
+ *                 message:
+ *                   type: string
+ *                   example: PO not found
+ */
+router.patch('/:id/mark-delivered', auth('procurement'), validate(poValidation.markItemsAsDelivered), markItemsAsDelivered);
 
 export default router; 

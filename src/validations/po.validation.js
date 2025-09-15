@@ -81,9 +81,26 @@ const deactivatePO = {
     }),
 };
 
+const markItemsAsDelivered = {
+    params: Joi.object().keys({
+        id: Joi.string().required(),
+    }),
+    body: Joi.object().keys({
+        itemIndices: Joi.array()
+            .items(Joi.number().integer().min(0))
+            .min(1)
+            .required()
+            .messages({
+                'array.min': 'At least one item index must be provided',
+                'any.required': 'Item indices are required',
+            }),
+    }),
+};
+
 export default {
     createPO,
     getPOs,
     activatePO,
     deactivatePO,
+    markItemsAsDelivered,
 };

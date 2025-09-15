@@ -372,7 +372,7 @@ export const createCustomerLeadService = async (req, session) => {
 
   // create user if password is provided
   if (leadData.password) {
-    await createUser({
+    await createUser(req, {
       name: leadData.customerName,
       email: leadData.email,
       password: leadData.password,

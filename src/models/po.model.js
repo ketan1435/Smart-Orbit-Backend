@@ -37,6 +37,10 @@ const poItemSchema = new mongoose.Schema({
         type: Boolean,
         default: true,
     },
+    isDelivered: {
+        type: Boolean,
+        default: false,
+    }
 }, {
     _id: false, // Don't create separate _id for subdocuments
 });
@@ -50,7 +54,7 @@ const poSchema = new mongoose.Schema({
     name: { type: String, required: true },
     description: { type: String }, // optional
     notes: { type: String }, // optional
-    originalBomId: { type: mongoose.Schema.Types.ObjectId, ref: 'BOM', required: true },
+    originalBomId: { type: mongoose.Schema.Types.ObjectId, ref: 'BOM' },
     items: { type: [poItemSchema], default: [] }, // PO items
 
     isSent: { type: Boolean, default: false },

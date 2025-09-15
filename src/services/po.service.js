@@ -221,6 +221,98 @@ export const deactivatePOService = async (req, id) => {
     return updatedPO;
 };
 
+export const markItemsAsDeliveredService = async (req, poId, itemIndices) => {
+    const existingPO = await PO.findById(poId);
+    if (!existingPO) throw new ApiError(404, 'PO not found');
+
+    // Validate that all indices are valid
+    const maxIndex = existingPO.items.length - 1;
+    const invalidIndices = itemIndices.filter(index => index < 0 || index > maxIndex);
+    if (invalidIndices.length > 0) {
+        throw new ApiError(400, `Invalid item indices: ${invalidIndices.join(', ')}. Valid range: 0-${maxIndex}`);
+    }
+
+    // Create a copy of the items array to track changes
+    const originalItems = existingPO.items.map(item => ({ ...item.toObject() }));
+    const updatedItems = [...existingPO.items];
+
+    // Track which items are being marked as delivered
+    const itemsToMark = [];
+    const alreadyDeliveredItems = [];
+
+    itemIndices.forEach(index => {
+        const item = updatedItems[index];
+        if (item.isDelivered) {
+            alreadyDeliveredItems.push({
+                index,
+                itemName: item.itemName,
+                quantity: item.quantity,
+                units: item.units
+            });
+        } else {
+            item.isDelivered = true;
+            itemsToMark.push({
+                index,
+                itemName: item.itemName,
+                quantity: item.quantity,
+                units: item.units
+            });
+        }
+    });
+
+    // Update the PO with the modified items
+    existingPO.items = updatedItems;
+    const updatedPO = await existingPO.save();
+
+    // Manual activity logging (non-blocking)
+    try {
+        const changes = {};
+        const previousValues = {};
+        const newValues = {};
+
+        itemsToMark.forEach(item => {
+            const fieldKey = `items.${item.index}.isDelivered`;
+            changes[fieldKey] = { from: false, to: true };
+            previousValues[fieldKey] = false;
+            newValues[fieldKey] = true;
+        });
+
+        await logActivity(req, {
+            action: 'mark_items_delivered',
+            targetModel: 'PO',
+            targetId: updatedPO._id,
+            targetName: updatedPO.name || 'PO',
+            description: `Marked ${itemsToMark.length} items as delivered in PO ${updatedPO.name || updatedPO._id}`,
+            changes,
+            previousValues,
+            newValues,
+            metadata: {
+                projectId: existingPO.project,
+                vendor: existingPO.vendor,
+                itemsMarked: itemsToMark,
+                alreadyDeliveredItems,
+                totalItems: existingPO.items.length,
+                deliveredItemsCount: updatedItems.filter(item => item.isDelivered).length
+            }
+        });
+    } catch (error) {
+        console.error('Error logging PO items delivery:', error);
+    }
+
+    return {
+        po: updatedPO,
+        itemsMarked: itemsToMark,
+        alreadyDeliveredItems,
+        summary: {
+            totalRequested: itemIndices.length,
+            newlyMarked: itemsToMark.length,
+            alreadyDelivered: alreadyDeliveredItems.length,
+            totalDelivered: updatedItems.filter(item => item.isDelivered).length,
+            totalItems: updatedItems.length
+        }
+    };
+};
+
 // Helper function to send WhatsApp message
 const sendWhatsAppMessage = async (po, items) => {
     try {
