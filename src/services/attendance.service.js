@@ -16,8 +16,8 @@ export const clockInService = async (req, session) => {
             throw new ApiError(httpStatus.NOT_FOUND, 'Fabricator not found');
         }
 
-        if (fabricator.role !== 'fabricator') {
-            throw new ApiError(httpStatus.BAD_REQUEST, 'User is not a fabricator');
+        if (!(fabricator.role === 'fabricator' || fabricator.role === 'custom')) {
+            throw new ApiError(httpStatus.BAD_REQUEST, 'User is not allowed to use attendance');
         }
 
         // Convert client time (Indian time) to UTC for storage
@@ -226,9 +226,9 @@ export const getAttendanceRecordsService = async (req, res, next) => {
         if (fabricatorId) {
             query.fabricator = fabricatorId;
         } else {
-            // If no fabricatorId provided, get records for current user if they are a fabricator
+            // If no fabricatorId provided, get records for current user if they are a fabricator/custom
             const user = await User.findById(userId);
-            if (user && user.role === 'fabricator') {
+            if (user && (user.role === 'fabricator' || user.role === 'custom')) {
                 query.fabricator = userId;
             }
         }
@@ -320,7 +320,7 @@ export const getAttendanceStatsService = async (req, res, next) => {
         let targetFabricatorId = fabricatorId;
         if (!targetFabricatorId) {
             const user = await User.findById(userId);
-            if (user && user.role === 'fabricator') {
+            if (user && (user.role === 'fabricator' || user.role === 'custom')) {
                 targetFabricatorId = userId;
             }
         }
