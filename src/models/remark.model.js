@@ -15,7 +15,7 @@ const remarkSchema = new mongoose.Schema({
     },
     addedBy: {
         type: mongoose.Schema.Types.ObjectId,
-        refPath: 'addedByModel',
+        ref: 'User',
         required: true
     },
     addedByModel: {

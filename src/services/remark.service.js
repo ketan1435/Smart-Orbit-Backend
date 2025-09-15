@@ -82,7 +82,7 @@ const updateRemarkById = async (remarkId, updateBody) => {
  */
 const deleteRemarkById = async (remarkId) => {
     const remark = await getRemarkById(remarkId);
-    await remark.remove();
+    await Remark.findByIdAndDelete(remarkId);
     return remark;
 };
 

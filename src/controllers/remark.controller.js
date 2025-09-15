@@ -11,6 +11,9 @@ const createRemark = catchAsync(async (req, res) => {
         addedByModel: req.user.role === 'admin' ? 'Admin' : 'User'
     };
     
+    console.log('Creating remark with body:', remarkBody);
+    console.log('User info:', { id: req.user.id, role: req.user.role });
+    
     const remark = await remarkService.createRemark(remarkBody);
     res.status(httpStatus.CREATED).send({
         status: 1,
@@ -23,7 +26,18 @@ const getRemarks = catchAsync(async (req, res) => {
     const filter = { projectId: req.params.projectId };
     const options = pick(req.query, ['page', 'limit', 'sortBy', 'sortOrder']);
     
+    console.log('Getting remarks with filter:', filter);
+    console.log('Options:', options);
+    
     const result = await remarkService.getRemarksByProjectId(filter, options);
+    
+    console.log('Retrieved remarks:', result.results.map(r => ({ 
+        id: r._id, 
+        addedBy: r.addedBy, 
+        addedByModel: r.addedByModel,
+        text: r.text 
+    })));
+    
     res.send({
         status: 1,
         message: 'Remarks retrieved successfully',
