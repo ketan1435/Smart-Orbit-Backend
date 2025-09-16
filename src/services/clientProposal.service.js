@@ -489,7 +489,7 @@ export const getClientProposalById = async (id) => {
     }
 
     const clientProposal = await ClientProposal.findById(id)
-        .populate('project', 'projectName projectCode')
+        .populate('project', 'projectName projectCode workOrderSentToPlanningEngineer')
         .populate('createdBy', 'name email')
         .populate('updatedBy', 'name email');
 
@@ -1306,7 +1306,7 @@ export const queryWorkOrders = async (filter = {}, options = {}) => {
     };
 
     const workOrders = await ClientProposal.find(effectiveFilter)
-        .populate('project', 'projectName projectCode')
+        .populate('project', 'projectName projectCode workOrderSentToPlanningEngineer')
         .populate('createdBy', 'name email')
         .populate('updatedBy', 'name email')
         .sort(sort)

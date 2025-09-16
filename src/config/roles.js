@@ -42,6 +42,7 @@ const allRoles = {
     'manageAttendance',
     'getAttendance',
     'admin',
+    'manageVendors',
   ],
 
   'sales-admin': [
@@ -51,6 +52,7 @@ const allRoles = {
     'sendSiteworkDocumentToCustomer',
     'updateProjectStatus',
     'admin',
+    'manageVendors',
   ],
 
   architect: [
@@ -100,6 +102,7 @@ const allRoles = {
     'getSiteEngineerBOMs',
     'updateBOMBySiteEngineer',
     'submitUpdatedBOMToPlanning',
+    'manageVendors',
   ],
 
   'site-engineer': [
@@ -121,6 +124,7 @@ const allRoles = {
     'updateBOMBySiteEngineer',
     'submitUpdatedBOMToPlanning',
     'getBoms',
+    'manageVendors',
   ],
 
   worker: [

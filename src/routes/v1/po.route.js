@@ -467,7 +467,7 @@ router.patch('/:id/deactivate', auth('procurement'), validate(poValidation.deact
  *                   example: 0
  *                 message:
  *                   type: string
- *                   example: Invalid item indices: 5, 6. Valid range: 0-4
+ *                   example: "Invalid item indices: 5, 6. Valid range: 0-4"
  *       404:
  *         description: PO not found
  *         content:

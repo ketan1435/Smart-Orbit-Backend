@@ -1,4 +1,3 @@
-import httpStatus from 'http-status';
 import Attendance from '../models/attendance.model.js';
 import User from '../models/user.model.js';
 import Project from '../models/project.model.js';
@@ -6,6 +5,7 @@ import Sitework from '../models/sitework.model.js';
 import storage from '../factory/storage.factory.js';
 import ApiError from '../utils/ApiError.js';
 import logger from '../config/logger.js';
+import httpStatus from 'http-status';
 
 export const clockInService = async (req, session) => {
     const { clockInTime, photoKey, projectId } = req.body;
@@ -40,10 +40,10 @@ export const clockInService = async (req, session) => {
         // Convert client time (Indian time) to UTC for storage
         const clientClockInTime = new Date(clockInTime);
         const currentTime = new Date();
-        
+
         // Calculate time difference (accounting for timezone)
         const timeDifference = Math.abs(currentTime - clientClockInTime);
-        
+
         // Allow up to 10 minutes difference between client and server time
         if (timeDifference > 10 * 60 * 1000) {
             throw new ApiError(httpStatus.BAD_REQUEST, 'Clock-in time is too far from current time');
@@ -155,10 +155,10 @@ export const clockOutService = async (req, session) => {
         // Convert client time (Indian time) to UTC for storage
         const clientClockOutTime = new Date(clockOutTime);
         const currentTime = new Date();
-        
+
         // Calculate time difference (accounting for timezone)
         const timeDifference = Math.abs(currentTime - clientClockOutTime);
-        
+
         // Allow up to 10 minutes difference between client and server time
         if (timeDifference > 10 * 60 * 1000) {
             throw new ApiError(httpStatus.BAD_REQUEST, 'Clock-out time is too far from current time');
@@ -263,7 +263,7 @@ export const getAttendanceRecordsService = async (req, res, next) => {
 
         // Build query
         const query = {};
-        
+
         // If fabricatorId is provided, filter by it
         if (fabricatorId) {
             query.fabricator = fabricatorId;
@@ -453,7 +453,7 @@ export const getInProgressProjectsService = async (req, res, next) => {
         // Verify user is custom or fabricator
         const user = await User.findById(userId);
         console.log('User found:', user ? { id: user._id, role: user.role, name: user.name } : 'User not found');
-        
+
         if (!user || !(user.role === 'fabricator' || user.role === 'custom')) {
             console.log('Access denied for user role:', user?.role);
             return res.status(httpStatus.FORBIDDEN).json({
@@ -464,17 +464,17 @@ export const getInProgressProjectsService = async (req, res, next) => {
 
         // Get in-progress projects assigned to the current user through sitework assignments
         console.log('Searching for projects with status: inprogress assigned to user through sitework:', userId);
-        
+
         // 1. Find all siteworks where user is assigned
         const siteworks = await Sitework.find({ "assignedUsers.user": userId })
             .select('project name')
             .sort({ createdAt: -1 });
-        
+
         console.log('Found siteworks for user:', siteworks.length, siteworks);
-        
+
         const projectIds = [...new Set(siteworks.map(sw => sw.project.toString()))];
         console.log('Project IDs from siteworks:', projectIds);
-        
+
         if (projectIds.length === 0) {
             console.log('No projects found through sitework assignments');
             return res.status(httpStatus.OK).json({
@@ -500,6 +500,99 @@ export const getInProgressProjectsService = async (req, res, next) => {
 
     } catch (error) {
         console.error('Error in getInProgressProjectsService:', error);
+        next(error);
+    }
+};
+
+// Admin: Get workers assigned to a project (via siteworks) with today's clock-in status
+export const getProjectWorkersStatusService = async (req, res, next) => {
+    try {
+        const { projectId } = req.params;
+        const requester = req.user;
+
+        // Validate project exists
+        const project = await Project.findById(projectId).select('_id projectName status');
+        if (!project) {
+            throw new ApiError(httpStatus.NOT_FOUND, 'Project not found');
+        }
+
+        // Get all siteworks for the project and gather assigned users
+        const siteworks = await Sitework.find({ project: projectId }).select('assignedUsers');
+        const assignedUserEntries = siteworks.flatMap(sw => sw.assignedUsers || []);
+
+        if (assignedUserEntries.length === 0) {
+            return res.status(httpStatus.OK).json({ status: 1, message: 'No assigned workers for this project', data: [] });
+        }
+
+        // Aggregate per user: amounts and assignment counts
+        const perUserAggregation = new Map();
+        for (const entry of assignedUserEntries) {
+            const userId = entry.user?.toString();
+            if (!userId) continue;
+            const existing = perUserAggregation.get(userId) || { assignmentAmountTotal: 0, perDayAmountAvg: 0, assignments: 0 };
+            existing.assignmentAmountTotal += entry.assignmentAmount || 0;
+            // For perDayAmount, keep the latest non-null or average; we'll average over assignments where set
+            if (typeof entry.perDayAmount === 'number') {
+                existing.perDayAmountSum = (existing.perDayAmountSum || 0) + entry.perDayAmount;
+                existing.perDayAmountCount = (existing.perDayAmountCount || 0) + 1;
+            }
+            existing.assignments += 1;
+            perUserAggregation.set(userId, existing);
+        }
+
+        const userIds = Array.from(perUserAggregation.keys());
+
+        // Fetch basic user info
+        const users = await User.find({ _id: { $in: userIds } }).select('_id name email role phone');
+        const userMap = new Map(users.map(u => [u._id.toString(), u]));
+
+        // Build today date range
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+
+        // Fetch today attendance records for these users on this project
+        const todaysAttendance = await Attendance.find({
+            fabricator: { $in: userIds },
+            project: projectId,
+            clockInTime: { $gte: today, $lt: tomorrow },
+        }).select('_id fabricator status clockInTime clockOutTime');
+
+        const attendanceMap = new Map();
+        for (const rec of todaysAttendance) {
+            attendanceMap.set(rec.fabricator.toString(), rec);
+        }
+
+        // Compose response list
+        const data = userIds.map(userId => {
+            const agg = perUserAggregation.get(userId) || {};
+            const u = userMap.get(userId);
+            const att = attendanceMap.get(userId);
+            const perDayAmountAvg = agg.perDayAmountCount ? (agg.perDayAmountSum || 0) / agg.perDayAmountCount : 0;
+            return {
+                userId,
+                name: u?.name || '',
+                email: u?.email || '',
+                role: u?.role || '',
+                phone: u?.phone || '',
+                assignments: agg.assignments || 0,
+                assignmentAmountTotal: Math.round((agg.assignmentAmountTotal || 0) * 100) / 100,
+                perDayAmountAvg: Math.round((perDayAmountAvg || 0) * 100) / 100,
+                isClockedIn: att ? att.status === 'clocked-in' : false,
+                isClockedOut: att ? att.status === 'clocked-out' : false,
+                clockInTime: att?.clockInTime || null,
+                clockOutTime: att?.clockOutTime || null,
+                attendanceId: att?._id || null,
+            };
+        }).sort((a, b) => a.name.localeCompare(b.name));
+
+        return res.status(httpStatus.OK).json({
+            status: 1,
+            message: 'Project workers fetched successfully',
+            data,
+        });
+    } catch (error) {
         next(error);
     }
 };
