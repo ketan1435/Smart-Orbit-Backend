@@ -20,3 +20,7 @@ export const getCurrentAttendance = async (req, res, next) => {
 export const getAttendanceStats = async (req, res, next) => {
     await attendanceService.getAttendanceStatsService(req, res, next);
 };
+
+export const getInProgressProjects = async (req, res, next) => {
+    await attendanceService.getInProgressProjectsService(req, res, next);
+};

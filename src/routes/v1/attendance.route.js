@@ -381,4 +381,132 @@ router.get('/current', auth('getAttendance'), attendanceController.getCurrentAtt
  */
 router.get('/stats', auth('getAttendance'), validate(attendanceValidation.getAttendanceStats), attendanceController.getAttendanceStats);
 
+/**
+ * @swagger
+ * /attendance/in-progress-projects:
+ *   get:
+ *     summary: Get in-progress projects for attendance
+ *     tags: [Attendance]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: In-progress projects fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: In-progress projects fetched successfully
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       _id:
+ *                         type: string
+ *                       projectName:
+ *                         type: string
+ *                       projectCode:
+ *                         type: string
+ *                       status:
+ *                         type: string
+ *                         enum: [inprogress]
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden - Only fabricators and custom users can access this endpoint
+ */
+router.get('/in-progress-projects', auth('getAttendance'), attendanceController.getInProgressProjects);
+
+// Debug endpoint to check all projects and assigned projects
+router.get('/debug-projects', auth('getAttendance'), async (req, res, next) => {
+    try {
+        const Project = (await import('../../models/project.model.js')).default;
+        const Sitework = (await import('../../models/sitework.model.js')).default;
+        const userId = req.user.id;
+        
+        // Get all projects
+        const allProjects = await Project.find({}).select('_id projectName projectCode status assignedSiteEngineer').sort({ projectName: 1 });
+        
+        // Get in-progress projects
+        const inProgressProjects = await Project.find({
+            status: 'inprogress'
+        }).select('_id projectName projectCode status assignedSiteEngineer').sort({ projectName: 1 });
+        
+        // Get projects assigned to current user via assignedSiteEngineer
+        const assignedProjects = await Project.find({
+            assignedSiteEngineer: { $in: [userId] }
+        }).select('_id projectName projectCode status assignedSiteEngineer').sort({ projectName: 1 });
+        
+        // Get in-progress projects assigned to current user via assignedSiteEngineer
+        const assignedInProgressProjects = await Project.find({
+            status: 'inprogress',
+            assignedSiteEngineer: { $in: [userId] }
+        }).select('_id projectName projectCode status assignedSiteEngineer').sort({ projectName: 1 });
+        
+        // Get siteworks assigned to current user
+        const siteworks = await Sitework.find({ "assignedUsers.user": userId })
+            .select('project name')
+            .sort({ createdAt: -1 });
+        
+        const projectIds = [...new Set(siteworks.map(sw => sw.project.toString()))];
+        
+        // Get projects assigned via sitework
+        const siteworkAssignedProjects = await Project.find({
+            _id: { $in: projectIds }
+        }).select('_id projectName projectCode status').sort({ projectName: 1 });
+        
+        // Get in-progress projects assigned via sitework
+        const siteworkAssignedInProgressProjects = await Project.find({
+            _id: { $in: projectIds },
+            status: 'inprogress'
+        }).select('_id projectName projectCode status').sort({ projectName: 1 });
+        
+        res.status(200).json({
+            status: 1,
+            message: 'Debug projects fetched successfully',
+            data: {
+                allProjects: {
+                    count: allProjects.length,
+                    projects: allProjects
+                },
+                inProgressProjects: {
+                    count: inProgressProjects.length,
+                    projects: inProgressProjects
+                },
+                assignedProjects: {
+                    count: assignedProjects.length,
+                    projects: assignedProjects
+                },
+                assignedInProgressProjects: {
+                    count: assignedInProgressProjects.length,
+                    projects: assignedInProgressProjects
+                },
+                siteworks: {
+                    count: siteworks.length,
+                    siteworks: siteworks
+                },
+                siteworkProjectIds: projectIds,
+                siteworkAssignedProjects: {
+                    count: siteworkAssignedProjects.length,
+                    projects: siteworkAssignedProjects
+                },
+                siteworkAssignedInProgressProjects: {
+                    count: siteworkAssignedInProgressProjects.length,
+                    projects: siteworkAssignedInProgressProjects
+                },
+                currentUserId: userId
+            }
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
 export default router;

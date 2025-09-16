@@ -1,12 +1,14 @@
 import httpStatus from 'http-status';
 import Attendance from '../models/attendance.model.js';
 import User from '../models/user.model.js';
+import Project from '../models/project.model.js';
+import Sitework from '../models/sitework.model.js';
 import storage from '../factory/storage.factory.js';
 import ApiError from '../utils/ApiError.js';
 import logger from '../config/logger.js';
 
 export const clockInService = async (req, session) => {
-    const { clockInTime, photoKey } = req.body;
+    const { clockInTime, photoKey, projectId } = req.body;
     const fabricatorId = req.user.id;
 
     try {
@@ -18,6 +20,21 @@ export const clockInService = async (req, session) => {
 
         if (!(fabricator.role === 'fabricator' || fabricator.role === 'custom')) {
             throw new ApiError(httpStatus.BAD_REQUEST, 'User is not allowed to use attendance');
+        }
+
+        // Validate project ID is provided
+        if (!projectId) {
+            throw new ApiError(httpStatus.BAD_REQUEST, 'Project ID is required');
+        }
+
+        // Verify project exists and is in-progress
+        const project = await Project.findById(projectId).session(session);
+        if (!project) {
+            throw new ApiError(httpStatus.NOT_FOUND, 'Project not found');
+        }
+
+        if (project.status !== 'inprogress') {
+            throw new ApiError(httpStatus.BAD_REQUEST, 'Only in-progress projects are allowed for attendance');
         }
 
         // Convert client time (Indian time) to UTC for storage
@@ -47,6 +64,7 @@ export const clockInService = async (req, session) => {
 
         const existingAttendance = await Attendance.findOne({
             fabricator: fabricatorId,
+            project: projectId,
             clockInTime: {
                 $gte: today,
                 $lt: tomorrow,
@@ -65,6 +83,8 @@ export const clockInService = async (req, session) => {
         const attendance = new Attendance({
             fabricator: fabricatorId,
             fabricatorName: fabricator.name,
+            project: projectId,
+            projectName: project.projectName,
             clockInTime: clientClockInTime,
             clockInPhotoKey: photoKey,
             status: 'clocked-in',
@@ -92,8 +112,11 @@ export const clockInService = async (req, session) => {
             throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to process photo');
         }
 
-        // Populate fabricator details
-        await attendance.populate('fabricator', 'name email role');
+        // Populate fabricator and project details
+        await attendance.populate([
+            { path: 'fabricator', select: 'name email role' },
+            { path: 'project', select: 'projectName projectCode status' }
+        ]);
 
         return {
             status: httpStatus.CREATED,
@@ -110,10 +133,25 @@ export const clockInService = async (req, session) => {
 };
 
 export const clockOutService = async (req, session) => {
-    const { clockOutTime, photoKey } = req.body;
+    const { clockOutTime, photoKey, projectId } = req.body;
     const fabricatorId = req.user.id;
 
     try {
+        // Validate project ID is provided
+        if (!projectId) {
+            throw new ApiError(httpStatus.BAD_REQUEST, 'Project ID is required');
+        }
+
+        // Verify project exists and is in-progress
+        const project = await Project.findById(projectId).session(session);
+        if (!project) {
+            throw new ApiError(httpStatus.NOT_FOUND, 'Project not found');
+        }
+
+        if (project.status !== 'inprogress') {
+            throw new ApiError(httpStatus.BAD_REQUEST, 'Only in-progress projects are allowed for attendance');
+        }
+
         // Convert client time (Indian time) to UTC for storage
         const clientClockOutTime = new Date(clockOutTime);
         const currentTime = new Date();
@@ -136,6 +174,7 @@ export const clockOutService = async (req, session) => {
 
         const attendance = await Attendance.findOne({
             fabricator: fabricatorId,
+            project: projectId,
             clockInTime: {
                 $gte: today,
                 $lt: tomorrow,
@@ -197,8 +236,11 @@ export const clockOutService = async (req, session) => {
             throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to process photo');
         }
 
-        // Populate fabricator details
-        await attendance.populate('fabricator', 'name email role');
+        // Populate fabricator and project details
+        await attendance.populate([
+            { path: 'fabricator', select: 'name email role' },
+            { path: 'project', select: 'projectName projectCode status' }
+        ]);
 
         return {
             status: httpStatus.OK,
@@ -216,7 +258,7 @@ export const clockOutService = async (req, session) => {
 
 export const getAttendanceRecordsService = async (req, res, next) => {
     try {
-        const { page = 1, limit = 10, fabricatorId, startDate, endDate } = req.query;
+        const { page = 1, limit = 10, fabricatorId, projectId, startDate, endDate } = req.query;
         const userId = req.user.id;
 
         // Build query
@@ -231,6 +273,11 @@ export const getAttendanceRecordsService = async (req, res, next) => {
             if (user && (user.role === 'fabricator' || user.role === 'custom')) {
                 query.fabricator = userId;
             }
+        }
+
+        // If projectId is provided, filter by it
+        if (projectId) {
+            query.project = projectId;
         }
 
         // Date range filter
@@ -248,10 +295,10 @@ export const getAttendanceRecordsService = async (req, res, next) => {
             page: parseInt(page),
             limit: parseInt(limit),
             sort: { clockInTime: -1 },
-            populate: {
-                path: 'fabricator',
-                select: 'name email role',
-            },
+            populate: [
+                { path: 'fabricator', select: 'name email role' },
+                { path: 'project', select: 'projectName projectCode status' }
+            ],
         };
 
         const result = await Attendance.paginate(query, options);
@@ -276,6 +323,7 @@ export const getAttendanceRecordsService = async (req, res, next) => {
 export const getCurrentAttendanceService = async (req, res, next) => {
     try {
         const userId = req.user.id;
+        const { projectId } = req.query;
 
         // Find today's active attendance
         const today = new Date();
@@ -283,14 +331,24 @@ export const getCurrentAttendanceService = async (req, res, next) => {
         const tomorrow = new Date(today);
         tomorrow.setDate(tomorrow.getDate() + 1);
 
-        const attendance = await Attendance.findOne({
+        const query = {
             fabricator: userId,
             clockInTime: {
                 $gte: today,
                 $lt: tomorrow,
             },
             status: 'clocked-in',
-        }).populate('fabricator', 'name email role');
+        };
+
+        // If projectId is provided, filter by it
+        if (projectId) {
+            query.project = projectId;
+        }
+
+        const attendance = await Attendance.findOne(query).populate([
+            { path: 'fabricator', select: 'name email role' },
+            { path: 'project', select: 'projectName projectCode status' }
+        ]);
 
         if (!attendance) {
             return res.status(httpStatus.OK).json({
@@ -313,7 +371,7 @@ export const getCurrentAttendanceService = async (req, res, next) => {
 
 export const getAttendanceStatsService = async (req, res, next) => {
     try {
-        const { fabricatorId, month, year } = req.query;
+        const { fabricatorId, projectId, month, year } = req.query;
         const userId = req.user.id;
 
         // Determine fabricator ID
@@ -337,15 +395,23 @@ export const getAttendanceStatsService = async (req, res, next) => {
         const startDate = new Date(targetYear, targetMonth - 1, 1);
         const endDate = new Date(targetYear, targetMonth, 0, 23, 59, 59);
 
-        // Get attendance records for the month
-        const attendanceRecords = await Attendance.find({
+        // Build query for attendance records
+        const query = {
             fabricator: targetFabricatorId,
             clockInTime: {
                 $gte: startDate,
                 $lte: endDate,
             },
             status: 'clocked-out',
-        });
+        };
+
+        // If projectId is provided, filter by it
+        if (projectId) {
+            query.project = projectId;
+        }
+
+        // Get attendance records for the month
+        const attendanceRecords = await Attendance.find(query);
 
         // Calculate stats
         const totalDays = attendanceRecords.length;
@@ -375,6 +441,65 @@ export const getAttendanceStatsService = async (req, res, next) => {
         });
 
     } catch (error) {
+        next(error);
+    }
+};
+
+export const getInProgressProjectsService = async (req, res, next) => {
+    try {
+        const userId = req.user.id;
+        console.log('getInProgressProjectsService called by user:', userId);
+
+        // Verify user is custom or fabricator
+        const user = await User.findById(userId);
+        console.log('User found:', user ? { id: user._id, role: user.role, name: user.name } : 'User not found');
+        
+        if (!user || !(user.role === 'fabricator' || user.role === 'custom')) {
+            console.log('Access denied for user role:', user?.role);
+            return res.status(httpStatus.FORBIDDEN).json({
+                status: 0,
+                message: 'Access denied. Only fabricators and custom users can access this endpoint.',
+            });
+        }
+
+        // Get in-progress projects assigned to the current user through sitework assignments
+        console.log('Searching for projects with status: inprogress assigned to user through sitework:', userId);
+        
+        // 1. Find all siteworks where user is assigned
+        const siteworks = await Sitework.find({ "assignedUsers.user": userId })
+            .select('project name')
+            .sort({ createdAt: -1 });
+        
+        console.log('Found siteworks for user:', siteworks.length, siteworks);
+        
+        const projectIds = [...new Set(siteworks.map(sw => sw.project.toString()))];
+        console.log('Project IDs from siteworks:', projectIds);
+        
+        if (projectIds.length === 0) {
+            console.log('No projects found through sitework assignments');
+            return res.status(httpStatus.OK).json({
+                status: 1,
+                message: 'No assigned projects found',
+                data: [],
+            });
+        }
+
+        // 2. Get in-progress projects from those project IDs
+        const projects = await Project.find({
+            _id: { $in: projectIds },
+            status: 'inprogress'
+        }).select('_id projectName projectCode status').sort({ projectName: 1 });
+
+        console.log('Found assigned in-progress projects:', projects.length, projects);
+
+        res.status(httpStatus.OK).json({
+            status: 1,
+            message: 'In-progress projects fetched successfully',
+            data: projects,
+        });
+
+    } catch (error) {
+        console.error('Error in getInProgressProjectsService:', error);
         next(error);
     }
 };
