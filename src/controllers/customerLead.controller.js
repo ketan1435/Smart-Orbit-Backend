@@ -123,7 +123,7 @@ export const getCustomerLeadController = catchAsync(async (req, res) => {
 
 export const activateCustomerLeadController = catchAsync(async (req, res) => {
   const { id } = req.params;
-  const lead = await activateCustomerLeadService(id);
+  const lead = await activateCustomerLeadService(req, id);
   if (!lead) {
     throw new ApiError(404, 'Customer lead not found');
   }
@@ -132,7 +132,7 @@ export const activateCustomerLeadController = catchAsync(async (req, res) => {
 
 export const deactivateCustomerLeadController = catchAsync(async (req, res) => {
   const { id } = req.params;
-  const lead = await deactivateCustomerLeadService(id);
+  const lead = await deactivateCustomerLeadService(req, id);
   if (!lead) {
     throw new ApiError(404, 'Customer lead not found');
   }
@@ -147,7 +147,7 @@ export const updateCustomerLeadStatusController = catchAsync(async (req, res) =>
     throw new ApiError(400, 'Status is required');
   }
 
-  const lead = await updateCustomerLeadStatusService(id, status);
+  const lead = await updateCustomerLeadStatusService(req, id, status);
   res.status(200).json({
     success: true,
     status: 1,
@@ -164,7 +164,7 @@ export const updateCustomerAndProjectsStatusController = catchAsync(async (req, 
     throw new ApiError(400, 'Status is required');
   }
 
-  const result = await updateCustomerAndProjectsStatusService(id, status);
+  const result = await updateCustomerAndProjectsStatusService(req, id, status);
   res.status(200).json({
     success: true,
     status: 1,
@@ -277,6 +277,7 @@ export const shareRequirementForUserController = catchAsync(async (req, res) => 
   const adminId = req.user.id;
 
   const updatedRequirement = await shareRequirementWithUsersService(
+    req,
     leadId,
     requirementId,
     userIds,
@@ -315,7 +316,7 @@ export const shareRequirementWithScpUsersController = catchAsync(async (req, res
   const { scpUserIds } = req.body;
   const adminId = req.user.id;
 
-  const updatedRequirement = await shareRequirementWithScpUsersService(leadId, requirementId, scpUserIds, adminId);
+  const updatedRequirement = await shareRequirementWithScpUsersService(req, leadId, requirementId, scpUserIds, adminId);
   res.status(httpStatus.OK).json({
     status: 1,
     message: 'Requirement shared with SCP users successfully.',
@@ -331,7 +332,7 @@ export const updateScpDataByScpUserController = catchAsync(async (req, res) => {
   const { scpData, files } = req.body;
   const scpUserId = req.user.id;
 
-  const updatedRequirement = await updateScpDataByScpUserService(leadId, requirementId, scpUserId, scpData, files);
+  const updatedRequirement = await updateScpDataByScpUserService(req, leadId, requirementId, scpUserId, scpData, files);
   res.status(httpStatus.OK).json({
     status: 1,
     message: 'SCP data updated successfully.',
@@ -384,7 +385,7 @@ export const updateScpDataByAdminController = catchAsync(async (req, res) => {
   const { scpData, files } = req.body;
   const adminId = req.user.id;
 
-  const updatedRequirement = await updateScpDataByAdminService(leadId, requirementId, adminId, scpData, files);
+  const updatedRequirement = await updateScpDataByAdminService(req, leadId, requirementId, adminId, scpData, files);
   res.status(httpStatus.OK).json({
     status: 1,
     message: 'SCP data updated successfully by admin.',
@@ -399,7 +400,7 @@ export const deleteFileFromRequirement = catchAsync(async (req, res) => {
   const { leadId, requirementId, fileKey } = req.params;
   const userId = req.user.id;
 
-  const updatedRequirement = await deleteFileFromRequirementService(leadId, requirementId, fileKey, userId);
+  const updatedRequirement = await deleteFileFromRequirementService(req, leadId, requirementId, fileKey, userId);
 
   res.status(httpStatus.OK).json({
     status: 1,
@@ -416,7 +417,7 @@ export const deleteMultipleFilesFromRequirement = catchAsync(async (req, res) =>
   const { fileKeys } = req.body;
   const userId = req.user.id;
 
-  const result = await deleteMultipleFilesFromRequirementService(leadId, requirementId, fileKeys, userId);
+  const result = await deleteMultipleFilesFromRequirementService(req, leadId, requirementId, fileKeys, userId);
 
   res.status(httpStatus.OK).json({
     status: 1,

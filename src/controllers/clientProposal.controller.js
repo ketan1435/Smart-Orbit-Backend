@@ -4,7 +4,7 @@ import * as clientProposalService from '../services/clientProposal.service.js';
 import pick from '../utils/pick.js';
 
 export const createClientProposal = catchAsync(async (req, res) => {
-    const clientProposal = await clientProposalService.createClientProposal(req.body, req.user.id);
+    const clientProposal = await clientProposalService.createClientProposal(req, req.body, req.user.id);
     res.status(httpStatus.CREATED).send({
         status: 1,
         message: 'Client proposal created successfully',
@@ -34,6 +34,7 @@ export const getClientProposal = catchAsync(async (req, res) => {
 
 export const updateClientProposal = catchAsync(async (req, res) => {
     const clientProposal = await clientProposalService.updateClientProposalById(
+        req,
         req.params.clientProposalId,
         req.body,
         req.user.id
@@ -48,6 +49,7 @@ export const updateClientProposal = catchAsync(async (req, res) => {
 export const updateClientProposalStatus = catchAsync(async (req, res) => {
     const { status } = req.body;
     const clientProposal = await clientProposalService.updateClientProposalStatus(
+        req,
         req.params.clientProposalId,
         status,
         req.user.id
@@ -61,6 +63,7 @@ export const updateClientProposalStatus = catchAsync(async (req, res) => {
 
 export const createNewVersion = catchAsync(async (req, res) => {
     const clientProposal = await clientProposalService.createNewVersion(
+        req,
         req.params.clientProposalId,
         req.body,
         req.user.id
@@ -73,7 +76,7 @@ export const createNewVersion = catchAsync(async (req, res) => {
 });
 
 export const deleteClientProposal = catchAsync(async (req, res) => {
-    await clientProposalService.deleteClientProposalById(req.params.clientProposalId, req.user.id);
+    await clientProposalService.deleteClientProposalById(req, req.params.clientProposalId, req.user.id);
     res.status(httpStatus.NO_CONTENT).send();
 });
 
@@ -104,6 +107,7 @@ export const getClientProposalPDF = catchAsync(async (req, res) => {
 
 export const sendToCustomer = catchAsync(async (req, res) => {
     const clientProposal = await clientProposalService.sendToCustomer(
+        req,
         req.params.clientProposalId,
         req.user.id
     );
@@ -116,6 +120,7 @@ export const sendToCustomer = catchAsync(async (req, res) => {
 
 export const customerReview = catchAsync(async (req, res) => {
     const clientProposal = await clientProposalService.customerReview(
+        req,
         req.params.clientProposalId,
         req.body,
         req.user.id
@@ -138,6 +143,7 @@ export const getSentToMeProposals = catchAsync(async (req, res) => {
 
 export const convertToWorkOrder = catchAsync(async (req, res) => {
     const clientProposal = await clientProposalService.convertToWorkOrder(
+        req,
         req.params.clientProposalId,
         req.user.id
     );
@@ -159,6 +165,7 @@ export const getWorkOrders = catchAsync(async (req, res) => {
 
 export const sendWorkOrderToPlanningEngineer = catchAsync(async (req, res) => {
     const clientProposal = await clientProposalService.sendWorkOrderToPlanningEngineer(
+        req,
         req.params.clientProposalId,
         req.user.id
     );

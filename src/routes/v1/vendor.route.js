@@ -1,8 +1,175 @@
 import express from 'express';
-import { createVendor, getVendors, activateVendor, deactivateVendor, getVendorsDropdown } from '../../controllers/vendor.controller.js';
+import { createVendor, getVendors, activateVendor, deactivateVendor, getVendorsDropdown, updateVendor, getVendorById, deleteVendor } from '../../controllers/vendor.controller.js';
 import auth from '../../middlewares/auth.js';
+import validate from '../../middlewares/validate.js';
+import * as vendorValidation from '../../validations/vendor.validation.js';
 
 const router = express.Router();
+
+/**
+ * @swagger
+ * /vendors/{id}:
+ *   get:
+ *     summary: Get a vendor by ID
+ *     tags: [Vendors]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The vendor ID
+ *     responses:
+ *       200:
+ *         description: Vendor details
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 1
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     _id:
+ *                       type: string
+ *                     name:
+ *                       type: string
+ *                     storeName:
+ *                       type: string
+ *                     mobileNumber:
+ *                       type: string
+ *                     email:
+ *                       type: string
+ *                     address:
+ *                       type: string
+ *                     city:
+ *                       type: string
+ *                     state:
+ *                       type: string
+ *                     country:
+ *                       type: string
+ *                     gstNo:
+ *                       type: string
+ *                     isActive:
+ *                       type: boolean
+ *                     createdAt:
+ *                       type: string
+ *                       format: date-time
+ *                     updatedAt:
+ *                       type: string
+ *                       format: date-time
+ *       404:
+ *         description: Vendor not found
+ */
+router.get('/:id', auth('manageVendors'), getVendorById);
+
+/**
+ * @swagger
+ * /vendors/{id}:
+ *   put:
+ *     summary: Update a vendor
+ *     tags: [Vendors]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The vendor ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *               storeName:
+ *                 type: string
+ *               mobileNumber:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *               address:
+ *                 type: string
+ *               city:
+ *                 type: string
+ *               state:
+ *                 type: string
+ *               country:
+ *                 type: string
+ *               gstNo:
+ *                 type: string
+ *               isActive:
+ *                 type: boolean
+ *             example:
+ *               name: "Updated Vendor Name"
+ *               storeName: "Updated Store Name"
+ *               mobileNumber: "9876543210"
+ *               email: "updated@example.com"
+ *               address: "456 Updated St"
+ *               city: "Updated City"
+ *               state: "Updated State"
+ *               country: "Updated Country"
+ *               gstNo: "GST5678"
+ *     responses:
+ *       200:
+ *         description: Vendor updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: Vendor updated successfully
+ *                 data:
+ *                   type: object
+ *       404:
+ *         description: Vendor not found
+ */
+router.put('/:id', auth('manageVendors'), updateVendor);
+
+/**
+ * @swagger
+ * /vendors/{id}:
+ *   delete:
+ *     summary: Delete a vendor (soft delete)
+ *     tags: [Vendors]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The vendor ID
+ *     responses:
+ *       200:
+ *         description: Vendor deleted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 1
+ *                 message:
+ *                   type: string
+ *                   example: Vendor deleted successfully
+ *                 data:
+ *                   type: object
+ *       404:
+ *         description: Vendor not found
+ */
+router.delete('/:id', auth('manageVendors'), deleteVendor);
 
 /**
  * @swagger

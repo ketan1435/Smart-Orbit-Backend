@@ -5,11 +5,12 @@ import BOM from '../models/bom.model.js';
 import Project from '../models/project.model.js';
 import Sitework from '../models/sitework.model.js';
 import ApiError from '../utils/ApiError.js';
+import { logActivity } from '../middlewares/activityLog.middleware.js';
 // import { Store } from '../models/store.model.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'secret';
 
-export const register = async (data) => {
+export const register = async (req, data) => {
   if (await Admin.isEmailTaken(data.email)) {
     throw new ApiError(409, 'Email already taken');
   }
@@ -17,6 +18,111 @@ export const register = async (data) => {
   data.password = await bcrypt.hash(data.password, 10);
 
   const admin = await Admin.create(data);
+
+  // Log the admin registration activity
+  try {
+    await logActivity(req, {
+      action: 'create_admin',
+      targetModel: 'Admin',
+      targetId: admin._id,
+      targetName: admin.adminName || 'Admin',
+      description: `Admin ${admin.adminName || 'Unknown'} (${admin.email}) was registered successfully`,
+      changes: {
+        adminName: {
+          from: null,
+          to: admin.adminName
+        },
+        email: {
+          from: null,
+          to: admin.email
+        },
+        mobileNo: {
+          from: null,
+          to: admin.mobileNo
+        },
+        alternateMobileNo: {
+          from: null,
+          to: admin.alternateMobileNo
+        },
+        role: {
+          from: null,
+          to: admin.role
+        },
+        isEmailVerified: {
+          from: null,
+          to: admin.isEmailVerified
+        },
+        createdAt: {
+          from: null,
+          to: admin.createdAt
+        }
+      },
+      previousValues: {
+        adminName: null,
+        email: null,
+        mobileNo: null,
+        alternateMobileNo: null,
+        role: null,
+        isEmailVerified: null,
+        createdAt: null
+      },
+      newValues: {
+        adminName: admin.adminName,
+        email: admin.email,
+        mobileNo: admin.mobileNo,
+        alternateMobileNo: admin.alternateMobileNo,
+        role: admin.role,
+        isEmailVerified: admin.isEmailVerified,
+        createdAt: admin.createdAt
+      },
+      metadata: {
+        user: {
+          userId: req.user?._id,
+          userName: req.user?.name,
+          userEmail: req.user?.email,
+          userRole: req.user?.role,
+          userType: req.user?.role === 'admin' ? 'Admin' : 'User',
+          userPhone: req.user?.phone
+        },
+        adminData: {
+          adminId: admin._id,
+          adminName: admin.adminName,
+          email: admin.email,
+          mobileNo: admin.mobileNo,
+          alternateMobileNo: admin.alternateMobileNo,
+          role: admin.role,
+          isEmailVerified: admin.isEmailVerified,
+          createdAt: admin.createdAt,
+          updatedAt: admin.updatedAt
+        },
+        registrationData: {
+          registeredBy: req.user?._id,
+          registeredByModel: req.user?.role === 'admin' ? 'Admin' : 'User',
+          registeredAt: new Date(),
+          registrationComplete: true,
+          emailVerified: admin.isEmailVerified,
+          passwordHashed: true,
+          roleAssigned: admin.role
+        },
+        securityData: {
+          passwordHashed: true,
+          emailVerified: admin.isEmailVerified,
+          role: admin.role,
+          accountStatus: 'active',
+          registrationMethod: 'manual'
+        },
+        workflow: {
+          adminRegistration: true,
+          userManagement: true,
+          accountCreation: true,
+          registrationComplete: true
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error logging admin registration:', error);
+  }
+
   return admin;
 };
 

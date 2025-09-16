@@ -31,13 +31,13 @@ export const getProjectSiteVisits = catchAsync(async (req, res) => {
 });
 
 export const submitProposal = catchAsync(async (req, res) => {
-    const project = await projectService.addArchitectProposal(req.params.projectId, req.user, req.body);
+    const project = await projectService.addArchitectProposal(req, req.params.projectId, req.user, req.body);
     res.status(httpStatus.CREATED).send(project);
 });
 
 export const acceptProposal = catchAsync(async (req, res) => {
     const { projectId, proposalId } = req.params;
-    const project = await projectService.acceptArchitectProposal(projectId, proposalId, req.user);
+    const project = await projectService.acceptArchitectProposal(req, projectId, proposalId, req.user);
     res.send(project);
 });
 
@@ -47,7 +47,7 @@ export const getProposalsForProject = catchAsync(async (req, res) => {
 });
 
 export const submitArchitectDocument = async (req, session) => {
-    const project = await projectService.submitArchitectDocument(req.params.projectId, req.user, req.body, session);
+    const project = await projectService.submitArchitectDocument(req, req.params.projectId, req.user, req.body, session);
     return {
         status: httpStatus.CREATED,
         body: project,
@@ -79,12 +79,12 @@ export const getMyProposals = catchAsync(async (req, res) => {
 });
 
 export const deleteMyProposal = catchAsync(async (req, res) => {
-    const result = await projectService.deleteMyProposal(req.params.proposalId, req.user);
+    const result = await projectService.deleteMyProposal(req, req.params.proposalId, req.user);
     res.status(httpStatus.OK).send({ status: 1, message: 'Proposal deleted successfully.', data: result });
 });
 
 export const rejectProposal = catchAsync(async (req, res) => {
-    const result = await projectService.rejectProposal(req.params.proposalId, req.user, req.body);
+    const result = await projectService.rejectProposal(req, req.params.proposalId, req.user, req.body);
     res.status(httpStatus.OK).send({ status: 1, message: 'Proposal rejected successfully.', data: result });
 });
 
@@ -95,6 +95,7 @@ export const getArchitectDocumentsForCustomer = catchAsync(async (req, res) => {
 
 export const reviewArchitectDocument = catchAsync(async (req, res) => {
     const project = await projectService.reviewArchitectDocument(
+        req,
         req.params.projectId,
         req.params.documentId,
         req.body,
@@ -105,6 +106,7 @@ export const reviewArchitectDocument = catchAsync(async (req, res) => {
 
 export const sendDocumentToCustomer = catchAsync(async (req, res) => {
     const project = await projectService.sendDocumentToCustomer(
+        req,
         req.params.projectId,
         req.params.documentId,
         req.user
@@ -114,6 +116,7 @@ export const sendDocumentToCustomer = catchAsync(async (req, res) => {
 
 export const customerReviewDocument = catchAsync(async (req, res) => {
     const project = await projectService.customerReviewDocument(
+        req,
         req.params.projectId,
         req.params.documentId,
         req.body
@@ -123,6 +126,7 @@ export const customerReviewDocument = catchAsync(async (req, res) => {
 
 export const sendDocumentToProcurement = catchAsync(async (req, res) => {
     const project = await projectService.sendDocumentToProcurement(
+        req,
         req.params.projectId,
         req.params.documentId,
         req.user
@@ -171,7 +175,7 @@ export const getProjectById = catchAsync(async (req, res) => {
 
 export const assignSiteEngineers = catchAsync(async (req, res) => {
     const { siteEngineers } = req.body;
-    const project = await assignSiteEngineersService(req.params.projectId, siteEngineers);
+    const project = await assignSiteEngineersService(req, req.params.projectId, siteEngineers);
 
     if (!project) {
         throw new ApiError(httpStatus.NOT_FOUND, 'Project not found');
@@ -215,9 +219,8 @@ export const getMySiteworkProjects = catchAsync(async (req, res) => {
 export const updateProjectStatus = catchAsync(async (req, res) => {
     const { projectId } = req.params;
     const { status } = req.body;
-    const user = req.user;
 
-    const project = await projectService.updateProjectStatusService(projectId, status, user);
+    const project = await projectService.updateProjectStatusService(req, projectId, status);
 
     res.status(httpStatus.OK).json({
         status: 1,

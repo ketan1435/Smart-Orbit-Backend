@@ -6,6 +6,7 @@ import User from '../models/user.model.js';
 import Admin from '../models/admin.model.js';
 import Project from '../models/project.model.js';
 import { generateClientProposalPDF } from './jsreport.service.js';
+import { logActivity } from '../middlewares/activityLog.middleware.js';
 
 /**
  * Helper function to determine user type
@@ -34,7 +35,7 @@ const getUserAndType = async (userId) => {
  * @param {ObjectId} userId
  * @returns {Promise<ClientProposal>}
  */
-export const createClientProposal = async (clientProposalBody, userId) => {
+export const createClientProposal = async (req, clientProposalBody, userId) => {
     if (!clientProposalBody) {
         throw new ApiError(httpStatus.BAD_REQUEST, 'Client proposal data is required');
     }
@@ -46,7 +47,7 @@ export const createClientProposal = async (clientProposalBody, userId) => {
     const { user, userType } = await getUserAndType(userId);
 
     // Verify project exists
-    const project = await Project.findById(clientProposalBody.project);
+    const project = await Project.findById(clientProposalBody.project).select('projectName projectCode status customerName requirementType architect');
     if (!project) {
         throw new ApiError(httpStatus.NOT_FOUND, 'Project not found');
     }
@@ -63,6 +64,106 @@ export const createClientProposal = async (clientProposalBody, userId) => {
         updatedBy: userId,
         updatedByModel: userType,
     });
+
+    // Log the client proposal creation activity
+    try {
+        await logActivity(req, {
+            action: 'create_client_proposal',
+            targetModel: 'ClientProposal',
+            targetId: clientProposal._id,
+            targetName: clientProposalBody.proposalFor || 'Client Proposal',
+            description: `${userType} ${user.name} (${user.email}) created a new client proposal for project: ${project.projectName}`,
+            changes: {
+                proposalCreated: {
+                    from: null,
+                    to: clientProposal._id
+                },
+                proposalStatus: {
+                    from: null,
+                    to: 'Draft'
+                }
+            },
+            metadata: {
+                projectId: project._id,
+                projectData: {
+                    projectId: project._id,
+                    projectName: project.projectName,
+                    projectCode: project.projectCode,
+                    status: project.status,
+                    customerName: project.customerName,
+                    requirementType: project.requirementType,
+                    architect: project.architect
+                },
+                user: {
+                    userId: user._id,
+                    userName: user.name,
+                    userEmail: user.email,
+                    userRole: user.role,
+                    userType: userType
+                },
+                proposalData: {
+                    proposalId: clientProposal._id,
+                    proposalFor: clientProposalBody.proposalFor,
+                    projectLocation: clientProposalBody.projectLocation,
+                    projectType: clientProposalBody.projectType,
+                    unitCost: clientProposalBody.unitCost,
+                    customerInfo: clientProposalBody.customerInfo,
+                    manufacturingSupply: clientProposalBody.manufacturingSupply ? 'Present' : 'Not provided',
+                    projectOverview: clientProposalBody.projectOverview ? 'Present' : 'Not provided',
+                    cottageSpecifications: clientProposalBody.cottageSpecifications ? 'Present' : 'Not provided',
+                    materialDetails: clientProposalBody.materialDetails ? 'Present' : 'Not provided',
+                    costBreakdown: clientProposalBody.costBreakdown ? 'Present' : 'Not provided',
+                    keyDurabilityFeatures: clientProposalBody.keyDurabilityFeatures ? 'Present' : 'Not provided',
+                    additionalFeatures: clientProposalBody.additionalFeatures ? 'Present' : 'Not provided',
+                    paymentTerms: clientProposalBody.paymentTerms ? 'Present' : 'Not provided',
+                    salesTerms: clientProposalBody.salesTerms ? 'Present' : 'Not provided',
+                    contactInformation: clientProposalBody.contactInformation ? 'Present' : 'Not provided',
+                    createdBy: userId,
+                    createdByModel: userType,
+                    updatedBy: userId,
+                    updatedByModel: userType,
+                    createdAt: clientProposal.createdAt,
+                    updatedAt: clientProposal.updatedAt
+                },
+                proposalCreation: {
+                    proposalCreated: true,
+                    createdBy: userId,
+                    createdByModel: userType,
+                    createdAt: clientProposal.createdAt,
+                    proposalStatus: 'Draft'
+                },
+                contentSections: {
+                    totalSections: 11,
+                    completedSections: [
+                        clientProposalBody.manufacturingSupply ? 'manufacturingSupply' : null,
+                        clientProposalBody.projectOverview ? 'projectOverview' : null,
+                        clientProposalBody.cottageSpecifications ? 'cottageSpecifications' : null,
+                        clientProposalBody.materialDetails ? 'materialDetails' : null,
+                        clientProposalBody.costBreakdown ? 'costBreakdown' : null,
+                        clientProposalBody.keyDurabilityFeatures ? 'keyDurabilityFeatures' : null,
+                        clientProposalBody.additionalFeatures ? 'additionalFeatures' : null,
+                        clientProposalBody.paymentTerms ? 'paymentTerms' : null,
+                        clientProposalBody.salesTerms ? 'salesTerms' : null,
+                        clientProposalBody.contactInformation ? 'contactInformation' : null
+                    ].filter(Boolean).length,
+                    sectionsProvided: [
+                        clientProposalBody.manufacturingSupply ? 'manufacturingSupply' : null,
+                        clientProposalBody.projectOverview ? 'projectOverview' : null,
+                        clientProposalBody.cottageSpecifications ? 'cottageSpecifications' : null,
+                        clientProposalBody.materialDetails ? 'materialDetails' : null,
+                        clientProposalBody.costBreakdown ? 'costBreakdown' : null,
+                        clientProposalBody.keyDurabilityFeatures ? 'keyDurabilityFeatures' : null,
+                        clientProposalBody.additionalFeatures ? 'additionalFeatures' : null,
+                        clientProposalBody.paymentTerms ? 'paymentTerms' : null,
+                        clientProposalBody.salesTerms ? 'salesTerms' : null,
+                        clientProposalBody.contactInformation ? 'contactInformation' : null
+                    ].filter(Boolean)
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error logging client proposal creation:', error);
+    }
 
     return clientProposal.populate(['project', 'createdBy', 'updatedBy']);
 };
@@ -108,7 +209,7 @@ export const queryClientProposals = async (filter, options) => {
  * @param {ObjectId} userId
  * @returns {Promise<ClientProposal>}
  */
-export const sendToCustomer = async (clientProposalId, userId) => {
+export const sendToCustomer = async (req, clientProposalId, userId) => {
     const clientProposal = await getClientProposalById(clientProposalId);
 
     // Check if user has permission to send to customer (creator or admin)
@@ -125,6 +226,11 @@ export const sendToCustomer = async (clientProposalId, userId) => {
         throw new ApiError(httpStatus.BAD_REQUEST, 'Only approved proposals can be sent to customers');
     }
 
+    // Store original data for logging
+    const originalStatus = clientProposal.status;
+    const originalSentToCustomer = clientProposal.sentToCustomer;
+    const originalSentToCustomerAt = clientProposal.sentToCustomerAt;
+
     // Update proposal to sent status
     clientProposal.status = 'sent';
     clientProposal.sentToCustomer = true;
@@ -132,10 +238,82 @@ export const sendToCustomer = async (clientProposalId, userId) => {
     clientProposal.updatedBy = userId;
 
     // Determine user type for updatedBy
-    const { userType } = await getUserAndType(userId);
+    const { user, userType } = await getUserAndType(userId);
     clientProposal.updatedByModel = userType;
 
     await clientProposal.save();
+
+    // Log the send to customer activity
+    try {
+        await logActivity(req, {
+            action: 'send_to_customer',
+            targetModel: 'ClientProposal',
+            targetId: clientProposal._id,
+            targetName: clientProposal.proposalFor || 'Client Proposal',
+            description: `${userType} ${user.name} (${user.email}) sent client proposal to customer for project: ${clientProposal.project?.projectName || 'Unknown Project'}`,
+            changes: {
+                status: {
+                    from: originalStatus,
+                    to: 'sent'
+                },
+                sentToCustomer: {
+                    from: originalSentToCustomer,
+                    to: true
+                },
+                sentToCustomerAt: {
+                    from: originalSentToCustomerAt,
+                    to: new Date()
+                }
+            },
+            metadata: {
+                projectId: clientProposal.project?._id,
+                projectData: {
+                    projectId: clientProposal.project?._id,
+                    projectName: clientProposal.project?.projectName,
+                    projectCode: clientProposal.project?.projectCode,
+                    status: clientProposal.project?.status,
+                    customerName: clientProposal.project?.customerName,
+                    requirementType: clientProposal.project?.requirementType,
+                    architect: clientProposal.project?.architect
+                },
+                user: {
+                    userId: user._id,
+                    userName: user.name,
+                    userEmail: user.email,
+                    userRole: user.role,
+                    userType: userType
+                },
+                proposalData: {
+                    proposalId: clientProposal._id,
+                    proposalFor: clientProposal.proposalFor,
+                    projectLocation: clientProposal.projectLocation,
+                    projectType: clientProposal.projectType,
+                    unitCost: clientProposal.unitCost,
+                    customerInfo: clientProposal.customerInfo,
+                    status: 'sent',
+                    sentToCustomer: true,
+                    sentToCustomerAt: new Date(),
+                    updatedBy: userId,
+                    updatedByModel: userType
+                },
+                customerNotification: {
+                    proposalSent: true,
+                    sentBy: userId,
+                    sentByModel: userType,
+                    sentAt: new Date(),
+                    customerEmail: clientProposal.customerInfo?.email,
+                    customerName: clientProposal.customerInfo?.name
+                },
+                workflow: {
+                    proposalWorkflow: true,
+                    customerWorkflow: true,
+                    notificationSent: true
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error logging send to customer:', error);
+    }
 
     return clientProposal.populate(['project', 'createdBy', 'updatedBy']);
 };
@@ -147,13 +325,19 @@ export const sendToCustomer = async (clientProposalId, userId) => {
  * @param {ObjectId} userId
  * @returns {Promise<ClientProposal>}
  */
-export const customerReview = async (clientProposalId, reviewData, userId) => {
+export const customerReview = async (req, clientProposalId, reviewData, userId) => {
     const clientProposal = await getClientProposalById(clientProposalId);
 
     // Check if proposal was sent to customer
     if (!clientProposal.sentToCustomer) {
         throw new ApiError(httpStatus.BAD_REQUEST, 'Proposal has not been sent to customer');
     }
+
+    // Store original data for logging
+    const originalStatus = clientProposal.status;
+    const originalCustomerRemarks = clientProposal.customerRemarks;
+    const originalCustomerReviewedAt = clientProposal.customerReviewedAt;
+    const originalProjectStatus = clientProposal.project?.status;
 
     // Update proposal based on customer review
     clientProposal.status = reviewData.status;
@@ -165,10 +349,103 @@ export const customerReview = async (clientProposalId, reviewData, userId) => {
     clientProposal.updatedBy = userId;
 
     // Determine user type for updatedBy
-    const { userType } = await getUserAndType(userId);
+    const { user, userType } = await getUserAndType(userId);
     clientProposal.updatedByModel = userType;
 
     await clientProposal.save();
+
+    // Log the customer review activity
+    try {
+        await logActivity(req, {
+            action: 'customer_review',
+            targetModel: 'ClientProposal',
+            targetId: clientProposal._id,
+            targetName: clientProposal.proposalFor || 'Client Proposal',
+            description: `Customer ${user.name} (${user.email}) ${reviewData.status} the client proposal for project: ${clientProposal.project?.projectName || 'Unknown Project'}`,
+            changes: {
+                status: {
+                    from: originalStatus,
+                    to: reviewData.status
+                },
+                customerRemarks: {
+                    from: originalCustomerRemarks,
+                    to: reviewData.remarks
+                },
+                customerReviewedAt: {
+                    from: originalCustomerReviewedAt,
+                    to: new Date()
+                },
+                projectStatus: reviewData.status === 'approved' ? {
+                    from: originalProjectStatus,
+                    to: 'Open'
+                } : undefined
+            },
+            metadata: {
+                projectId: clientProposal.project?._id,
+                projectData: {
+                    projectId: clientProposal.project?._id,
+                    projectName: clientProposal.project?.projectName,
+                    projectCode: clientProposal.project?.projectCode,
+                    status: reviewData.status === 'approved' ? 'Open' : clientProposal.project?.status,
+                    customerName: clientProposal.project?.customerName,
+                    requirementType: clientProposal.project?.requirementType,
+                    architect: clientProposal.project?.architect
+                },
+                customer: {
+                    userId: user._id,
+                    userName: user.name,
+                    userEmail: user.email,
+                    userRole: user.role,
+                    userType: userType
+                },
+                proposalData: {
+                    proposalId: clientProposal._id,
+                    proposalFor: clientProposal.proposalFor,
+                    projectLocation: clientProposal.projectLocation,
+                    projectType: clientProposal.projectType,
+                    unitCost: clientProposal.unitCost,
+                    customerInfo: clientProposal.customerInfo,
+                    status: reviewData.status,
+                    customerRemarks: reviewData.remarks,
+                    customerReviewedAt: new Date(),
+                    updatedBy: userId,
+                    updatedByModel: userType
+                },
+                reviewData: {
+                    status: reviewData.status,
+                    remarks: reviewData.remarks,
+                    reviewedAt: new Date(),
+                    reviewedBy: userId,
+                    reviewedByModel: userType
+                },
+                customerReview: {
+                    proposalReviewed: true,
+                    reviewStatus: reviewData.status,
+                    reviewRemarks: reviewData.remarks,
+                    reviewedAt: new Date(),
+                    reviewedBy: userId,
+                    reviewedByModel: userType
+                },
+                projectUpdate: reviewData.status === 'approved' ? {
+                    projectStatusUpdated: true,
+                    fromStatus: originalProjectStatus,
+                    toStatus: 'Open',
+                    updatedAt: new Date()
+                } : {
+                    projectStatusUpdated: false,
+                    reason: 'Proposal not approved'
+                },
+                workflow: {
+                    customerReview: true,
+                    proposalWorkflow: true,
+                    projectWorkflow: reviewData.status === 'approved',
+                    reviewComplete: true
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error logging customer review:', error);
+    }
 
     return clientProposal.populate(['project', 'createdBy', 'updatedBy']);
 };
@@ -230,7 +507,7 @@ export const getClientProposalById = async (id) => {
  * @param {ObjectId} userId
  * @returns {Promise<ClientProposal>}
  */
-export const updateClientProposalById = async (clientProposalId, updateBody, userId) => {
+export const updateClientProposalById = async (req, clientProposalId, updateBody, userId) => {
     const clientProposal = await getClientProposalById(clientProposalId);
 
     // Check if user has permission to update (creator or admin)
@@ -261,11 +538,35 @@ export const updateClientProposalById = async (clientProposalId, updateBody, use
 
     // If project is being updated, verify it exists
     if (updateBody.project) {
-        const project = await Project.findById(updateBody.project);
+        const project = await Project.findById(updateBody.project).select('projectName projectCode status customerName requirementType architect');
         if (!project) {
             throw new ApiError(httpStatus.NOT_FOUND, 'Project not found');
         }
     }
+
+    // Store original data for logging
+    const originalProposal = {
+        proposalFor: clientProposal.proposalFor,
+        projectLocation: clientProposal.projectLocation,
+        projectType: clientProposal.projectType,
+        unitCost: clientProposal.unitCost,
+        customerInfo: clientProposal.customerInfo,
+        manufacturingSupply: clientProposal.manufacturingSupply,
+        projectOverview: clientProposal.projectOverview,
+        cottageSpecifications: clientProposal.cottageSpecifications,
+        materialDetails: clientProposal.materialDetails,
+        costBreakdown: clientProposal.costBreakdown,
+        keyDurabilityFeatures: clientProposal.keyDurabilityFeatures,
+        additionalFeatures: clientProposal.additionalFeatures,
+        paymentTerms: clientProposal.paymentTerms,
+        salesTerms: clientProposal.salesTerms,
+        contactInformation: clientProposal.contactInformation,
+        project: clientProposal.project,
+        status: clientProposal.status,
+        sentToCustomer: clientProposal.sentToCustomer,
+        updatedBy: clientProposal.updatedBy,
+        updatedByModel: clientProposal.updatedByModel
+    };
 
     // Remove any status, version, or sentToCustomer updates from the update body
     // These should be handled by separate endpoints
@@ -277,6 +578,136 @@ export const updateClientProposalById = async (clientProposalId, updateBody, use
     });
     await clientProposal.save();
 
+    // Log the client proposal update activity
+    try {
+        await logActivity(req, {
+            action: 'update_client_proposal',
+            targetModel: 'ClientProposal',
+            targetId: clientProposal._id,
+            targetName: clientProposal.proposalFor || 'Client Proposal',
+            description: `${userType} ${user.name} (${user.email}) updated client proposal for project: ${clientProposal.project?.projectName || 'Unknown Project'}`,
+            changes: {
+                proposalFor: updateBody.proposalFor ? {
+                    from: originalProposal.proposalFor,
+                    to: updateBody.proposalFor
+                } : undefined,
+                projectLocation: updateBody.projectLocation ? {
+                    from: originalProposal.projectLocation,
+                    to: updateBody.projectLocation
+                } : undefined,
+                projectType: updateBody.projectType ? {
+                    from: originalProposal.projectType,
+                    to: updateBody.projectType
+                } : undefined,
+                unitCost: updateBody.unitCost ? {
+                    from: originalProposal.unitCost,
+                    to: updateBody.unitCost
+                } : undefined,
+                customerInfo: updateBody.customerInfo ? {
+                    from: originalProposal.customerInfo,
+                    to: updateBody.customerInfo
+                } : undefined,
+                project: updateBody.project ? {
+                    from: originalProposal.project,
+                    to: updateBody.project
+                } : undefined,
+                updatedBy: {
+                    from: originalProposal.updatedBy,
+                    to: userId
+                },
+                updatedByModel: {
+                    from: originalProposal.updatedByModel,
+                    to: userType
+                }
+            },
+            metadata: {
+                projectId: clientProposal.project?._id,
+                projectData: {
+                    projectId: clientProposal.project?._id,
+                    projectName: clientProposal.project?.projectName,
+                    projectCode: clientProposal.project?.projectCode,
+                    status: clientProposal.project?.status,
+                    customerName: clientProposal.project?.customerName,
+                    requirementType: clientProposal.project?.requirementType,
+                    architect: clientProposal.project?.architect
+                },
+                user: {
+                    userId: user._id,
+                    userName: user.name,
+                    userEmail: user.email,
+                    userRole: user.role,
+                    userType: userType
+                },
+                proposalData: {
+                    proposalId: clientProposal._id,
+                    proposalFor: clientProposal.proposalFor,
+                    projectLocation: clientProposal.projectLocation,
+                    projectType: clientProposal.projectType,
+                    unitCost: clientProposal.unitCost,
+                    customerInfo: clientProposal.customerInfo,
+                    manufacturingSupply: clientProposal.manufacturingSupply ? 'Present' : 'Not provided',
+                    projectOverview: clientProposal.projectOverview ? 'Present' : 'Not provided',
+                    cottageSpecifications: clientProposal.cottageSpecifications ? 'Present' : 'Not provided',
+                    materialDetails: clientProposal.materialDetails ? 'Present' : 'Not provided',
+                    costBreakdown: clientProposal.costBreakdown ? 'Present' : 'Not provided',
+                    keyDurabilityFeatures: clientProposal.keyDurabilityFeatures ? 'Present' : 'Not provided',
+                    additionalFeatures: clientProposal.additionalFeatures ? 'Present' : 'Not provided',
+                    paymentTerms: clientProposal.paymentTerms ? 'Present' : 'Not provided',
+                    salesTerms: clientProposal.salesTerms ? 'Present' : 'Not provided',
+                    contactInformation: clientProposal.contactInformation ? 'Present' : 'Not provided',
+                    status: clientProposal.status,
+                    sentToCustomer: clientProposal.sentToCustomer,
+                    updatedBy: userId,
+                    updatedByModel: userType,
+                    updatedAt: clientProposal.updatedAt
+                },
+                originalProposalData: originalProposal,
+                updateData: {
+                    updatedFields: Object.keys(safeUpdateBody),
+                    updatedBy: userId,
+                    updatedByModel: userType,
+                    updatedAt: clientProposal.updatedAt
+                },
+                contentSections: {
+                    totalSections: 11,
+                    completedSections: [
+                        clientProposal.manufacturingSupply ? 'manufacturingSupply' : null,
+                        clientProposal.projectOverview ? 'projectOverview' : null,
+                        clientProposal.cottageSpecifications ? 'cottageSpecifications' : null,
+                        clientProposal.materialDetails ? 'materialDetails' : null,
+                        clientProposal.costBreakdown ? 'costBreakdown' : null,
+                        clientProposal.keyDurabilityFeatures ? 'keyDurabilityFeatures' : null,
+                        clientProposal.additionalFeatures ? 'additionalFeatures' : null,
+                        clientProposal.paymentTerms ? 'paymentTerms' : null,
+                        clientProposal.salesTerms ? 'salesTerms' : null,
+                        clientProposal.contactInformation ? 'contactInformation' : null
+                    ].filter(Boolean).length,
+                    sectionsProvided: [
+                        clientProposal.manufacturingSupply ? 'manufacturingSupply' : null,
+                        clientProposal.projectOverview ? 'projectOverview' : null,
+                        clientProposal.cottageSpecifications ? 'cottageSpecifications' : null,
+                        clientProposal.materialDetails ? 'materialDetails' : null,
+                        clientProposal.costBreakdown ? 'costBreakdown' : null,
+                        clientProposal.keyDurabilityFeatures ? 'keyDurabilityFeatures' : null,
+                        clientProposal.additionalFeatures ? 'additionalFeatures' : null,
+                        clientProposal.paymentTerms ? 'paymentTerms' : null,
+                        clientProposal.salesTerms ? 'salesTerms' : null,
+                        clientProposal.contactInformation ? 'contactInformation' : null
+                    ].filter(Boolean)
+                },
+                proposalUpdate: {
+                    proposalUpdated: true,
+                    updatedBy: userId,
+                    updatedByModel: userType,
+                    updatedAt: clientProposal.updatedAt,
+                    fieldsUpdated: Object.keys(safeUpdateBody)
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error logging client proposal update:', error);
+    }
+
     return clientProposal.populate(['project', 'createdBy', 'updatedBy']);
 };
 
@@ -287,7 +718,7 @@ export const updateClientProposalById = async (clientProposalId, updateBody, use
  * @param {ObjectId} userId
  * @returns {Promise<ClientProposal>}
  */
-export const updateClientProposalStatus = async (clientProposalId, status, userId) => {
+export const updateClientProposalStatus = async (req, clientProposalId, status, userId) => {
     const clientProposal = await getClientProposalById(clientProposalId);
 
     // Check if user has permission to update status (creator or admin)
@@ -315,8 +746,14 @@ export const updateClientProposalStatus = async (clientProposalId, status, userI
         );
     }
 
+    // Store original data for logging
+    const originalStatus = clientProposal.status;
+    const originalSentToCustomer = clientProposal.sentToCustomer;
+    const originalSentToCustomerAt = clientProposal.sentToCustomerAt;
+    const originalProjectStatus = clientProposal.project?.status;
+
     // Determine user type for updatedBy
-    const { userType } = await getUserAndType(userId);
+    const { user, userType } = await getUserAndType(userId);
 
     clientProposal.status = status;
     clientProposal.updatedBy = userId;
@@ -330,6 +767,123 @@ export const updateClientProposalStatus = async (clientProposalId, status, userI
     }
     await clientProposal.save();
 
+    // Log the client proposal status update activity
+    try {
+        await logActivity(req, {
+            action: 'update_client_proposal_status',
+            targetModel: 'ClientProposal',
+            targetId: clientProposal._id,
+            targetName: clientProposal.proposalFor || 'Client Proposal',
+            description: `${userType} ${user.name} (${user.email}) updated client proposal status from '${originalStatus}' to '${status}' for project: ${clientProposal.project?.projectName || 'Unknown Project'}`,
+            changes: {
+                status: {
+                    from: originalStatus,
+                    to: status
+                },
+                sentToCustomer: status === 'sent' ? {
+                    from: originalSentToCustomer,
+                    to: true
+                } : undefined,
+                sentToCustomerAt: status === 'sent' ? {
+                    from: originalSentToCustomerAt,
+                    to: new Date()
+                } : undefined,
+                projectStatus: status === 'approved' ? {
+                    from: originalProjectStatus,
+                    to: 'Open'
+                } : undefined,
+                updatedBy: {
+                    from: clientProposal.updatedBy,
+                    to: userId
+                },
+                updatedByModel: {
+                    from: clientProposal.updatedByModel,
+                    to: userType
+                }
+            },
+            metadata: {
+                projectId: clientProposal.project?._id,
+                projectData: {
+                    projectId: clientProposal.project?._id,
+                    projectName: clientProposal.project?.projectName,
+                    projectCode: clientProposal.project?.projectCode,
+                    status: status === 'approved' ? 'Open' : clientProposal.project?.status,
+                    customerName: clientProposal.project?.customerName,
+                    requirementType: clientProposal.project?.requirementType,
+                    architect: clientProposal.project?.architect
+                },
+                user: {
+                    userId: user._id,
+                    userName: user.name,
+                    userEmail: user.email,
+                    userRole: user.role,
+                    userType: userType
+                },
+                proposalData: {
+                    proposalId: clientProposal._id,
+                    proposalFor: clientProposal.proposalFor,
+                    projectLocation: clientProposal.projectLocation,
+                    projectType: clientProposal.projectType,
+                    unitCost: clientProposal.unitCost,
+                    customerInfo: clientProposal.customerInfo,
+                    status: status,
+                    sentToCustomer: status === 'sent' ? true : clientProposal.sentToCustomer,
+                    sentToCustomerAt: status === 'sent' ? new Date() : clientProposal.sentToCustomerAt,
+                    updatedBy: userId,
+                    updatedByModel: userType,
+                    updatedAt: clientProposal.updatedAt
+                },
+                statusUpdate: {
+                    originalStatus,
+                    newStatus: status,
+                    statusTransition: `${originalStatus} → ${status}`,
+                    statusChanged: originalStatus !== status,
+                    updatedAt: new Date()
+                },
+                validTransitions: {
+                    fromStatus: originalStatus,
+                    validTransitions: validTransitions[originalStatus],
+                    transitionValid: validTransitions[originalStatus].includes(status)
+                },
+                workflowActions: {
+                    sentToCustomer: status === 'sent',
+                    projectStatusUpdated: status === 'approved',
+                    customerNotification: status === 'sent',
+                    projectWorkflow: status === 'approved'
+                },
+                projectUpdate: status === 'approved' ? {
+                    projectStatusUpdated: true,
+                    fromStatus: originalProjectStatus,
+                    toStatus: 'Open',
+                    updatedAt: new Date()
+                } : {
+                    projectStatusUpdated: false,
+                    reason: 'Status not approved'
+                },
+                customerNotification: status === 'sent' ? {
+                    proposalSent: true,
+                    sentBy: userId,
+                    sentByModel: userType,
+                    sentAt: new Date(),
+                    customerEmail: clientProposal.customerInfo?.email,
+                    customerName: clientProposal.customerInfo?.name
+                } : {
+                    proposalSent: false,
+                    reason: 'Status not sent'
+                },
+                workflow: {
+                    statusUpdate: true,
+                    proposalWorkflow: true,
+                    projectWorkflow: status === 'approved',
+                    customerWorkflow: status === 'sent',
+                    statusTransition: true
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error logging client proposal status update:', error);
+    }
+
     return clientProposal.populate(['project', 'createdBy', 'updatedBy']);
 };
 
@@ -340,7 +894,7 @@ export const updateClientProposalStatus = async (clientProposalId, status, userI
  * @param {ObjectId} userId
  * @returns {Promise<ClientProposal>}
  */
-export const createNewVersion = async (clientProposalId, updateBody, userId) => {
+export const createNewVersion = async (req, clientProposalId, updateBody, userId) => {
     const originalProposal = await getClientProposalById(clientProposalId);
 
     // Check if user has permission to create new version (creator or admin)
@@ -353,7 +907,7 @@ export const createNewVersion = async (clientProposalId, updateBody, userId) => 
     }
 
     // Determine user type for new version
-    const { userType } = await getUserAndType(userId);
+    const { user, userType } = await getUserAndType(userId);
 
     // Create new version with incremented version number
     const newVersion = originalProposal.version + 1;
@@ -370,6 +924,155 @@ export const createNewVersion = async (clientProposalId, updateBody, userId) => 
         updatedByModel: userType,
     });
 
+    // Log the new version creation activity
+    try {
+        await logActivity(req, {
+            action: 'create_new_version',
+            targetModel: 'ClientProposal',
+            targetId: newProposal._id,
+            targetName: newProposal.proposalFor || 'Client Proposal',
+            description: `${userType} ${user.name} (${user.email}) created new version ${newVersion} of client proposal for project: ${newProposal.project?.projectName || 'Unknown Project'}`,
+            changes: {
+                version: {
+                    from: originalProposal.version,
+                    to: newVersion
+                },
+                status: {
+                    from: originalProposal.status,
+                    to: 'draft'
+                },
+                createdBy: {
+                    from: originalProposal.createdBy,
+                    to: userId
+                },
+                createdByModel: {
+                    from: originalProposal.createdByModel,
+                    to: userType
+                },
+                updatedBy: {
+                    from: originalProposal.updatedBy,
+                    to: userId
+                },
+                updatedByModel: {
+                    from: originalProposal.updatedByModel,
+                    to: userType
+                }
+            },
+            metadata: {
+                projectId: newProposal.project?._id,
+                projectData: {
+                    projectId: newProposal.project?._id,
+                    projectName: newProposal.project?.projectName,
+                    projectCode: newProposal.project?.projectCode,
+                    status: newProposal.project?.status,
+                    customerName: newProposal.project?.customerName,
+                    requirementType: newProposal.project?.requirementType,
+                    architect: newProposal.project?.architect
+                },
+                user: {
+                    userId: user._id,
+                    userName: user.name,
+                    userEmail: user.email,
+                    userRole: user.role,
+                    userType: userType
+                },
+                originalProposalData: {
+                    proposalId: originalProposal._id,
+                    proposalFor: originalProposal.proposalFor,
+                    projectLocation: originalProposal.projectLocation,
+                    projectType: originalProposal.projectType,
+                    unitCost: originalProposal.unitCost,
+                    customerInfo: originalProposal.customerInfo,
+                    version: originalProposal.version,
+                    status: originalProposal.status,
+                    sentToCustomer: originalProposal.sentToCustomer,
+                    createdBy: originalProposal.createdBy,
+                    createdByModel: originalProposal.createdByModel,
+                    updatedBy: originalProposal.updatedBy,
+                    updatedByModel: originalProposal.updatedByModel
+                },
+                newProposalData: {
+                    proposalId: newProposal._id,
+                    proposalFor: newProposal.proposalFor,
+                    projectLocation: newProposal.projectLocation,
+                    projectType: newProposal.projectType,
+                    unitCost: newProposal.unitCost,
+                    customerInfo: newProposal.customerInfo,
+                    manufacturingSupply: newProposal.manufacturingSupply ? 'Present' : 'Not provided',
+                    projectOverview: newProposal.projectOverview ? 'Present' : 'Not provided',
+                    cottageSpecifications: newProposal.cottageSpecifications ? 'Present' : 'Not provided',
+                    materialDetails: newProposal.materialDetails ? 'Present' : 'Not provided',
+                    costBreakdown: newProposal.costBreakdown ? 'Present' : 'Not provided',
+                    keyDurabilityFeatures: newProposal.keyDurabilityFeatures ? 'Present' : 'Not provided',
+                    additionalFeatures: newProposal.additionalFeatures ? 'Present' : 'Not provided',
+                    paymentTerms: newProposal.paymentTerms ? 'Present' : 'Not provided',
+                    salesTerms: newProposal.salesTerms ? 'Present' : 'Not provided',
+                    contactInformation: newProposal.contactInformation ? 'Present' : 'Not provided',
+                    version: newVersion,
+                    status: 'draft',
+                    sentToCustomer: false,
+                    createdBy: userId,
+                    createdByModel: userType,
+                    updatedBy: userId,
+                    updatedByModel: userType,
+                    createdAt: newProposal.createdAt,
+                    updatedAt: newProposal.updatedAt
+                },
+                versionCreation: {
+                    newVersionCreated: true,
+                    originalVersion: originalProposal.version,
+                    newVersion: newVersion,
+                    versionIncremented: true,
+                    statusReset: true,
+                    createdBy: userId,
+                    createdByModel: userType,
+                    createdAt: newProposal.createdAt
+                },
+                contentSections: {
+                    totalSections: 11,
+                    completedSections: [
+                        newProposal.manufacturingSupply ? 'manufacturingSupply' : null,
+                        newProposal.projectOverview ? 'projectOverview' : null,
+                        newProposal.cottageSpecifications ? 'cottageSpecifications' : null,
+                        newProposal.materialDetails ? 'materialDetails' : null,
+                        newProposal.costBreakdown ? 'costBreakdown' : null,
+                        newProposal.keyDurabilityFeatures ? 'keyDurabilityFeatures' : null,
+                        newProposal.additionalFeatures ? 'additionalFeatures' : null,
+                        newProposal.paymentTerms ? 'paymentTerms' : null,
+                        newProposal.salesTerms ? 'salesTerms' : null,
+                        newProposal.contactInformation ? 'contactInformation' : null
+                    ].filter(Boolean).length,
+                    sectionsProvided: [
+                        newProposal.manufacturingSupply ? 'manufacturingSupply' : null,
+                        newProposal.projectOverview ? 'projectOverview' : null,
+                        newProposal.cottageSpecifications ? 'cottageSpecifications' : null,
+                        newProposal.materialDetails ? 'materialDetails' : null,
+                        newProposal.costBreakdown ? 'costBreakdown' : null,
+                        newProposal.keyDurabilityFeatures ? 'keyDurabilityFeatures' : null,
+                        newProposal.additionalFeatures ? 'additionalFeatures' : null,
+                        newProposal.paymentTerms ? 'paymentTerms' : null,
+                        newProposal.salesTerms ? 'salesTerms' : null,
+                        newProposal.contactInformation ? 'contactInformation' : null
+                    ].filter(Boolean)
+                },
+                updateData: {
+                    updatedFields: Object.keys(updateBody),
+                    updatedBy: userId,
+                    updatedByModel: userType,
+                    updatedAt: newProposal.updatedAt
+                },
+                workflow: {
+                    versionCreation: true,
+                    proposalWorkflow: true,
+                    newVersion: true,
+                    statusReset: true
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error logging new version creation:', error);
+    }
+
     return newProposal.populate(['project', 'createdBy', 'updatedBy']);
 };
 
@@ -379,7 +1082,7 @@ export const createNewVersion = async (clientProposalId, updateBody, userId) => 
  * @param {ObjectId} userId
  * @returns {Promise<ClientProposal>}
  */
-export const deleteClientProposalById = async (clientProposalId, userId) => {
+export const deleteClientProposalById = async (req, clientProposalId, userId) => {
     const clientProposal = await getClientProposalById(clientProposalId);
 
     // Check if user has permission to delete (creator or admin)
@@ -391,7 +1094,127 @@ export const deleteClientProposalById = async (clientProposalId, userId) => {
         }
     }
 
+    // Store proposal data for logging before deletion
+    const proposalData = {
+        proposalId: clientProposal._id,
+        proposalFor: clientProposal.proposalFor,
+        projectLocation: clientProposal.projectLocation,
+        projectType: clientProposal.projectType,
+        unitCost: clientProposal.unitCost,
+        customerInfo: clientProposal.customerInfo,
+        manufacturingSupply: clientProposal.manufacturingSupply ? 'Present' : 'Not provided',
+        projectOverview: clientProposal.projectOverview ? 'Present' : 'Not provided',
+        cottageSpecifications: clientProposal.cottageSpecifications ? 'Present' : 'Not provided',
+        materialDetails: clientProposal.materialDetails ? 'Present' : 'Not provided',
+        costBreakdown: clientProposal.costBreakdown ? 'Present' : 'Not provided',
+        keyDurabilityFeatures: clientProposal.keyDurabilityFeatures ? 'Present' : 'Not provided',
+        additionalFeatures: clientProposal.additionalFeatures ? 'Present' : 'Not provided',
+        paymentTerms: clientProposal.paymentTerms ? 'Present' : 'Not provided',
+        salesTerms: clientProposal.salesTerms ? 'Present' : 'Not provided',
+        contactInformation: clientProposal.contactInformation ? 'Present' : 'Not provided',
+        version: clientProposal.version,
+        status: clientProposal.status,
+        sentToCustomer: clientProposal.sentToCustomer,
+        sentToCustomerAt: clientProposal.sentToCustomerAt,
+        customerRemarks: clientProposal.customerRemarks,
+        customerReviewedAt: clientProposal.customerReviewedAt,
+        createdBy: clientProposal.createdBy,
+        createdByModel: clientProposal.createdByModel,
+        updatedBy: clientProposal.updatedBy,
+        updatedByModel: clientProposal.updatedByModel,
+        createdAt: clientProposal.createdAt,
+        updatedAt: clientProposal.updatedAt
+    };
+
+    // Get user information for logging
+    const { user, userType } = await getUserAndType(userId);
+
     await clientProposal.deleteOne();
+
+    // Log the client proposal deletion activity
+    try {
+        await logActivity(req, {
+            action: 'delete_client_proposal',
+            targetModel: 'ClientProposal',
+            targetId: clientProposal._id,
+            targetName: clientProposal.proposalFor || 'Client Proposal',
+            description: `${userType} ${user.name} (${user.email}) deleted client proposal version ${clientProposal.version} for project: ${clientProposal.project?.projectName || 'Unknown Project'}`,
+            changes: {
+                proposalDeleted: {
+                    from: clientProposal._id,
+                    to: null
+                },
+                status: {
+                    from: clientProposal.status,
+                    to: 'deleted'
+                }
+            },
+            metadata: {
+                projectId: clientProposal.project?._id,
+                projectData: {
+                    projectId: clientProposal.project?._id,
+                    projectName: clientProposal.project?.projectName,
+                    projectCode: clientProposal.project?.projectCode,
+                    status: clientProposal.project?.status,
+                    customerName: clientProposal.project?.customerName,
+                    requirementType: clientProposal.project?.requirementType,
+                    architect: clientProposal.project?.architect
+                },
+                user: {
+                    userId: user._id,
+                    userName: user.name,
+                    userEmail: user.email,
+                    userRole: user.role,
+                    userType: userType
+                },
+                deletedProposalData: proposalData,
+                deletionDetails: {
+                    proposalDeleted: true,
+                    deletedBy: userId,
+                    deletedByModel: userType,
+                    deletedAt: new Date(),
+                    proposalVersion: clientProposal.version,
+                    proposalStatus: clientProposal.status,
+                    sentToCustomer: clientProposal.sentToCustomer
+                },
+                contentSections: {
+                    totalSections: 11,
+                    completedSections: [
+                        clientProposal.manufacturingSupply ? 'manufacturingSupply' : null,
+                        clientProposal.projectOverview ? 'projectOverview' : null,
+                        clientProposal.cottageSpecifications ? 'cottageSpecifications' : null,
+                        clientProposal.materialDetails ? 'materialDetails' : null,
+                        clientProposal.costBreakdown ? 'costBreakdown' : null,
+                        clientProposal.keyDurabilityFeatures ? 'keyDurabilityFeatures' : null,
+                        clientProposal.additionalFeatures ? 'additionalFeatures' : null,
+                        clientProposal.paymentTerms ? 'paymentTerms' : null,
+                        clientProposal.salesTerms ? 'salesTerms' : null,
+                        clientProposal.contactInformation ? 'contactInformation' : null
+                    ].filter(Boolean).length,
+                    sectionsProvided: [
+                        clientProposal.manufacturingSupply ? 'manufacturingSupply' : null,
+                        clientProposal.projectOverview ? 'projectOverview' : null,
+                        clientProposal.cottageSpecifications ? 'cottageSpecifications' : null,
+                        clientProposal.materialDetails ? 'materialDetails' : null,
+                        clientProposal.costBreakdown ? 'costBreakdown' : null,
+                        clientProposal.keyDurabilityFeatures ? 'keyDurabilityFeatures' : null,
+                        clientProposal.additionalFeatures ? 'additionalFeatures' : null,
+                        clientProposal.paymentTerms ? 'paymentTerms' : null,
+                        clientProposal.salesTerms ? 'salesTerms' : null,
+                        clientProposal.contactInformation ? 'contactInformation' : null
+                    ].filter(Boolean)
+                },
+                workflow: {
+                    proposalDeletion: true,
+                    proposalWorkflow: true,
+                    deletionComplete: true
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error logging client proposal deletion:', error);
+    }
+
     return clientProposal;
 };
 
@@ -508,7 +1331,7 @@ export const queryWorkOrders = async (filter = {}, options = {}) => {
  * @param {ObjectId} userId
  * @returns {Promise<ClientProposal>}
  */
-export const convertToWorkOrder = async (clientProposalId, userId) => {
+export const convertToWorkOrder = async (req, clientProposalId, userId) => {
     const clientProposal = await getClientProposalById(clientProposalId);
 
     // Only allow conversion if proposal is approved
@@ -521,8 +1344,14 @@ export const convertToWorkOrder = async (clientProposalId, userId) => {
         throw new ApiError(httpStatus.BAD_REQUEST, 'This proposal has already been converted to a work order');
     }
 
+    // Store original values for logging
+    const originalConvertedToWorkOrder = clientProposal.convertedToWorkOrder;
+    const originalConvertedToWorkOrderAt = clientProposal.convertedToWorkOrderAt;
+    const originalUpdatedBy = clientProposal.updatedBy;
+    const originalUpdatedByModel = clientProposal.updatedByModel;
+
     // Determine user type for updatedBy
-    const { userType } = await getUserAndType(userId);
+    const { user, userType } = await getUserAndType(userId);
 
     // Update proposal to mark as converted to work order
     clientProposal.convertedToWorkOrder = true;
@@ -531,6 +1360,118 @@ export const convertToWorkOrder = async (clientProposalId, userId) => {
     clientProposal.updatedByModel = userType;
 
     await clientProposal.save();
+
+    // Log the client proposal to work order conversion activity
+    try {
+        await logActivity(req, {
+            action: 'convert_to_work_order',
+            targetModel: 'ClientProposal',
+            targetId: clientProposal._id,
+            targetName: clientProposal.proposalFor || 'Client Proposal',
+            description: `${userType} ${user.name} (${user.email}) converted client proposal version ${clientProposal.version} to work order for project: ${clientProposal.project?.projectName || 'Unknown Project'}`,
+            changes: {
+                convertedToWorkOrder: {
+                    from: originalConvertedToWorkOrder,
+                    to: true
+                },
+                convertedToWorkOrderAt: {
+                    from: originalConvertedToWorkOrderAt,
+                    to: new Date()
+                },
+                updatedBy: {
+                    from: originalUpdatedBy,
+                    to: userId
+                },
+                updatedByModel: {
+                    from: originalUpdatedByModel,
+                    to: userType
+                }
+            },
+            metadata: {
+                projectId: clientProposal.project?._id,
+                projectData: {
+                    projectId: clientProposal.project?._id,
+                    projectName: clientProposal.project?.projectName,
+                    projectCode: clientProposal.project?.projectCode,
+                    status: clientProposal.project?.status,
+                    customerName: clientProposal.project?.customerName,
+                    requirementType: clientProposal.project?.requirementType,
+                    architect: clientProposal.project?.architect
+                },
+                user: {
+                    userId: user._id,
+                    userName: user.name,
+                    userEmail: user.email,
+                    userRole: user.role,
+                    userType: userType
+                },
+                proposalData: {
+                    proposalId: clientProposal._id,
+                    proposalFor: clientProposal.proposalFor,
+                    projectLocation: clientProposal.projectLocation,
+                    projectType: clientProposal.projectType,
+                    unitCost: clientProposal.unitCost,
+                    customerInfo: clientProposal.customerInfo,
+                    version: clientProposal.version,
+                    status: clientProposal.status,
+                    sentToCustomer: clientProposal.sentToCustomer,
+                    sentToCustomerAt: clientProposal.sentToCustomerAt,
+                    customerRemarks: clientProposal.customerRemarks,
+                    customerReviewedAt: clientProposal.customerReviewedAt,
+                    createdBy: clientProposal.createdBy,
+                    createdByModel: clientProposal.createdByModel,
+                    updatedBy: clientProposal.updatedBy,
+                    updatedByModel: clientProposal.updatedByModel,
+                    createdAt: clientProposal.createdAt,
+                    updatedAt: clientProposal.updatedAt
+                },
+                workOrderConversion: {
+                    convertedToWorkOrder: true,
+                    convertedAt: new Date(),
+                    convertedBy: userId,
+                    convertedByModel: userType,
+                    proposalVersion: clientProposal.version,
+                    proposalStatus: clientProposal.status,
+                    workOrderCreated: true
+                },
+                contentSections: {
+                    totalSections: 11,
+                    completedSections: [
+                        clientProposal.manufacturingSupply ? 'manufacturingSupply' : null,
+                        clientProposal.projectOverview ? 'projectOverview' : null,
+                        clientProposal.cottageSpecifications ? 'cottageSpecifications' : null,
+                        clientProposal.materialDetails ? 'materialDetails' : null,
+                        clientProposal.costBreakdown ? 'costBreakdown' : null,
+                        clientProposal.keyDurabilityFeatures ? 'keyDurabilityFeatures' : null,
+                        clientProposal.additionalFeatures ? 'additionalFeatures' : null,
+                        clientProposal.paymentTerms ? 'paymentTerms' : null,
+                        clientProposal.salesTerms ? 'salesTerms' : null,
+                        clientProposal.contactInformation ? 'contactInformation' : null
+                    ].filter(Boolean).length,
+                    sectionsProvided: [
+                        clientProposal.manufacturingSupply ? 'manufacturingSupply' : null,
+                        clientProposal.projectOverview ? 'projectOverview' : null,
+                        clientProposal.cottageSpecifications ? 'cottageSpecifications' : null,
+                        clientProposal.materialDetails ? 'materialDetails' : null,
+                        clientProposal.costBreakdown ? 'costBreakdown' : null,
+                        clientProposal.keyDurabilityFeatures ? 'keyDurabilityFeatures' : null,
+                        clientProposal.additionalFeatures ? 'additionalFeatures' : null,
+                        clientProposal.paymentTerms ? 'paymentTerms' : null,
+                        clientProposal.salesTerms ? 'salesTerms' : null,
+                        clientProposal.contactInformation ? 'contactInformation' : null
+                    ].filter(Boolean)
+                },
+                workflow: {
+                    proposalToWorkOrder: true,
+                    proposalWorkflow: true,
+                    workOrderWorkflow: true,
+                    conversionComplete: true
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error logging client proposal to work order conversion:', error);
+    }
 
     return clientProposal.populate(['project', 'createdBy', 'updatedBy']);
 };
@@ -541,7 +1482,7 @@ export const convertToWorkOrder = async (clientProposalId, userId) => {
  * @param {ObjectId} userId
  * @returns {Promise<ClientProposal>}
  */
-export const sendWorkOrderToPlanningEngineer = async (clientProposalId, userId) => {
+export const sendWorkOrderToPlanningEngineer = async (req, clientProposalId, userId) => {
     const clientProposal = await getClientProposalById(clientProposalId);
 
     // Only allow sending if proposal is converted to work order
@@ -554,8 +1495,16 @@ export const sendWorkOrderToPlanningEngineer = async (clientProposalId, userId) 
         throw new ApiError(httpStatus.BAD_REQUEST, 'This work order has already been sent to planning engineer');
     }
 
+    // Store original values for logging
+    const originalWorkOrderSentToPlanningEngineer = clientProposal.project.workOrderSentToPlanningEngineer;
+    const originalWorkOrderSentToPlanningEngineerAt = clientProposal.project.workOrderSentToPlanningEngineerAt;
+    const originalWorkOrderSentToPlanningEngineerBy = clientProposal.project.workOrderSentToPlanningEngineerBy;
+    const originalWorkOrderSentToPlanningEngineerByModel = clientProposal.project.workOrderSentToPlanningEngineerByModel;
+    const originalUpdatedBy = clientProposal.updatedBy;
+    const originalUpdatedByModel = clientProposal.updatedByModel;
+
     // Determine user type for updatedBy
-    const { userType } = await getUserAndType(userId);
+    const { user, userType } = await getUserAndType(userId);
 
     // Update project to mark as sent to planning engineer
     await Project.findByIdAndUpdate(clientProposal.project._id, {
@@ -569,6 +1518,131 @@ export const sendWorkOrderToPlanningEngineer = async (clientProposalId, userId) 
     clientProposal.updatedBy = userId;
     clientProposal.updatedByModel = userType;
     await clientProposal.save();
+
+    // Log the work order to planning engineer sending activity
+    try {
+        await logActivity(req, {
+            action: 'send_work_order_to_planning_engineer',
+            targetModel: 'ClientProposal',
+            targetId: clientProposal._id,
+            targetName: clientProposal.proposalFor || 'Client Proposal',
+            description: `${userType} ${user.name} (${user.email}) sent work order version ${clientProposal.version} to planning engineer for project: ${clientProposal.project?.projectName || 'Unknown Project'}`,
+            changes: {
+                workOrderSentToPlanningEngineer: {
+                    from: originalWorkOrderSentToPlanningEngineer,
+                    to: true
+                },
+                workOrderSentToPlanningEngineerAt: {
+                    from: originalWorkOrderSentToPlanningEngineerAt,
+                    to: new Date()
+                },
+                workOrderSentToPlanningEngineerBy: {
+                    from: originalWorkOrderSentToPlanningEngineerBy,
+                    to: userId
+                },
+                workOrderSentToPlanningEngineerByModel: {
+                    from: originalWorkOrderSentToPlanningEngineerByModel,
+                    to: userType
+                },
+                updatedBy: {
+                    from: originalUpdatedBy,
+                    to: userId
+                },
+                updatedByModel: {
+                    from: originalUpdatedByModel,
+                    to: userType
+                }
+            },
+            metadata: {
+                projectId: clientProposal.project?._id,
+                projectData: {
+                    projectId: clientProposal.project?._id,
+                    projectName: clientProposal.project?.projectName,
+                    projectCode: clientProposal.project?.projectCode,
+                    status: clientProposal.project?.status,
+                    customerName: clientProposal.project?.customerName,
+                    requirementType: clientProposal.project?.requirementType,
+                    architect: clientProposal.project?.architect
+                },
+                user: {
+                    userId: user._id,
+                    userName: user.name,
+                    userEmail: user.email,
+                    userRole: user.role,
+                    userType: userType
+                },
+                proposalData: {
+                    proposalId: clientProposal._id,
+                    proposalFor: clientProposal.proposalFor,
+                    projectLocation: clientProposal.projectLocation,
+                    projectType: clientProposal.projectType,
+                    unitCost: clientProposal.unitCost,
+                    customerInfo: clientProposal.customerInfo,
+                    version: clientProposal.version,
+                    status: clientProposal.status,
+                    sentToCustomer: clientProposal.sentToCustomer,
+                    sentToCustomerAt: clientProposal.sentToCustomerAt,
+                    customerRemarks: clientProposal.customerRemarks,
+                    customerReviewedAt: clientProposal.customerReviewedAt,
+                    convertedToWorkOrder: clientProposal.convertedToWorkOrder,
+                    convertedToWorkOrderAt: clientProposal.convertedToWorkOrderAt,
+                    createdBy: clientProposal.createdBy,
+                    createdByModel: clientProposal.createdByModel,
+                    updatedBy: clientProposal.updatedBy,
+                    updatedByModel: clientProposal.updatedByModel,
+                    createdAt: clientProposal.createdAt,
+                    updatedAt: clientProposal.updatedAt
+                },
+                workOrderSending: {
+                    sentToPlanningEngineer: true,
+                    sentAt: new Date(),
+                    sentBy: userId,
+                    sentByModel: userType,
+                    proposalVersion: clientProposal.version,
+                    proposalStatus: clientProposal.status,
+                    workOrderStatus: 'sent_to_planning_engineer',
+                    planningEngineerNotification: true
+                },
+                contentSections: {
+                    totalSections: 11,
+                    completedSections: [
+                        clientProposal.manufacturingSupply ? 'manufacturingSupply' : null,
+                        clientProposal.projectOverview ? 'projectOverview' : null,
+                        clientProposal.cottageSpecifications ? 'cottageSpecifications' : null,
+                        clientProposal.materialDetails ? 'materialDetails' : null,
+                        clientProposal.costBreakdown ? 'costBreakdown' : null,
+                        clientProposal.keyDurabilityFeatures ? 'keyDurabilityFeatures' : null,
+                        clientProposal.additionalFeatures ? 'additionalFeatures' : null,
+                        clientProposal.paymentTerms ? 'paymentTerms' : null,
+                        clientProposal.salesTerms ? 'salesTerms' : null,
+                        clientProposal.contactInformation ? 'contactInformation' : null
+                    ].filter(Boolean).length,
+                    sectionsProvided: [
+                        clientProposal.manufacturingSupply ? 'manufacturingSupply' : null,
+                        clientProposal.projectOverview ? 'projectOverview' : null,
+                        clientProposal.cottageSpecifications ? 'cottageSpecifications' : null,
+                        clientProposal.materialDetails ? 'materialDetails' : null,
+                        clientProposal.costBreakdown ? 'costBreakdown' : null,
+                        clientProposal.keyDurabilityFeatures ? 'keyDurabilityFeatures' : null,
+                        clientProposal.additionalFeatures ? 'additionalFeatures' : null,
+                        clientProposal.paymentTerms ? 'paymentTerms' : null,
+                        clientProposal.salesTerms ? 'salesTerms' : null,
+                        clientProposal.contactInformation ? 'contactInformation' : null
+                    ].filter(Boolean)
+                },
+                workflow: {
+                    proposalToWorkOrder: true,
+                    workOrderToPlanningEngineer: true,
+                    proposalWorkflow: true,
+                    workOrderWorkflow: true,
+                    planningEngineerWorkflow: true,
+                    sendingComplete: true
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error logging work order to planning engineer sending:', error);
+    }
 
     return clientProposal.populate(['project', 'createdBy', 'updatedBy']);
 };

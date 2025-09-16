@@ -8,9 +8,11 @@ import User from '../models/user.model.js';
 import ProjectAssignmentPaymant from '../models/projectAssignmentPaymant.model.js';
 import Project from '../models/project.model.js';
 import Roles from '../config/enums/roles.enum.js';
+import { logActivity } from '../middlewares/activityLog.middleware.js';
 
 
-export const createSiteworkService = async (data, user) => {
+
+export const createSiteworkService = async (req, data, user) => {
     // Handle attachment upload if provided
     let attachmentData = null;
     if (data.attachment && data.attachment.files && data.attachment.files.length > 0) {
@@ -38,6 +40,11 @@ export const createSiteworkService = async (data, user) => {
         // Delete tmp files
         await Promise.all(data.attachment.files.map(f => storage.deleteFile(f.key)));
     }
+    // Get project details for logging
+    const project = await Project.findById(data.project).populate('architect', 'name email');
+    if (!project) {
+        throw new ApiError(httpStatus.NOT_FOUND, 'Project not found');
+    }
 
     // Create the Sitework entry
     const sitework = await Sitework.create({
@@ -55,6 +62,7 @@ export const createSiteworkService = async (data, user) => {
     });
 
     // Create payment records for each assigned user
+    const paymentRecords = [];
     await Promise.all(data.assignedUsers.map(async (assigned) => {
         // const existing = await ProjectAssignmentPaymant.findOne({
         //     user: assigned.user,
@@ -62,21 +70,181 @@ export const createSiteworkService = async (data, user) => {
         // });
 
         if (true) {
-            await ProjectAssignmentPaymant.create({
+            const paymentRecord = await ProjectAssignmentPaymant.create({
                 user: assigned.user,
                 project: data.project,
                 assignedAmount: assigned.assignmentAmount,
                 perDayAmount: assigned.perDayAmount,
             });
+            paymentRecords.push(paymentRecord);
         }
     }));
+
+    // Log the sitework creation activity
+    try {
+        await logActivity(req, {
+            action: 'create_sitework',
+            targetModel: 'Sitework',
+            targetId: sitework._id,
+            targetName: sitework.name || 'Sitework',
+            description: `${user.role === 'Admin' ? 'Admin' : 'User'} ${user.name} (${user.email}) created sitework "${sitework.name}" for project: ${project.projectName || 'Unknown Project'}`,
+            changes: {
+                siteworkCreated: {
+                    from: null,
+                    to: sitework._id
+                },
+                name: {
+                    from: null,
+                    to: sitework.name
+                },
+                description: {
+                    from: null,
+                    to: sitework.description
+                },
+                project: {
+                    from: null,
+                    to: sitework.project
+                },
+                startDate: {
+                    from: null,
+                    to: sitework.startDate
+                },
+                endDate: {
+                    from: null,
+                    to: sitework.endDate
+                },
+                status: {
+                    from: null,
+                    to: sitework.status
+                },
+                assignedUsers: {
+                    from: null,
+                    to: sitework.assignedUsers
+                },
+                createdBy: {
+                    from: null,
+                    to: user.id
+                },
+                createdByModel: {
+                    from: null,
+                    to: user.role === 'Admin' ? 'Admin' : 'User'
+                },
+                isActive: {
+                    from: null,
+                    to: true
+                }
+            },
+            metadata: {
+                projectId: project._id,
+                projectData: {
+                    projectId: project._id,
+                    projectName: project.projectName,
+                    projectCode: project.projectCode,
+                    status: project.status,
+                    customerName: project.customerName,
+                    requirementType: project.requirementType,
+                    architect: project.architect
+                },
+                user: {
+                    userId: user._id,
+                    userName: user.name,
+                    userEmail: user.email,
+                    userRole: user.role,
+                    userType: user.role === 'Admin' ? 'Admin' : 'User',
+                    userPhone: user.phone
+                },
+                siteworkData: {
+                    siteworkId: sitework._id,
+                    name: sitework.name,
+                    description: sitework.description,
+                    project: sitework.project,
+                    startDate: sitework.startDate,
+                    endDate: sitework.endDate,
+                    status: sitework.status,
+                    assignedUsers: sitework.assignedUsers,
+                    createdBy: sitework.createdBy,
+                    createdByModel: sitework.createdByModel,
+                    isActive: sitework.isActive,
+                    createdAt: sitework.createdAt,
+                    updatedAt: sitework.updatedAt
+                },
+                siteworkCreation: {
+                    siteworkCreated: true,
+                    createdBy: user.id,
+                    createdByModel: user.role === 'Admin' ? 'Admin' : 'User',
+                    createdAt: new Date(),
+                    assignedUsersCount: sitework.assignedUsers.length,
+                    paymentRecordsCreated: paymentRecords.length,
+                    duration: sitework.endDate && sitework.startDate ?
+                        Math.ceil((new Date(sitework.endDate) - new Date(sitework.startDate)) / (1000 * 60 * 60 * 24)) : null
+                },
+                assignedUsersData: {
+                    totalAssignedUsers: sitework.assignedUsers.length,
+                    assignedUserIds: sitework.assignedUsers.map(au => au.user),
+                    totalAssignedAmount: sitework.assignedUsers.reduce((sum, au) => sum + (au.assignmentAmount || 0), 0),
+                    totalPerDayAmount: sitework.assignedUsers.reduce((sum, au) => sum + (au.perDayAmount || 0), 0),
+                    averageAssignedAmount: sitework.assignedUsers.length > 0 ?
+                        sitework.assignedUsers.reduce((sum, au) => sum + (au.assignmentAmount || 0), 0) / sitework.assignedUsers.length : 0,
+                    averagePerDayAmount: sitework.assignedUsers.length > 0 ?
+                        sitework.assignedUsers.reduce((sum, au) => sum + (au.perDayAmount || 0), 0) / sitework.assignedUsers.length : 0
+                },
+                paymentRecordsData: {
+                    paymentRecordsCreated: paymentRecords.length,
+                    totalAssignedAmount: paymentRecords.reduce((sum, pr) => sum + (pr.assignedAmount || 0), 0),
+                    totalPerDayAmount: paymentRecords.reduce((sum, pr) => sum + (pr.perDayAmount || 0), 0),
+                    averageAssignedAmount: paymentRecords.length > 0 ?
+                        paymentRecords.reduce((sum, pr) => sum + (pr.assignedAmount || 0), 0) / paymentRecords.length : 0,
+                    averagePerDayAmount: paymentRecords.length > 0 ?
+                        paymentRecords.reduce((sum, pr) => sum + (pr.perDayAmount || 0), 0) / paymentRecords.length : 0
+                },
+                contentSections: {
+                    totalSections: 7,
+                    completedSections: [
+                        sitework.name ? 'name' : null,
+                        sitework.description ? 'description' : null,
+                        sitework.project ? 'project' : null,
+                        sitework.startDate ? 'startDate' : null,
+                        sitework.endDate ? 'endDate' : null,
+                        sitework.status ? 'status' : null,
+                        sitework.assignedUsers.length > 0 ? 'assignedUsers' : null
+                    ].filter(Boolean).length,
+                    sectionsProvided: [
+                        sitework.name ? 'name' : null,
+                        sitework.description ? 'description' : null,
+                        sitework.project ? 'project' : null,
+                        sitework.startDate ? 'startDate' : null,
+                        sitework.endDate ? 'endDate' : null,
+                        sitework.status ? 'status' : null,
+                        sitework.assignedUsers.length > 0 ? 'assignedUsers' : null
+                    ].filter(Boolean)
+                },
+                workflow: {
+                    siteworkCreation: true,
+                    siteworkWorkflow: true,
+                    projectWorkflow: true,
+                    userAssignment: true,
+                    paymentSetup: true,
+                    creationComplete: true
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error logging sitework creation:', error);
+    }
 
     return sitework;
 };
 
-export const updateSiteworkService = async (id, data, user) => {
-    const sitework = await Sitework.findById(id);
+export const updateSiteworkService = async (req, id, data, user) => {
+    const sitework = await Sitework.findById(id).populate('project', 'projectName projectCode status customerName requirementType architect');
     if (!sitework) throw new ApiError(httpStatus.NOT_FOUND, 'Sitework not found');
+
+    // Store original values for logging
+    const originalDescription = sitework.description;
+    const originalAssignedUsers = JSON.parse(JSON.stringify(sitework.assignedUsers));
+    const originalEndDate = sitework.endDate;
+    const originalStatus = sitework.status;
+    const originalUpdatedAt = sitework.updatedAt;
 
     // Update fields if provided
     if (data.description !== undefined) sitework.description = data.description;
@@ -85,9 +253,10 @@ export const updateSiteworkService = async (id, data, user) => {
     if (data.status !== undefined) sitework.status = data.status;
 
     // Update assignment payment details
+    const updatedPaymentRecords = [];
     if (data.assignedUsers && data.assignedUsers.length > 0) {
         await Promise.all(data.assignedUsers.map(async (assigned) => {
-            await ProjectAssignmentPaymant.findOneAndUpdate(
+            const paymentRecord = await ProjectAssignmentPaymant.findOneAndUpdate(
                 { user: assigned.user, project: sitework.project },
                 {
                     assignedAmount: assigned.assignmentAmount,
@@ -95,10 +264,148 @@ export const updateSiteworkService = async (id, data, user) => {
                 },
                 { new: true, upsert: true } // upsert ensures a record exists if missing
             );
+            updatedPaymentRecords.push(paymentRecord);
         }));
     }
 
+    sitework.updatedAt = new Date();
     await sitework.save();
+
+    // Log the sitework update activity
+    try {
+        await logActivity(req, {
+            action: 'update_sitework',
+            targetModel: 'Sitework',
+            targetId: sitework._id,
+            targetName: sitework.name || 'Sitework',
+            description: `${user.role === 'Admin' ? 'Admin' : 'User'} ${user.name} (${user.email}) updated sitework "${sitework.name}" for project: ${sitework.project?.projectName || 'Unknown Project'}`,
+            changes: {
+                description: {
+                    from: originalDescription,
+                    to: sitework.description
+                },
+                assignedUsers: {
+                    from: originalAssignedUsers,
+                    to: sitework.assignedUsers
+                },
+                endDate: {
+                    from: originalEndDate,
+                    to: sitework.endDate
+                },
+                status: {
+                    from: originalStatus,
+                    to: sitework.status
+                },
+                updatedAt: {
+                    from: originalUpdatedAt,
+                    to: new Date()
+                }
+            },
+            metadata: {
+                projectId: sitework.project?._id,
+                projectData: {
+                    projectId: sitework.project?._id,
+                    projectName: sitework.project?.projectName,
+                    projectCode: sitework.project?.projectCode,
+                    status: sitework.project?.status,
+                    customerName: sitework.project?.customerName,
+                    requirementType: sitework.project?.requirementType,
+                    architect: sitework.project?.architect
+                },
+                user: {
+                    userId: user._id,
+                    userName: user.name,
+                    userEmail: user.email,
+                    userRole: user.role,
+                    userType: user.role === 'Admin' ? 'Admin' : 'User',
+                    userPhone: user.phone
+                },
+                siteworkData: {
+                    siteworkId: sitework._id,
+                    name: sitework.name,
+                    description: sitework.description,
+                    project: sitework.project,
+                    startDate: sitework.startDate,
+                    endDate: sitework.endDate,
+                    status: sitework.status,
+                    assignedUsers: sitework.assignedUsers,
+                    createdBy: sitework.createdBy,
+                    createdByModel: sitework.createdByModel,
+                    isActive: sitework.isActive,
+                    createdAt: sitework.createdAt,
+                    updatedAt: sitework.updatedAt
+                },
+                siteworkUpdate: {
+                    siteworkUpdated: true,
+                    updatedBy: user.id,
+                    updatedByModel: user.role === 'Admin' ? 'Admin' : 'User',
+                    updatedAt: new Date(),
+                    descriptionUpdated: data.description !== undefined,
+                    assignedUsersUpdated: data.assignedUsers !== undefined,
+                    endDateUpdated: data.endDate !== undefined,
+                    statusUpdated: data.status !== undefined,
+                    paymentRecordsUpdated: updatedPaymentRecords.length,
+                    assignedUsersCount: sitework.assignedUsers.length,
+                    previousAssignedUsersCount: originalAssignedUsers.length
+                },
+                assignedUsersData: {
+                    totalAssignedUsers: sitework.assignedUsers.length,
+                    previousTotalAssignedUsers: originalAssignedUsers.length,
+                    assignedUserIds: sitework.assignedUsers.map(au => au.user),
+                    previousAssignedUserIds: originalAssignedUsers.map(au => au.user),
+                    totalAssignedAmount: sitework.assignedUsers.reduce((sum, au) => sum + (au.assignmentAmount || 0), 0),
+                    previousTotalAssignedAmount: originalAssignedUsers.reduce((sum, au) => sum + (au.assignmentAmount || 0), 0),
+                    totalPerDayAmount: sitework.assignedUsers.reduce((sum, au) => sum + (au.perDayAmount || 0), 0),
+                    previousTotalPerDayAmount: originalAssignedUsers.reduce((sum, au) => sum + (au.perDayAmount || 0), 0),
+                    averageAssignedAmount: sitework.assignedUsers.length > 0 ?
+                        sitework.assignedUsers.reduce((sum, au) => sum + (au.assignmentAmount || 0), 0) / sitework.assignedUsers.length : 0,
+                    averagePerDayAmount: sitework.assignedUsers.length > 0 ?
+                        sitework.assignedUsers.reduce((sum, au) => sum + (au.perDayAmount || 0), 0) / sitework.assignedUsers.length : 0
+                },
+                paymentRecordsData: {
+                    paymentRecordsUpdated: updatedPaymentRecords.length,
+                    totalAssignedAmount: updatedPaymentRecords.reduce((sum, pr) => sum + (pr.assignedAmount || 0), 0),
+                    totalPerDayAmount: updatedPaymentRecords.reduce((sum, pr) => sum + (pr.perDayAmount || 0), 0),
+                    averageAssignedAmount: updatedPaymentRecords.length > 0 ?
+                        updatedPaymentRecords.reduce((sum, pr) => sum + (pr.assignedAmount || 0), 0) / updatedPaymentRecords.length : 0,
+                    averagePerDayAmount: updatedPaymentRecords.length > 0 ?
+                        updatedPaymentRecords.reduce((sum, pr) => sum + (pr.perDayAmount || 0), 0) / updatedPaymentRecords.length : 0
+                },
+                contentSections: {
+                    totalSections: 7,
+                    completedSections: [
+                        sitework.name ? 'name' : null,
+                        sitework.description ? 'description' : null,
+                        sitework.project ? 'project' : null,
+                        sitework.startDate ? 'startDate' : null,
+                        sitework.endDate ? 'endDate' : null,
+                        sitework.status ? 'status' : null,
+                        sitework.assignedUsers.length > 0 ? 'assignedUsers' : null
+                    ].filter(Boolean).length,
+                    sectionsProvided: [
+                        sitework.name ? 'name' : null,
+                        sitework.description ? 'description' : null,
+                        sitework.project ? 'project' : null,
+                        sitework.startDate ? 'startDate' : null,
+                        sitework.endDate ? 'endDate' : null,
+                        sitework.status ? 'status' : null,
+                        sitework.assignedUsers.length > 0 ? 'assignedUsers' : null
+                    ].filter(Boolean)
+                },
+                workflow: {
+                    siteworkUpdate: true,
+                    siteworkWorkflow: true,
+                    projectWorkflow: true,
+                    userAssignment: true,
+                    paymentUpdate: true,
+                    updateComplete: true
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error logging sitework update:', error);
+    }
+
     return sitework;
 };
 
@@ -186,14 +493,26 @@ export const addSiteworkDocumentService = async (siteworkId, data, user) => {
     return sitework.siteworkDocuments[sitework.siteworkDocuments.length - 1];
 };
 
-export const approveOrRejectSiteworkDocumentService = async (siteworkId, docId, data, user) => {
-    const sitework = await Sitework.findById(siteworkId);
+export const approveOrRejectSiteworkDocumentService = async (req, siteworkId, docId, data, user) => {
+    const sitework = await Sitework.findById(siteworkId).populate('project', 'projectName projectCode status customerName requirementType architect');
     if (!sitework) throw new ApiError(httpStatus.NOT_FOUND, 'Sitework not found');
     const doc = sitework.siteworkDocuments.id(docId);
     if (!doc) throw new ApiError(httpStatus.NOT_FOUND, 'Document not found');
 
     const { status, feedback } = data;
     const now = new Date();
+
+    // Store original values for logging
+    const originalAdminStatus = doc.adminStatus;
+    const originalAdminFeedback = doc.adminFeedback;
+    const originalAdminFeedbackBy = doc.adminFeedbackBy;
+    const originalAdminFeedbackByModel = doc.adminFeedbackByModel;
+    const originalSiteengineerStatus = doc.siteengineerStatus;
+    const originalSiteengineerFeedback = doc.siteengineerFeedback;
+    const originalSiteengineerFeedbackBy = doc.siteengineerFeedbackBy;
+    const originalCustomerStatus = doc.customerStatus;
+    const originalCustomerFeedback = doc.customerFeedback;
+    const originalCustomerFeedbackBy = doc.customerFeedbackBy;
 
     if (user.role === 'Admin' || user.role === 'sales-admin') {
         doc.adminStatus = status;
@@ -214,6 +533,168 @@ export const approveOrRejectSiteworkDocumentService = async (siteworkId, docId, 
 
     doc.addedAt = doc.addedAt || now;
     await sitework.save();
+
+    // Log the sitework document approval/rejection activity
+    try {
+        await logActivity(req, {
+            action: 'approve_or_reject_sitework_document',
+            targetModel: 'SiteworkDocument',
+            targetId: doc._id,
+            targetName: `Document in ${sitework.name || 'Sitework'}`,
+            description: `${user.role === 'Admin' ? 'Admin' : user.role === 'sales-admin' ? 'Sales Admin' : user.role === 'site-engineer' ? 'Site Engineer' : 'Customer'} ${user.name} (${user.email}) ${status.toLowerCase()}ed sitework document in "${sitework.name}" for project: ${sitework.project?.projectName || 'Unknown Project'}`,
+            changes: {
+                adminStatus: {
+                    from: originalAdminStatus,
+                    to: doc.adminStatus
+                },
+                adminFeedback: {
+                    from: originalAdminFeedback,
+                    to: doc.adminFeedback
+                },
+                adminFeedbackBy: {
+                    from: originalAdminFeedbackBy,
+                    to: doc.adminFeedbackBy
+                },
+                adminFeedbackByModel: {
+                    from: originalAdminFeedbackByModel,
+                    to: doc.adminFeedbackByModel
+                },
+                siteengineerStatus: {
+                    from: originalSiteengineerStatus,
+                    to: doc.siteengineerStatus
+                },
+                siteengineerFeedback: {
+                    from: originalSiteengineerFeedback,
+                    to: doc.siteengineerFeedback
+                },
+                siteengineerFeedbackBy: {
+                    from: originalSiteengineerFeedbackBy,
+                    to: doc.siteengineerFeedbackBy
+                },
+                customerStatus: {
+                    from: originalCustomerStatus,
+                    to: doc.customerStatus
+                },
+                customerFeedback: {
+                    from: originalCustomerFeedback,
+                    to: doc.customerFeedback
+                },
+                customerFeedbackBy: {
+                    from: originalCustomerFeedbackBy,
+                    to: doc.customerFeedbackBy
+                }
+            },
+            metadata: {
+                projectId: sitework.project?._id,
+                projectData: {
+                    projectId: sitework.project?._id,
+                    projectName: sitework.project?.projectName,
+                    projectCode: sitework.project?.projectCode,
+                    status: sitework.project?.status,
+                    customerName: sitework.project?.customerName,
+                    requirementType: sitework.project?.requirementType,
+                    architect: sitework.project?.architect
+                },
+                user: {
+                    userId: user._id,
+                    userName: user.name,
+                    userEmail: user.email,
+                    userRole: user.role,
+                    userType: user.role === 'Admin' ? 'Admin' : user.role === 'sales-admin' ? 'Sales Admin' : user.role === 'site-engineer' ? 'Site Engineer' : 'Customer',
+                    userPhone: user.phone
+                },
+                siteworkData: {
+                    siteworkId: sitework._id,
+                    name: sitework.name,
+                    description: sitework.description,
+                    project: sitework.project,
+                    startDate: sitework.startDate,
+                    endDate: sitework.endDate,
+                    status: sitework.status,
+                    assignedUsers: sitework.assignedUsers,
+                    createdBy: sitework.createdBy,
+                    createdByModel: sitework.createdByModel,
+                    isActive: sitework.isActive,
+                    createdAt: sitework.createdAt,
+                    updatedAt: sitework.updatedAt
+                },
+                documentData: {
+                    documentId: doc._id,
+                    files: doc.files,
+                    createdByUser: doc.createdByUser,
+                    createdByUserModel: doc.createdByUserModel,
+                    userNote: doc.userNote,
+                    addedAt: doc.addedAt,
+                    adminStatus: doc.adminStatus,
+                    adminFeedback: doc.adminFeedback,
+                    adminFeedbackBy: doc.adminFeedbackBy,
+                    adminFeedbackByModel: doc.adminFeedbackByModel,
+                    siteengineerStatus: doc.siteengineerStatus,
+                    siteengineerFeedback: doc.siteengineerFeedback,
+                    siteengineerFeedbackBy: doc.siteengineerFeedbackBy,
+                    customerStatus: doc.customerStatus,
+                    customerFeedback: doc.customerFeedback,
+                    customerFeedbackBy: doc.customerFeedbackBy,
+                    sentToCustomer: doc.sentToCustomer,
+                    sentToCustomerAt: doc.sentToCustomerAt,
+                    sentToCustomerBy: doc.sentToCustomerBy,
+                    sentToCustomerByModel: doc.sentToCustomerByModel
+                },
+                documentReview: {
+                    documentReviewed: true,
+                    reviewedBy: user.id,
+                    reviewedByModel: user.role === 'Admin' ? 'Admin' : user.role === 'sales-admin' ? 'Sales Admin' : user.role === 'site-engineer' ? 'Site Engineer' : 'Customer',
+                    reviewedAt: new Date(),
+                    reviewStatus: status,
+                    reviewAction: status.toLowerCase(),
+                    feedbackProvided: feedback ? true : false,
+                    feedbackLength: feedback ? feedback.length : 0,
+                    reviewType: user.role === 'Admin' || user.role === 'sales-admin' ? 'admin' :
+                        user.role === 'site-engineer' ? 'siteengineer' : 'customer'
+                },
+                filesData: {
+                    totalFiles: doc.files ? doc.files.length : 0,
+                    fileTypes: doc.files ? [...new Set(doc.files.map(f => f.fileType))] : [],
+                    totalFileSize: doc.files ? doc.files.reduce((sum, f) => sum + (f.size || 0), 0) : 0
+                },
+                contentSections: {
+                    totalSections: 8,
+                    completedSections: [
+                        doc.files && doc.files.length > 0 ? 'files' : null,
+                        doc.createdByUser ? 'createdByUser' : null,
+                        doc.userNote ? 'userNote' : null,
+                        doc.adminStatus ? 'adminStatus' : null,
+                        doc.siteengineerStatus ? 'siteengineerStatus' : null,
+                        doc.customerStatus ? 'customerStatus' : null,
+                        doc.sentToCustomer ? 'sentToCustomer' : null,
+                        doc.addedAt ? 'addedAt' : null
+                    ].filter(Boolean).length,
+                    sectionsProvided: [
+                        doc.files && doc.files.length > 0 ? 'files' : null,
+                        doc.createdByUser ? 'createdByUser' : null,
+                        doc.userNote ? 'userNote' : null,
+                        doc.adminStatus ? 'adminStatus' : null,
+                        doc.siteengineerStatus ? 'siteengineerStatus' : null,
+                        doc.customerStatus ? 'customerStatus' : null,
+                        doc.sentToCustomer ? 'sentToCustomer' : null,
+                        doc.addedAt ? 'addedAt' : null
+                    ].filter(Boolean)
+                },
+                workflow: {
+                    documentReview: true,
+                    siteworkWorkflow: true,
+                    projectWorkflow: true,
+                    documentWorkflow: true,
+                    approvalWorkflow: status === 'Approved',
+                    rejectionWorkflow: status === 'Rejected',
+                    reviewComplete: true
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error logging sitework document approval/rejection:', error);
+    }
+
     return doc;
 };
 
@@ -392,7 +873,7 @@ export const getSiteworkDocumentsForCustomerService = async (projectId, user) =>
     return allDocuments;
 };
 
-export const customerReviewSiteworkDocumentService = async (projectId, siteworkId, docId, data, user) => {
+export const customerReviewSiteworkDocumentService = async (req, projectId, siteworkId, docId, data, user) => {
     // Verify user is a customer
     if (user.role !== Roles.USER) {
         throw new ApiError(httpStatus.FORBIDDEN, 'Only customers can review documents');
@@ -403,7 +884,7 @@ export const customerReviewSiteworkDocumentService = async (projectId, siteworkI
         _id: siteworkId,
         project: projectId,
         isActive: true
-    });
+    }).populate('project', 'projectName projectCode status customerName requirementType architect');
 
     if (!sitework) {
         throw new ApiError(httpStatus.NOT_FOUND, 'Sitework not found');
@@ -422,6 +903,12 @@ export const customerReviewSiteworkDocumentService = async (projectId, siteworkI
 
     const { status, feedback } = data;
     const now = new Date();
+
+    // Store original values for logging
+    const originalCustomerStatus = doc.customerStatus;
+    const originalCustomerFeedback = doc.customerFeedback;
+    const originalCustomerFeedbackBy = doc.customerFeedbackBy;
+    const originalCustomerReviewedAt = doc.customerReviewedAt;
 
     // Update customer review status
     doc.customerStatus = status;
@@ -466,6 +953,156 @@ export const customerReviewSiteworkDocumentService = async (projectId, siteworkI
         adminFeedbackByUserName = doc.adminFeedbackByModel === 'Admin' ? (doc.adminFeedbackByUser?.adminName || '') : (doc.adminFeedbackByUser?.name || '');
     }
 
+    // Log the customer sitework document review activity
+    try {
+        await logActivity(req, {
+            action: 'customer_review_sitework_document',
+            targetModel: 'SiteworkDocument',
+            targetId: doc._id,
+            targetName: `Document in ${sitework.name || 'Sitework'}`,
+            description: `Customer ${user.name} (${user.email}) ${status.toLowerCase()}ed sitework document in "${sitework.name}" for project: ${sitework.project?.projectName || 'Unknown Project'}`,
+            changes: {
+                customerStatus: {
+                    from: originalCustomerStatus,
+                    to: doc.customerStatus
+                },
+                customerFeedback: {
+                    from: originalCustomerFeedback,
+                    to: doc.customerFeedback
+                },
+                customerFeedbackBy: {
+                    from: originalCustomerFeedbackBy,
+                    to: doc.customerFeedbackBy
+                },
+                customerReviewedAt: {
+                    from: originalCustomerReviewedAt,
+                    to: doc.customerReviewedAt
+                }
+            },
+            metadata: {
+                projectId: sitework.project?._id,
+                projectData: {
+                    projectId: sitework.project?._id,
+                    projectName: sitework.project?.projectName,
+                    projectCode: sitework.project?.projectCode,
+                    status: sitework.project?.status,
+                    customerName: sitework.project?.customerName,
+                    requirementType: sitework.project?.requirementType,
+                    architect: sitework.project?.architect
+                },
+                user: {
+                    userId: user._id,
+                    userName: user.name,
+                    userEmail: user.email,
+                    userRole: user.role,
+                    userType: 'Customer',
+                    userPhone: user.phone
+                },
+                siteworkData: {
+                    siteworkId: sitework._id,
+                    name: sitework.name,
+                    description: sitework.description,
+                    project: sitework.project,
+                    startDate: sitework.startDate,
+                    endDate: sitework.endDate,
+                    status: sitework.status,
+                    assignedUsers: sitework.assignedUsers,
+                    createdBy: sitework.createdBy,
+                    createdByModel: sitework.createdByModel,
+                    isActive: sitework.isActive,
+                    createdAt: sitework.createdAt,
+                    updatedAt: sitework.updatedAt
+                },
+                documentData: {
+                    documentId: doc._id,
+                    files: doc.files,
+                    createdByUser: doc.createdByUser,
+                    createdByUserModel: doc.createdByUserModel,
+                    userNote: doc.userNote,
+                    addedAt: doc.addedAt,
+                    adminStatus: doc.adminStatus,
+                    adminFeedback: doc.adminFeedback,
+                    adminFeedbackBy: doc.adminFeedbackBy,
+                    adminFeedbackByModel: doc.adminFeedbackByModel,
+                    siteengineerStatus: doc.siteengineerStatus,
+                    siteengineerFeedback: doc.siteengineerFeedback,
+                    siteengineerFeedbackBy: doc.siteengineerFeedbackBy,
+                    customerStatus: doc.customerStatus,
+                    customerFeedback: doc.customerFeedback,
+                    customerFeedbackBy: doc.customerFeedbackBy,
+                    customerReviewedAt: doc.customerReviewedAt,
+                    sentToCustomer: doc.sentToCustomer,
+                    sentToCustomerAt: doc.sentToCustomerAt,
+                    sentToCustomerBy: doc.sentToCustomerBy,
+                    sentToCustomerByModel: doc.sentToCustomerByModel
+                },
+                customerReview: {
+                    documentReviewed: true,
+                    reviewedBy: user.id,
+                    reviewedByModel: 'Customer',
+                    reviewedAt: new Date(),
+                    reviewStatus: status,
+                    reviewAction: status.toLowerCase(),
+                    feedbackProvided: feedback ? true : false,
+                    feedbackLength: feedback ? feedback.length : 0,
+                    reviewType: 'customer',
+                    customerReviewComplete: true,
+                    previousCustomerStatus: originalCustomerStatus,
+                    newCustomerStatus: doc.customerStatus
+                },
+                approvalWorkflow: {
+                    siteengineerApproved: doc.siteengineerStatus === 'Approved',
+                    adminApproved: doc.adminStatus === 'Approved',
+                    customerReviewed: true,
+                    allApprovalsComplete: doc.siteengineerStatus === 'Approved' && doc.adminStatus === 'Approved' && doc.customerStatus === 'Approved',
+                    workflowStage: 'customer_review',
+                    nextStage: doc.customerStatus === 'Approved' ? 'completed' : 'revision_required'
+                },
+                filesData: {
+                    totalFiles: doc.files ? doc.files.length : 0,
+                    fileTypes: doc.files ? [...new Set(doc.files.map(f => f.fileType))] : [],
+                    totalFileSize: doc.files ? doc.files.reduce((sum, f) => sum + (f.size || 0), 0) : 0
+                },
+                contentSections: {
+                    totalSections: 8,
+                    completedSections: [
+                        doc.files && doc.files.length > 0 ? 'files' : null,
+                        doc.createdByUser ? 'createdByUser' : null,
+                        doc.userNote ? 'userNote' : null,
+                        doc.adminStatus ? 'adminStatus' : null,
+                        doc.siteengineerStatus ? 'siteengineerStatus' : null,
+                        doc.customerStatus ? 'customerStatus' : null,
+                        doc.sentToCustomer ? 'sentToCustomer' : null,
+                        doc.addedAt ? 'addedAt' : null
+                    ].filter(Boolean).length,
+                    sectionsProvided: [
+                        doc.files && doc.files.length > 0 ? 'files' : null,
+                        doc.createdByUser ? 'createdByUser' : null,
+                        doc.userNote ? 'userNote' : null,
+                        doc.adminStatus ? 'adminStatus' : null,
+                        doc.siteengineerStatus ? 'siteengineerStatus' : null,
+                        doc.customerStatus ? 'customerStatus' : null,
+                        doc.sentToCustomer ? 'sentToCustomer' : null,
+                        doc.addedAt ? 'addedAt' : null
+                    ].filter(Boolean)
+                },
+                workflow: {
+                    documentReview: true,
+                    siteworkWorkflow: true,
+                    projectWorkflow: true,
+                    documentWorkflow: true,
+                    customerReviewWorkflow: true,
+                    approvalWorkflow: status === 'Approved',
+                    rejectionWorkflow: status === 'Rejected',
+                    reviewComplete: true,
+                    customerReviewComplete: true
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error logging customer sitework document review:', error);
+    }
+
     return {
         ...doc.toObject(),
         createdByUserName,
@@ -477,7 +1114,7 @@ export const customerReviewSiteworkDocumentService = async (projectId, siteworkI
     };
 };
 
-export const sendSiteworkDocumentToCustomerService = async (projectId, siteworkId, docId, user) => {
+export const sendSiteworkDocumentToCustomerService = async (req, projectId, siteworkId, docId, user) => {
     // Verify user is an admin or sales-admin
     if (user.role !== 'Admin' && user.role !== 'sales-admin') {
         throw new ApiError(httpStatus.FORBIDDEN, 'Only admins can send documents to customers');
@@ -488,7 +1125,7 @@ export const sendSiteworkDocumentToCustomerService = async (projectId, siteworkI
         _id: siteworkId,
         project: projectId,
         isActive: true
-    });
+    }).populate('project', 'projectName projectCode status customerName requirementType architect');
 
     if (!sitework) {
         throw new ApiError(httpStatus.NOT_FOUND, 'Sitework not found');
@@ -509,6 +1146,13 @@ export const sendSiteworkDocumentToCustomerService = async (projectId, siteworkI
     if (doc.customerStatus !== 'Pending') {
         throw new ApiError(httpStatus.BAD_REQUEST, 'Document has already been sent to customer for review');
     }
+
+    // Store original values for logging
+    const originalCustomerStatus = doc.customerStatus;
+    const originalSentToCustomer = doc.sentToCustomer;
+    const originalSentToCustomerAt = doc.sentToCustomerAt;
+    const originalSentToCustomerBy = doc.sentToCustomerBy;
+    const originalSentToCustomerByModel = doc.sentToCustomerByModel;
 
     // Update document to indicate it's sent to customer
     doc.customerStatus = 'Pending'; // Reset to pending for customer review
@@ -559,6 +1203,158 @@ export const sendSiteworkDocumentToCustomerService = async (projectId, siteworkI
         sentToCustomerByUserName = doc.sentToCustomerByUser?.adminName || '';
     } else {
         sentToCustomerByUserName = doc.sentToCustomerByUser?.name || '';
+    }
+
+    // Log the sitework document send to customer activity
+    try {
+        await logActivity(req, {
+            action: 'send_sitework_document_to_customer',
+            targetModel: 'SiteworkDocument',
+            targetId: doc._id,
+            targetName: `Document in ${sitework.name || 'Sitework'}`,
+            description: `${user.role === 'Admin' ? 'Admin' : 'Sales Admin'} ${user.name} (${user.email}) sent sitework document in "${sitework.name}" to customer for project: ${sitework.project?.projectName || 'Unknown Project'}`,
+            changes: {
+                customerStatus: {
+                    from: originalCustomerStatus,
+                    to: doc.customerStatus
+                },
+                sentToCustomer: {
+                    from: originalSentToCustomer,
+                    to: doc.sentToCustomer
+                },
+                sentToCustomerAt: {
+                    from: originalSentToCustomerAt,
+                    to: doc.sentToCustomerAt
+                },
+                sentToCustomerBy: {
+                    from: originalSentToCustomerBy,
+                    to: doc.sentToCustomerBy
+                },
+                sentToCustomerByModel: {
+                    from: originalSentToCustomerByModel,
+                    to: doc.sentToCustomerByModel
+                }
+            },
+            metadata: {
+                projectId: sitework.project?._id,
+                projectData: {
+                    projectId: sitework.project?._id,
+                    projectName: sitework.project?.projectName,
+                    projectCode: sitework.project?.projectCode,
+                    status: sitework.project?.status,
+                    customerName: sitework.project?.customerName,
+                    requirementType: sitework.project?.requirementType,
+                    architect: sitework.project?.architect
+                },
+                user: {
+                    userId: user._id,
+                    userName: user.name,
+                    userEmail: user.email,
+                    userRole: user.role,
+                    userType: user.role === 'Admin' ? 'Admin' : 'Sales Admin',
+                    userPhone: user.phone
+                },
+                siteworkData: {
+                    siteworkId: sitework._id,
+                    name: sitework.name,
+                    description: sitework.description,
+                    project: sitework.project,
+                    startDate: sitework.startDate,
+                    endDate: sitework.endDate,
+                    status: sitework.status,
+                    assignedUsers: sitework.assignedUsers,
+                    createdBy: sitework.createdBy,
+                    createdByModel: sitework.createdByModel,
+                    isActive: sitework.isActive,
+                    createdAt: sitework.createdAt,
+                    updatedAt: sitework.updatedAt
+                },
+                documentData: {
+                    documentId: doc._id,
+                    files: doc.files,
+                    createdByUser: doc.createdByUser,
+                    createdByUserModel: doc.createdByUserModel,
+                    userNote: doc.userNote,
+                    addedAt: doc.addedAt,
+                    adminStatus: doc.adminStatus,
+                    adminFeedback: doc.adminFeedback,
+                    adminFeedbackBy: doc.adminFeedbackBy,
+                    adminFeedbackByModel: doc.adminFeedbackByModel,
+                    siteengineerStatus: doc.siteengineerStatus,
+                    siteengineerFeedback: doc.siteengineerFeedback,
+                    siteengineerFeedbackBy: doc.siteengineerFeedbackBy,
+                    customerStatus: doc.customerStatus,
+                    customerFeedback: doc.customerFeedback,
+                    customerFeedbackBy: doc.customerFeedbackBy,
+                    customerReviewedAt: doc.customerReviewedAt,
+                    sentToCustomer: doc.sentToCustomer,
+                    sentToCustomerAt: doc.sentToCustomerAt,
+                    sentToCustomerBy: doc.sentToCustomerBy,
+                    sentToCustomerByModel: doc.sentToCustomerByModel
+                },
+                documentSending: {
+                    documentSent: true,
+                    sentBy: user.id,
+                    sentByModel: user.role === 'Admin' ? 'Admin' : 'Sales Admin',
+                    sentAt: new Date(),
+                    sentToCustomer: true,
+                    customerStatus: 'Pending',
+                    previousCustomerStatus: originalCustomerStatus,
+                    sendingAction: 'send_to_customer',
+                    notificationSent: true,
+                    customerNotification: true
+                },
+                approvalWorkflow: {
+                    siteengineerApproved: doc.siteengineerStatus === 'Approved',
+                    adminApproved: doc.adminStatus === 'Approved',
+                    sentToCustomer: true,
+                    customerReviewPending: true,
+                    workflowStage: 'customer_review_pending',
+                    nextStage: 'customer_review',
+                    allInternalApprovalsComplete: doc.siteengineerStatus === 'Approved' && doc.adminStatus === 'Approved'
+                },
+                filesData: {
+                    totalFiles: doc.files ? doc.files.length : 0,
+                    fileTypes: doc.files ? [...new Set(doc.files.map(f => f.fileType))] : [],
+                    totalFileSize: doc.files ? doc.files.reduce((sum, f) => sum + (f.size || 0), 0) : 0
+                },
+                contentSections: {
+                    totalSections: 8,
+                    completedSections: [
+                        doc.files && doc.files.length > 0 ? 'files' : null,
+                        doc.createdByUser ? 'createdByUser' : null,
+                        doc.userNote ? 'userNote' : null,
+                        doc.adminStatus ? 'adminStatus' : null,
+                        doc.siteengineerStatus ? 'siteengineerStatus' : null,
+                        doc.customerStatus ? 'customerStatus' : null,
+                        doc.sentToCustomer ? 'sentToCustomer' : null,
+                        doc.addedAt ? 'addedAt' : null
+                    ].filter(Boolean).length,
+                    sectionsProvided: [
+                        doc.files && doc.files.length > 0 ? 'files' : null,
+                        doc.createdByUser ? 'createdByUser' : null,
+                        doc.userNote ? 'userNote' : null,
+                        doc.adminStatus ? 'adminStatus' : null,
+                        doc.siteengineerStatus ? 'siteengineerStatus' : null,
+                        doc.customerStatus ? 'customerStatus' : null,
+                        doc.sentToCustomer ? 'sentToCustomer' : null,
+                        doc.addedAt ? 'addedAt' : null
+                    ].filter(Boolean)
+                },
+                workflow: {
+                    documentSending: true,
+                    siteworkWorkflow: true,
+                    projectWorkflow: true,
+                    documentWorkflow: true,
+                    customerNotificationWorkflow: true,
+                    approvalWorkflow: true,
+                    customerReviewWorkflow: true,
+                    sendingComplete: true
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error logging sitework document send to customer:', error);
     }
 
     return {
