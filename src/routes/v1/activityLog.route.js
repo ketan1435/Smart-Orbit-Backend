@@ -849,7 +849,7 @@ router.post('/cleanup', auth('admin'), cleanupLogs);
  *                         includeRelated:
  *                           type: boolean
  */
-router.get('/project/:projectId', auth('admin'), getProjectLogsController);
+router.get('/project/:projectId', auth('getProjects'), getProjectLogsController);
 
 /**
  * @swagger
@@ -958,6 +958,6 @@ router.get('/project/:projectId', auth('admin'), getProjectLogsController);
  *                     projectId:
  *                       type: string
  */
-router.get('/project/:projectId/stats', auth('admin'), getProjectLogStatsController);
+router.get('/project/:projectId/stats', auth('getProjects'), getProjectLogStatsController);
 
 export default router;

@@ -1,4 +1,5 @@
 import ActivityLog from '../models/activityLog.model.js';
+import mongoose from 'mongoose';
 import { EventEmitter } from 'events';
 
 // Create event emitter instance
@@ -274,11 +275,16 @@ export const getProjectLogs = async (projectId, options = {}) => {
             limit = 100
         } = options;
 
+        const projectObjectId = mongoose.Types.ObjectId.isValid(projectId)
+            ? new mongoose.Types.ObjectId(projectId)
+            : projectId;
+
         // Build base query for direct project logs
         const baseQuery = {
             isActive: true,
             $or: [
-                { targetModel: 'Project', targetId: projectId }
+                { targetModel: 'Project', targetId: projectObjectId },
+                { 'metadata.projectId': projectObjectId }
             ]
         };
 
@@ -295,13 +301,13 @@ export const getProjectLogs = async (projectId, options = {}) => {
         // If including related entities, expand the query
         if (includeRelated) {
             // Get related entities that might have logs
-            const relatedQueries = [
-                { targetModel: 'CustomerLead', 'metadata.projectId': projectId },
-                { targetModel: 'ClientProposal', 'metadata.projectId': projectId },
-                { targetModel: 'BOM', 'metadata.projectId': projectId },
-                { targetModel: 'PO', 'metadata.projectId': projectId },
-                { targetModel: 'Quote', 'metadata.projectId': projectId },
-                { targetModel: 'Sitework', 'metadata.projectId': projectId },
+            const relatedQueries = [    
+                { targetModel: 'CustomerLead', 'metadata.projectId': projectObjectId },
+                { targetModel: 'ClientProposal', 'metadata.projectId': projectObjectId },
+                { targetModel: 'BOM', 'metadata.projectId': projectObjectId },
+                { targetModel: 'PO', 'metadata.projectId': projectObjectId },
+                { targetModel: 'Quote', 'metadata.projectId': projectObjectId },
+                { targetModel: 'Sitework', 'metadata.projectId': projectObjectId },
                 // { targetModel: 'SiteVisit', 'metadata.projectId': projectId },
                 // { targetModel: 'File', 'metadata.projectId': projectId }
             ];
@@ -312,10 +318,10 @@ export const getProjectLogs = async (projectId, options = {}) => {
         // If including embedded documents, add embedded document queries
         if (includeEmbedded) {
             const embeddedQueries = [
-                { 'metadata.embeddedDocument': 'architectProposal', 'metadata.projectId': projectId },
-                { 'metadata.embeddedDocument': 'architectDocument', 'metadata.projectId': projectId },
-                { 'metadata.embeddedDocument': 'proposal', 'metadata.projectId': projectId },
-                { 'metadata.embeddedDocument': 'siteworkDocument', 'metadata.projectId': projectId }
+                { 'metadata.embeddedDocument': 'architectProposal', 'metadata.projectId': projectObjectId },
+                { 'metadata.embeddedDocument': 'architectDocument', 'metadata.projectId': projectObjectId },
+                { 'metadata.embeddedDocument': 'proposal', 'metadata.projectId': projectObjectId },
+                { 'metadata.embeddedDocument': 'siteworkDocument', 'metadata.projectId': projectObjectId }
             ];
 
             baseQuery.$or = baseQuery.$or.concat(embeddedQueries);
@@ -376,11 +382,15 @@ export const getProjectLogStats = async (projectId, options = {}) => {
     try {
         const { startDate, endDate } = options;
 
+        const projectObjectId = mongoose.Types.ObjectId.isValid(projectId)
+            ? new mongoose.Types.ObjectId(projectId)
+            : projectId;
+
         const baseQuery = {
             isActive: true,
             $or: [
-                { targetModel: 'Project', targetId: projectId },
-                { 'metadata.projectId': projectId }
+                { targetModel: 'Project', targetId: projectObjectId },
+                { 'metadata.projectId': projectObjectId }
             ]
         };
 
