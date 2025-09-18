@@ -8,6 +8,73 @@ const router = express.Router();
 
 /**
  * @swagger
+ * /vendors/dropdown:
+ *   get:
+ *     summary: Get all vendors for dropdown (with optional filters)
+ *     tags: [Vendors]
+ *     parameters:
+ *       - in: query
+ *         name: name
+ *         schema:
+ *           type: string
+ *         description: Filter by vendor name (case-insensitive)
+ *       - in: query
+ *         name: storeName
+ *         schema:
+ *           type: string
+ *         description: Filter by store name (case-insensitive)
+ *       - in: query
+ *         name: city
+ *         schema:
+ *           type: string
+ *         description: Filter by city (case-insensitive)
+ *       - in: query
+ *         name: state
+ *         schema:
+ *           type: string
+ *         description: Filter by state (case-insensitive)
+ *       - in: query
+ *         name: country
+ *         schema:
+ *           type: string
+ *         description: Filter by country (case-insensitive)
+ *       - in: query
+ *         name: gstNo
+ *         schema:
+ *           type: string
+ *         description: Filter by GST number (case-insensitive)
+ *       - in: query
+ *         name: isActive
+ *         schema:
+ *           type: boolean
+ *         description: Filter by active status
+ *     responses:
+ *       200:
+ *         description: List of vendors for dropdown
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 1
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       _id:
+ *                         type: string
+ *                       name:
+ *                         type: string
+ *                       storeName:
+ *                         type: string
+ */
+router.get('/dropdown', getVendorsDropdown);
+
+/**
+ * @swagger
  * /vendors/{id}:
  *   get:
  *     summary: Get a vendor by ID
@@ -171,72 +238,6 @@ router.put('/:id', auth('manageVendors'), updateVendor);
  */
 router.delete('/:id', auth('manageVendors'), deleteVendor);
 
-/**
- * @swagger
- * /vendors/dropdown:
- *   get:
- *     summary: Get all vendors for dropdown (with optional filters)
- *     tags: [Vendors]
- *     parameters:
- *       - in: query
- *         name: name
- *         schema:
- *           type: string
- *         description: Filter by vendor name (case-insensitive)
- *       - in: query
- *         name: storeName
- *         schema:
- *           type: string
- *         description: Filter by store name (case-insensitive)
- *       - in: query
- *         name: city
- *         schema:
- *           type: string
- *         description: Filter by city (case-insensitive)
- *       - in: query
- *         name: state
- *         schema:
- *           type: string
- *         description: Filter by state (case-insensitive)
- *       - in: query
- *         name: country
- *         schema:
- *           type: string
- *         description: Filter by country (case-insensitive)
- *       - in: query
- *         name: gstNo
- *         schema:
- *           type: string
- *         description: Filter by GST number (case-insensitive)
- *       - in: query
- *         name: isActive
- *         schema:
- *           type: boolean
- *         description: Filter by active status
- *     responses:
- *       200:
- *         description: List of vendors for dropdown
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 status:
- *                   type: integer
- *                   example: 1
- *                 data:
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       _id:
- *                         type: string
- *                       name:
- *                         type: string
- *                       storeName:
- *                         type: string
- */
-router.get('/dropdown', getVendorsDropdown);
 
 /**
  * @swagger
