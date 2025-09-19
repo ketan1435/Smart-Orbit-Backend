@@ -63,18 +63,18 @@ export const queryProjects = async (filter, options, user = null) => {
   const projectFilter = { ...directFilters };
 
   // Filter for SCP users - REMOVED: Now SCP users can see all projects like admin users
-  // if (user && user.role === Roles.SCP_USER) {
-  //   const requirementsWithScpUser = await Requirement.find({
-  //     'sharedWith.user': user._id
-  //   }).select('_id');
+  if (user && user.role === Roles.SCP_USER) {
+    const requirementsWithScpUser = await Requirement.find({
+      'sharedWith.user': user._id
+    }).select('_id');
 
-  //   if (requirementsWithScpUser.length === 0) {
-  //     return { results: [], page, limit, totalPages: 0, totalResults: 0 };
-  //   }
+    if (requirementsWithScpUser.length === 0) {
+      return { results: [], page, limit, totalPages: 0, totalResults: 0 };
+    }
 
-  //   const requirementIds = requirementsWithScpUser.map(r => r._id);
-  //   projectFilter.requirement = { $in: requirementIds };
-  // }
+    const requirementIds = requirementsWithScpUser.map(r => r._id);
+    projectFilter.requirement = { $in: requirementIds };
+  }
 
   // Fuzzy search for project name
   if (projectName) {

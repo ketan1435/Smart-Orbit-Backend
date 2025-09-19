@@ -30,6 +30,24 @@ router
         projectController.getProjectsForArchitect
     );
 
+// Test route to debug the issue
+router
+    .route('/architect/test-my-projects')
+    .get(
+        auth('getProjects'),
+        validate(projectValidation.getProjectsForArchitect),
+        projectController.getProjectsForArchitect
+    );
+
+// Completely different test route
+router
+    .route('/test-architect-projects')
+    .get(
+        auth('getProjects'),
+        validate(projectValidation.getProjectsForArchitect),
+        projectController.getProjectsForArchitect
+    );
+
 router
     .route('/architect/my-proposals')
     .get(
