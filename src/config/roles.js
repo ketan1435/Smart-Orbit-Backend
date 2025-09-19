@@ -150,6 +150,7 @@ const allRoles = {
   'scp-user': [
     'getProjects',
     'getBoms',
+    'admin',
     'acceptProposal',
     'rejectProposal',
     'manageProjects',

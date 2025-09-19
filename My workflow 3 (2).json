@@ -1,0 +1,132 @@
+{
+  "name": "My workflow 3",
+  "nodes": [
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        224,
+        160
+      ],
+      "id": "65537a8e-6b93-4e6b-bb4a-9a5578ccc0ca",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"success\": {{ $json[\"statusCode\"] ? $json[\"statusCode\"] < 300 : false }},\n  \"status\": {{$json[\"statusCode\"]}},\n  \"body\": {{$json[\"body\"]}}\n}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        224,
+        352
+      ],
+      "id": "dd9760e8-b975-4fe3-abaf-a7b7315edfb3",
+      "name": "Respond to Webhook1"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "send-waba-message",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -224,
+        256
+      ],
+      "id": "75fb45d6-601f-417b-be96-6ac56808b893",
+      "name": "Webhook",
+      "webhookId": "477ea3e2-a13f-4369-93ab-1d016a07ae84"
+    },
+    {
+      "parameters": {
+        "phoneNumberId": "549024268303461",
+        "recipientPhoneNumber": "={{ $json.body.recipient }}",
+        "template": "item_request|en_US",
+        "components": {
+          "component": [
+            {
+              "bodyParameters": {
+                "parameter": [
+                  {
+                    "text": "={{ $json.body.variables[0] }}"
+                  },
+                  {
+                    "text": "={{ $json.body.variables[1] }}"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1,
+      "position": [
+        0,
+        256
+      ],
+      "id": "dc0ac147-9935-45f6-bbe6-39d6f9dc538d",
+      "name": "Send template",
+      "webhookId": "666269aa-4d4d-49e9-b00c-8cca25c0e917",
+      "alwaysOutputData": true,
+      "credentials": {
+        "whatsAppApi": {
+          "id": "eIeaePprvTcEwwYq",
+          "name": "WhatsApp account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Send template",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send template": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond to Webhook1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "032b3247-fa66-47e5-b9c0-46bf10394d5a",
+  "meta": {
+    "instanceId": "d2b1d930b34298ceb2dc4211604fad2c0e70c206ccf4908ee53955a177b2b2ee"
+  },
+  "id": "qZeMthhKC3nNVdBG",
+  "tags": []
+}
