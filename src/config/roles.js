@@ -125,6 +125,8 @@ const allRoles = {
     'submitUpdatedBOMToPlanning',
     'getBoms',
     'manageVendors',
+    'manageAttendance',
+    'getAttendance',
   ],
 
   worker: [

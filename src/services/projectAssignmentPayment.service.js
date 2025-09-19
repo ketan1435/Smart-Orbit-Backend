@@ -84,6 +84,9 @@ export const queryProjectAssignmentPayments = async (filter, options) => {
     if (filter.createdByModel) {
         mongoFilter.createdByModel = filter.createdByModel;
     }
+    if (filter.userId) {
+        mongoFilter.user = filter.userId;
+    }
 
     console.log('Final mongoFilter:', JSON.stringify(mongoFilter, null, 2));
 
@@ -113,12 +116,39 @@ export const queryProjectAssignmentPayments = async (filter, options) => {
 
     console.log(`Found ${payments.length} payments out of ${totalResults} total`);
 
+    // Compute totals for the current filter for pagination-friendly stats
+    // Important: aggregation does not cast string IDs, so cast user to ObjectId explicitly when present
+    const aggMatch = { ...mongoFilter };
+    if (aggMatch.user && typeof aggMatch.user === 'string') {
+        aggMatch.user = new (await import('mongoose')).default.Types.ObjectId(aggMatch.user);
+    }
+
+    const totalsAgg = await ProjectAssignmentPayment.aggregate([
+        { $match: aggMatch },
+        {
+            $group: {
+                _id: null,
+                totalAssigned: { $sum: { $ifNull: ['$assignedAmount', 0] } },
+                totalRemaining: { $sum: { $ifNull: ['$remainingAmount', { $ifNull: ['$assignedAmount', 0] }] } },
+                count: { $sum: 1 }
+            }
+        }
+    ]);
+
+    const totals = totalsAgg[0] || { totalAssigned: 0, totalRemaining: 0, count: 0 };
+    const totalPaid = Math.max(0, (totals.totalAssigned || 0) - (totals.totalRemaining || 0));
+
     return {
         results: payments,
         page,
         limit,
         totalPages: Math.ceil(totalResults / limit),
         totalResults,
+        totals: {
+            totalAssigned: totals.totalAssigned || 0,
+            totalRemaining: totals.totalRemaining || 0,
+            totalPaid
+        }
     };
 };
 
@@ -145,6 +175,7 @@ export const getProjectAssignmentPaymentById = async (id) => {
  * @returns {Promise<ProjectAssignmentPayment>}
  */
 export const createProjectAssignmentPayment = async (paymentBody) => {
+    paymentBody.remainingAmount=paymentBody.assignedAmount;
     const payment = await ProjectAssignmentPayment.create(paymentBody);
     return payment;
 };

@@ -31,6 +31,7 @@ export const createWalletTransaction = {
         amount: Joi.number().positive().required(),
         currency: Joi.string().valid('INR', 'USD', 'EUR').default('INR'),
         project: Joi.string().custom(objectId).optional(),
+        projectAssignmentPaymentId: Joi.string().custom(objectId).optional(),
         forDate: Joi.date().optional(),
         siteVisit: Joi.string().custom(objectId).optional(),
         requirement: Joi.string().custom(objectId).optional(),

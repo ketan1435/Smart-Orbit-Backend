@@ -6,6 +6,7 @@ const assignmentPaymentSchema = new mongoose.Schema({
     assignedAmount: Number,
     note: String,
     perDayAmount: Number,
+    remainingAmount:Number,
     createdBy: { type: mongoose.Schema.Types.ObjectId, refPath: 'createdByModel' },
     createdByModel: { type: String, enum: ['Admin', 'User'] },
 }, { timestamps: true });

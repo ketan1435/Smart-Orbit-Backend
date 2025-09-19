@@ -4,6 +4,7 @@ import ApiError from '../utils/ApiError.js';
 import Project from '../models/project.model.js';
 import User from '../models/user.model.js';
 import mongoose from 'mongoose';
+import ProjectAssignmentPayment from '../models/projectAssignmentPaymant.model.js';
 
 /**
  * Query wallet transactions
@@ -151,8 +152,54 @@ export const getWalletTransactionById = async (id) => {
  * @returns {Promise<WalletTransaction>}
  */
 export const createWalletTransaction = async (transactionBody) => {
+    // If a projectAssignmentPaymentId is provided, deduct the amount from its remainingAmount atomically
+    const { projectAssignmentPaymentId, amount } = transactionBody;
+
+    if (!projectAssignmentPaymentId) {
     const transaction = await WalletTransaction.create(transactionBody);
     return transaction;
+    }
+
+    if (typeof amount !== 'number' || Number.isNaN(amount) || amount <= 0) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Amount must be a positive number');
+    }
+
+    const session = await mongoose.startSession();
+    try {
+        session.startTransaction();
+
+        const assignment = await ProjectAssignmentPayment.findById(projectAssignmentPaymentId).session(session);
+        if (!assignment) {
+            throw new ApiError(httpStatus.NOT_FOUND, 'Project assignment payment not found');
+        }
+
+        // Support legacy records where remainingAmount may be undefined by falling back to assignedAmount
+        const currentRemaining = Number(
+            assignment.remainingAmount != null ? assignment.remainingAmount : (assignment.assignedAmount || 0)
+        );
+        if (assignment.remainingAmount == null) {
+            assignment.remainingAmount = currentRemaining;
+        }
+        if (amount > currentRemaining) {
+            throw new ApiError(
+                httpStatus.BAD_REQUEST,
+                `Payment amount exceeds remaining amount. Remaining: ${currentRemaining}`
+            );
+        }
+
+        assignment.remainingAmount = currentRemaining - amount;
+        await assignment.save({ session });
+
+        const transaction = await WalletTransaction.create([transactionBody], { session });
+
+        await session.commitTransaction();
+        return transaction[0];
+    } catch (error) {
+        await session.abortTransaction();
+        throw error;
+    } finally {
+        session.endSession();
+    }
 };
 
 /**
