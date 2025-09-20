@@ -70,6 +70,7 @@ export const getUserTransactions = {
         sortBy: Joi.string(),
         limit: Joi.number().integer(),
         page: Joi.number().integer(),
+        projectName: Joi.string().optional(),
     }),
 };
 

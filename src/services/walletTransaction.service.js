@@ -234,6 +234,12 @@ export const deleteWalletTransactionById = async (transactionId) => {
  */
 export const getUserWalletTransactions = async (userId, options) => {
     const filter = { userId };
+    
+    // Add projectName filter if provided
+    if (options.projectName) {
+        filter.projectName = options.projectName;
+    }
+    
     return queryWalletTransactions(filter, options);
 };
 

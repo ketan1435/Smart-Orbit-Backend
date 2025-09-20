@@ -2173,7 +2173,7 @@ export const deleteMultipleFilesFromRequirementService = async (req, leadId, req
 
 export const getSharedRequirementsForUserService = async (userId) => {
   const requirements = await Requirement.find({ 'sharedWith.user': userId })
-    .populate('lead', 'customerName') // populate only necessary lead fields
+    .populate('lead', 'customerName mobileNumber email state city') // populate necessary lead fields
     .populate({
       path: 'sharedWith.user',
       select: '_id name email role'
