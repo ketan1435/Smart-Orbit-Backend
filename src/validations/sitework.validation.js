@@ -16,13 +16,7 @@ export const createSitework = {
             assignmentAmount: Joi.number().required(),
             perDayAmount: Joi.number().required()
         })).required(),
-        attachment: Joi.object().keys({
-            files: Joi.array().items(Joi.object().keys({
-                key: Joi.string().required(),
-                fileType: Joi.string().required(),
-            })).optional(),
-            note: Joi.string().allow('').optional(),
-        }).optional(),
+        attachment: Joi.any(),
     }),
 };
 
