@@ -97,12 +97,12 @@ export const clockInService = async (req, session) => {
             if (!sitework) {
                 throw new ApiError(httpStatus.NOT_FOUND, 'Sitework not found');
             }
-            
+
             // Verify sitework belongs to the project
             if (sitework.project.toString() !== projectId) {
                 throw new ApiError(httpStatus.BAD_REQUEST, 'Sitework does not belong to the specified project');
             }
-            
+
             // Verify fabricator is assigned to this sitework
             const isAssignedToSitework = sitework.assignedUsers.some(
                 assignedUser => assignedUser.user.toString() === fabricatorId
@@ -110,7 +110,7 @@ export const clockInService = async (req, session) => {
             if (!isAssignedToSitework) {
                 throw new ApiError(httpStatus.FORBIDDEN, 'You are not assigned to this sitework');
             }
-            
+
             siteworkName = sitework.name;
         }
 
@@ -557,7 +557,7 @@ export const getInProgressProjectsService = async (req, res, next) => {
                 project: project._id,
                 'assignedUsers.user': userId
             }).select('_id name description status startDate endDate').sort({ name: 1 });
-            
+
             return {
                 ...project.toObject(),
                 siteworks: projectSiteworks
@@ -590,34 +590,41 @@ export const getProjectWorkersStatusService = async (req, res, next) => {
             throw new ApiError(httpStatus.NOT_FOUND, 'Project not found');
         }
 
-        // Get all siteworks for the project and gather assigned users
-        const siteworks = await Sitework.find({ project: projectId }).select('assignedUsers');
-        const assignedUserEntries = siteworks.flatMap(sw => sw.assignedUsers || []);
+        // Get all siteworks for the project with assigned users
+        const siteworks = await Sitework.find({ project: projectId }).select('_id name description status assignedUsers');
 
-        if (assignedUserEntries.length === 0) {
+        if (siteworks.length === 0) {
             return res.status(httpStatus.OK).json({ status: 1, message: 'No assigned workers for this project', data: [] });
         }
 
-        // Aggregate per user: amounts and assignment counts
-        const perUserAggregation = new Map();
-        for (const entry of assignedUserEntries) {
-            const userId = entry.user?.toString();
-            if (!userId) continue;
-            const existing = perUserAggregation.get(userId) || { assignmentAmountTotal: 0, perDayAmountAvg: 0, assignments: 0 };
-            existing.assignmentAmountTotal += entry.assignmentAmount || 0;
-            // For perDayAmount, keep the latest non-null or average; we'll average over assignments where set
-            if (typeof entry.perDayAmount === 'number') {
-                existing.perDayAmountSum = (existing.perDayAmountSum || 0) + entry.perDayAmount;
-                existing.perDayAmountCount = (existing.perDayAmountCount || 0) + 1;
+        // Create a map of user assignments per sitework
+        const userSiteworkMap = new Map();
+        const allUserIds = new Set();
+
+        for (const sitework of siteworks) {
+            for (const assignedUser of sitework.assignedUsers || []) {
+                const userId = assignedUser.user?.toString();
+                if (!userId) continue;
+
+                allUserIds.add(userId);
+
+                if (!userSiteworkMap.has(userId)) {
+                    userSiteworkMap.set(userId, []);
+                }
+
+                userSiteworkMap.get(userId).push({
+                    siteworkId: sitework._id,
+                    siteworkName: sitework.name,
+                    siteworkDescription: sitework.description,
+                    siteworkStatus: sitework.status,
+                    assignmentAmount: assignedUser.assignmentAmount || 0,
+                    perDayAmount: assignedUser.perDayAmount || 0
+                });
             }
-            existing.assignments += 1;
-            perUserAggregation.set(userId, existing);
         }
 
-        const userIds = Array.from(perUserAggregation.keys());
-
         // Fetch basic user info
-        const users = await User.find({ _id: { $in: userIds } }).select('_id name email role phone');
+        const users = await User.find({ _id: { $in: Array.from(allUserIds) } }).select('_id name email role phone');
         const userMap = new Map(users.map(u => [u._id.toString(), u]));
 
         // Build today date range
@@ -628,40 +635,57 @@ export const getProjectWorkersStatusService = async (req, res, next) => {
 
         // Fetch today attendance records for these users on this project
         const todaysAttendance = await Attendance.find({
-            fabricator: { $in: userIds },
+            fabricator: { $in: Array.from(allUserIds) },
             project: projectId,
             clockInTime: { $gte: today, $lt: tomorrow },
-        }).select('_id fabricator status clockInTime clockOutTime sitework siteworkName').populate('sitework', 'name description status');
+        }).select('_id fabricator status clockInTime clockOutTime sitework siteworkName workDuration formattedWorkDuration').populate('sitework', 'name description status');
 
+        // Create attendance map by user and sitework
         const attendanceMap = new Map();
         for (const rec of todaysAttendance) {
-            attendanceMap.set(rec.fabricator.toString(), rec);
+            const key = `${rec.fabricator.toString()}_${rec.sitework ? rec.sitework._id.toString() : 'general'}`;
+            attendanceMap.set(key, rec);
         }
 
-        // Compose response list
-        const data = userIds.map(userId => {
-            const agg = perUserAggregation.get(userId) || {};
-            const u = userMap.get(userId);
-            const att = attendanceMap.get(userId);
-            const perDayAmountAvg = agg.perDayAmountCount ? (agg.perDayAmountSum || 0) / agg.perDayAmountCount : 0;
-            return {
-                userId,
-                name: u?.name || '',
-                email: u?.email || '',
-                role: u?.role || '',
-                phone: u?.phone || '',
-                assignments: agg.assignments || 0,
-                assignmentAmountTotal: Math.round((agg.assignmentAmountTotal || 0) * 100) / 100,
-                perDayAmountAvg: Math.round((perDayAmountAvg || 0) * 100) / 100,
-                isClockedIn: att ? att.status === 'clocked-in' : false,
-                isClockedOut: att ? att.status === 'clocked-out' : false,
-                clockInTime: att?.clockInTime || null,
-                clockOutTime: att?.clockOutTime || null,
-                attendanceId: att?._id || null,
-                sitework: att?.sitework || null,
-                siteworkName: att?.siteworkName || null,
-            };
-        }).sort((a, b) => a.name.localeCompare(b.name));
+        // Compose response list - one entry per user-sitework combination
+        const data = [];
+
+        for (const [userId, siteworkAssignments] of userSiteworkMap) {
+            const user = userMap.get(userId);
+
+            for (const siteworkAssignment of siteworkAssignments) {
+                const attendanceKey = `${userId}_${siteworkAssignment.siteworkId}`;
+                const attendance = attendanceMap.get(attendanceKey);
+
+                data.push({
+                    userId,
+                    name: user?.name || '',
+                    email: user?.email || '',
+                    role: user?.role || '',
+                    phone: user?.phone || '',
+                    siteworkId: siteworkAssignment.siteworkId,
+                    siteworkName: siteworkAssignment.siteworkName,
+                    siteworkDescription: siteworkAssignment.siteworkDescription,
+                    siteworkStatus: siteworkAssignment.siteworkStatus,
+                    assignmentAmount: Math.round((siteworkAssignment.assignmentAmount || 0) * 100) / 100,
+                    perDayAmount: Math.round((siteworkAssignment.perDayAmount || 0) * 100) / 100,
+                    isClockedIn: attendance ? attendance.status === 'clocked-in' : false,
+                    isClockedOut: attendance ? attendance.status === 'clocked-out' : false,
+                    clockInTime: attendance?.clockInTime || null,
+                    clockOutTime: attendance?.clockOutTime || null,
+                    workDuration: attendance?.workDuration || null,
+                    formattedWorkDuration: attendance?.formattedWorkDuration || null,
+                    attendanceId: attendance?._id || null,
+                });
+            }
+        }
+
+        // Sort by user name, then by sitework name
+        data.sort((a, b) => {
+            const nameCompare = a.name.localeCompare(b.name);
+            if (nameCompare !== 0) return nameCompare;
+            return a.siteworkName.localeCompare(b.siteworkName);
+        });
 
         return res.status(httpStatus.OK).json({
             status: 1,
