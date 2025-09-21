@@ -56,38 +56,38 @@ export const clockInService = async (req, session) => {
             throw new ApiError(httpStatus.BAD_REQUEST, 'Clock-in is only allowed between 5:00 AM and 11:00 PM IST');
         }
 
-// Check if fabricator has already clocked in today for the same project and sitework
-const today = new Date();
-today.setHours(0, 0, 0, 0);
-const tomorrow = new Date(today);
-tomorrow.setDate(tomorrow.getDate() + 1);
+        // Check if fabricator has already clocked in today for the same project and sitework
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
 
-const query = {
-    fabricator: fabricatorId,
-    project: projectId,
-    clockInTime: {
-        $gte: today,
-        $lt: tomorrow,
-    },
-};
+        const query = {
+            fabricator: fabricatorId,
+            project: projectId,
+            clockInTime: {
+                $gte: today,
+                $lt: tomorrow,
+            },
+        };
 
-// If siteworkId is provided, check for the same sitework
-if (siteworkId) {
-    query.sitework = siteworkId;
-} else {
-    // If no siteworkId, check for records with no sitework
-    query.sitework = { $exists: false };
-}
+        // If siteworkId is provided, check for the same sitework
+        if (siteworkId) {
+            query.sitework = siteworkId;
+        } else {
+            // If no siteworkId, check for records with no sitework
+            query.sitework = { $exists: false };
+        }
 
-const existingAttendance = await Attendance.findOne(query).session(session);
+        const existingAttendance = await Attendance.findOne(query).session(session);
 
-if (existingAttendance) {
-    if (existingAttendance.status === 'clocked-in') {
-        throw new ApiError(httpStatus.BAD_REQUEST, 'You are already clocked in for this site work today');
-    }
-    // Allow clocking in again if the previous session was clocked out
-    // This enables multiple clock in/out sessions per day for different site works
-}
+        if (existingAttendance) {
+            if (existingAttendance.status === 'clocked-in') {
+                throw new ApiError(httpStatus.BAD_REQUEST, 'You are already clocked in for this site work today');
+            }
+            // Allow clocking in again if the previous session was clocked out
+            // This enables multiple clock in/out sessions per day for different site works
+        }
 
         // Validate sitework if provided
         let sitework = null;
