@@ -9,6 +9,7 @@ import {
   updateCustomerLeadStatusService,
   updateCustomerAndProjectsStatusService,
   importCustomerLeadsService,
+  generateSampleCustomerLeadsCSV,
   exportCustomerLeadsService,
   shareRequirementWithUsersService,
   getSharedRequirementsForUserService,
@@ -178,7 +179,7 @@ export const importCustomerLeadsController = catchAsync(async (req, res) => {
     throw new ApiError(400, 'Please upload a spreadsheet file.');
   }
 
-  const { importedCount, errors } = await importCustomerLeadsService(req.file.path);
+  const { importedCount, errors } = await importCustomerLeadsService(req.file.path, req);
 
   const message = `${importedCount} leads imported successfully.`;
 
@@ -192,6 +193,14 @@ export const importCustomerLeadsController = catchAsync(async (req, res) => {
   }
 
   res.status(201).json({ status: 1, message, importedCount });
+});
+
+export const downloadSampleCustomerLeadsController = catchAsync(async (req, res) => {
+  const csvBuffer = generateSampleCustomerLeadsCSV();
+
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', 'attachment; filename="customer_leads_sample.csv"');
+  res.send(csvBuffer);
 });
 
 export const exportCustomerLeadsController = catchAsync(async (req, res) => {

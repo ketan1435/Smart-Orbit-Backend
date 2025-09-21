@@ -2481,7 +2481,76 @@ const parseBoolean = (value) => {
   return undefined;
 };
 
-export const importCustomerLeadsService = async (filePath) => {
+// Generate password: first word of name + @ + 123
+const generatePassword = (customerName) => {
+  if (!customerName) return 'Customer@123';
+  const firstWord = customerName.trim().split(' ')[0];
+  return `${firstWord}@123`;
+};
+
+// Helper function to process requirement and create project (extracted from createCustomerLeadService)
+const processRequirementAndProject = async (req, lead, requirementData, session) => {
+  const requirementId = new mongoose.Types.ObjectId();
+  const files = [];
+
+  // Handle file processing if needed (for now, empty files array)
+  const fileKeys = {
+    imageUrlKeys: requirementData.imageUrlKeys || [],
+    videoUrlKeys: requirementData.videoUrlKeys || [],
+    voiceMessageUrlKeys: requirementData.voiceMessageUrlKeys || [],
+    sketchUrlKeys: requirementData.sketchUrlKeys || [],
+  };
+
+  for (const [type, keys] of Object.entries(fileKeys)) {
+    for (const tempKey of keys) {
+      const fileType = type.replace('UrlKeys', '');
+      const fileName = tempKey.split('/').pop();
+      const permanentKey = `customer-leads/${lead._id}/${requirementId}/${fileType}/${fileName}`;
+      await storage.copyFile(tempKey, permanentKey);
+      files.push({ fileType, key: permanentKey });
+    }
+  }
+
+  // Create Requirement document
+  const requirement = await Requirement.create([{
+    _id: requirementId,
+    lead: lead._id,
+    projectName: requirementData.projectName,
+    requirementType: requirementData.requirementType,
+    otherRequirement: requirementData.otherRequirement,
+    requirementDescription: requirementData.requirementDescription,
+    urgency: requirementData.urgency,
+    budget: requirementData.budget,
+    scpData: requirementData.scpData || {},
+    files,
+    sharedWith: [],
+  }], { session });
+
+  // Create a project and link back to requirement
+  const project = await createProject({
+    projectName: requirementData.projectName,
+    requirement: requirementId,
+    lead: lead._id,
+    budget: requirementData.budget ? parseFloat(requirementData.budget.replace(/[^0-9.-]+/g, '')) : 0,
+    createdBy: req.user.id,
+    createdByModel: req.user.constructor.modelName,
+  }, session);
+
+  // Update the requirement with the project ID
+  await Requirement.findByIdAndUpdate(requirementId, {
+    project: project._id,
+  }, { session });
+
+  // Add requirement to lead
+  lead.requirements.push(requirementId);
+
+  // Simplified import - no SCP sharing, site visits, or project assignment payments
+  // These can be added later through the UI if needed
+
+  return { requirement, project };
+};
+
+export const importCustomerLeadsService = async (filePath, req) => {
   const workbook = xlsx.readFile(filePath);
   const sheetName = workbook.SheetNames[0];
   const worksheet = workbook.Sheets[sheetName];
@@ -2522,14 +2591,22 @@ export const importCustomerLeadsService = async (filePath) => {
     }
 
     if (!leadsByCustomer.has(customerId)) {
+      const customerName = getVal('customerName');
       leadsByCustomer.set(customerId, {
-        leadSource: getVal('leadSource'),
-        customerName: getVal('customerName'),
+        leadSource: getVal('leadSource') || 'Meta Ads',
+        customerName: customerName,
         mobileNumber: getVal('mobileNumber'),
         alternateContactNumber: getVal('alternateContactNumber'),
+        whatsappNumber: getVal('whatsappNumber'),
+        preferredLanguages: getVal('preferredLanguages'),
         email: getVal('email'),
         state: getVal('state'),
         city: getVal('city'),
+        town: getVal('town'),
+        townVillage: getVal('town'),
+        googleLocationLink: getVal('googleLocationLink'),
+        status: STATUS_ENUM.INPROGRESS,
+        password: generatePassword(customerName), // Auto-generate password
         requirements: [],
         _sourceRows: [], // To track original row numbers for better error reporting
       });
@@ -2538,83 +2615,162 @@ export const importCustomerLeadsService = async (filePath) => {
     const customerData = leadsByCustomer.get(customerId);
     customerData._sourceRows.push(index + 2); // Store original row number (2-based index)
 
-    const scpData = {
-      siteAddress: getVal('siteAddress'),
-      googleLocationLink: getVal('googleLocationLink'),
-      siteType: getVal('siteType'),
-      plotSize: getVal('plotSize'),
-      totalArea: getVal('totalArea'),
-      plinthStatus: getVal('plinthStatus'),
-      structureType: getVal('structureType'),
-      numUnits: getVal('numUnits') ? Number(getVal('numUnits')) : undefined,
-      usageType: getVal('usageType'),
-      avgStayDuration: getVal('avgStayDuration'),
-      additionalFeatures: getVal('additionalFeatures'),
-      designIdeas: getVal('designIdeas'),
-      drawingStatus: getVal('drawingStatus'),
-      architectStatus: getVal('architectStatus'),
-      roomRequirements: getVal('roomRequirements'),
-      tokenAdvance: parseBoolean(getVal('tokenAdvance')),
-      financing: parseBoolean(getVal('financing')),
-      roadWidth: getVal('roadWidth'),
-      targetCompletionDate: getVal('targetCompletionDate'),
-      siteVisitDate: getVal('siteVisitDate'),
-      scpRemarks: getVal('scpRemarks'),
-    };
-
+    // Simplified requirement data - only basic fields
     const requirement = {
+      projectName: getVal('projectName'),
       requirementType: getVal('requirementType'),
-      otherRequirement: getVal('otherRequirement'),
       requirementDescription: getVal('requirementDescription'),
       urgency: getVal('urgency'),
-      budget: getVal('budget') ? Number(getVal('budget')) : undefined,
-      scpData: getVal('requirementType') === 'Cottage / Structure Proposal' ? scpData : {},
+      budget: getVal('budget') ? getVal('budget').toString() : undefined,
+      scpData: {}, // Empty SCP data for simplified import
     };
 
     customerData.requirements.push(requirement);
   });
 
   let importedCount = 0;
-  for (const [customerId, leadData] of leadsByCustomer.entries()) {
-    const { _sourceRows, ...leadPayload } = leadData;
-    const rowIdentifier = `Row(s) ${_sourceRows.join(', ')}`;
+  const session = await mongoose.startSession();
 
-    try {
-      // Find existing lead by email or mobile.
-      const existingLead = await CustomerLead.findOne({
-        $or: [{ email: leadPayload.email }, { mobileNumber: leadPayload.mobileNumber }],
-      });
+  try {
+    await session.startTransaction();
 
-      if (existingLead) {
-        // If lead exists, add new requirements.
-        const { error: validationError } = updateCustomerLead.body.validate({ requirements: leadPayload.requirements });
-        if (validationError) {
-          errors.push({ customerId, error: validationError.details.map((d) => d.message).join(', '), location: rowIdentifier });
-          continue;
+    for (const [customerId, leadData] of leadsByCustomer.entries()) {
+      const { _sourceRows, ...leadPayload } = leadData;
+      const rowIdentifier = `Row(s) ${_sourceRows.join(', ')}`;
+
+      try {
+        // Find existing lead by email or mobile
+        const existingLead = await CustomerLead.findOne({
+          $or: [{ email: leadPayload.email }, { mobileNumber: leadPayload.mobileNumber }],
+        }).session(session);
+
+        if (existingLead) {
+          // If lead exists, add new requirements and create projects
+          for (const requirementData of leadPayload.requirements) {
+            await processRequirementAndProject(req, existingLead, requirementData, session);
+          }
+        } else {
+          // Create new lead with simplified functionality
+          const { requirements, password, ...basicLeadInfo } = leadPayload;
+
+          const leadPayloadData = {
+            ...basicLeadInfo,
+            createdBy: req.user.id,
+            createdByModel: req.user.role === 'Admin' ? 'Admin' : 'User',
+            status: STATUS_ENUM.INPROGRESS,
+            requirements: [],
+          };
+
+          const lead = (await CustomerLead.create([leadPayloadData], { session }))[0];
+
+          // Process each requirement and create projects
+          for (const requirementData of requirements) {
+            await processRequirementAndProject(req, lead, requirementData, session);
+          }
+
+          // Update lead with requirement references
+          lead.requirements = lead.requirements;
+          await lead.save({ session });
+
+          // Create user account if password is provided
+          if (password) {
+            try {
+              await createUser(req, {
+                name: leadPayloadData.customerName,
+                email: leadPayloadData.email,
+                password: password,
+              });
+            } catch (userError) {
+              console.error('Error creating user account:', userError);
+              // Don't fail the import if user creation fails
+            }
+          }
         }
 
-        existingLead.requirements.push(...leadPayload.requirements);
-        await existingLead.save();
-
-      } else {
-        // If lead doesn't exist, create a new one.
-        const { error: validationError } = createCustomerLead.body.validate(leadPayload);
-        if (validationError) {
-          errors.push({ customerId, error: validationError.details.map((d) => d.message).join(', '), location: rowIdentifier });
-          continue;
-        }
-
-        await CustomerLead.create(leadPayload);
+        importedCount++;
+      } catch (dbError) {
+        const errorMessage = `Failed to process lead. Reason: ${dbError.message}`;
+        errors.push({ customerId, error: errorMessage, location: rowIdentifier });
       }
-
-      importedCount++;
-    } catch (dbError) {
-      const errorMessage = `Failed to process lead. Reason: ${dbError.message}`;
-      errors.push({ customerId, error: errorMessage, location: rowIdentifier });
     }
+
+    await session.commitTransaction();
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    session.endSession();
   }
 
   return { importedCount, errors };
+};
+
+export const generateSampleCustomerLeadsCSV = () => {
+  const sampleData = [
+    // Headers - Basic Information Only
+    [
+      'customerName',
+      'email',
+      'mobileNumber',
+      'alternateContactNumber',
+      'whatsappNumber',
+      'preferredLanguages',
+      'leadSource',
+      'state',
+      'city',
+      'town',
+      'googleLocationLink',
+      'requirementType',
+      'projectName',
+      'requirementDescription',
+      'urgency',
+      'budget'
+    ],
+    // Sample data row 1
+    [
+      'John Doe',
+      'john.doe@example.com',
+      '9876543210',
+      '9876543211',
+      '9876543210',
+      'English,Hindi',
+      'Meta Ads',
+      'Maharashtra',
+      'Mumbai',
+      'Andheri',
+      'https://maps.google.com/example',
+      'Cottage / Structure Proposal',
+      'Residential Villa Project',
+      'Need a 3BHK villa with modern amenities',
+      'High',
+      '5000000'
+    ],
+    // Sample data row 2
+    [
+      'Jane Smith',
+      'jane.smith@example.com',
+      '9876543212',
+      '',
+      '9876543212',
+      'English',
+      'Meta Ads',
+      'Karnataka',
+      'Bangalore',
+      'Whitefield',
+      'https://maps.google.com/example2',
+      'Commercial',
+      'Office Space Project',
+      'Need office space for 50 employees',
+      'Medium',
+      '10000000'
+    ]
+  ];
+
+  const worksheet = xlsx.utils.aoa_to_sheet(sampleData);
+  const workbook = xlsx.utils.book_new();
+  xlsx.utils.book_append_sheet(workbook, worksheet, 'Customer Leads Sample');
+
+  return xlsx.write(workbook, { type: 'buffer', bookType: 'csv' });
 };
 
 export const exportCustomerLeadsService = async (filter = {}) => {

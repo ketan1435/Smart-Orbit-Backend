@@ -10,6 +10,7 @@ import {
   updateCustomerLeadStatusController,
   updateCustomerAndProjectsStatusController,
   importCustomerLeadsController,
+  downloadSampleCustomerLeadsController,
   exportCustomerLeadsController,
   // updateCustomerLeadController,
   shareRequirementForUserController,
@@ -61,10 +62,7 @@ const router = express.Router();
  *               type: string
  *               format: binary
  */
-router.get('/import/sample', (req, res) => {
-  const filePath = path.join(process.cwd(), 'src/docs/customer_leads_sample.csv');
-  res.download(filePath);
-});
+router.get('/import/sample', downloadSampleCustomerLeadsController);
 
 /**
  * @swagger

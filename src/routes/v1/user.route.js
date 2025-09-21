@@ -924,7 +924,7 @@ router.patch(
 
 router.patch(
   '/:userId/password',
-  auth('manageUsers'),
+  auth('resetPassword'),
   validate(userValidation.resetUserPassword),
   userController.resetUserPasswordById
 );

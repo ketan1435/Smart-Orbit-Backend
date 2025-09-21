@@ -206,7 +206,7 @@ export const resetUserPasswordById = catchAsync(async (req, res) => {
   // Site engineer can reset only workers/fabricators they created
   if (user.role === 'site-engineer') {
     const targetUser = await userService.getUserById(userId);
-    if (!targetUser || !['worker', 'fabricator'].includes(targetUser.role) || String(targetUser.createdBy) !== String(user._id)) {
+    if (!targetUser || !['custom', 'fabricator'].includes(targetUser.role) || String(targetUser.createdBy) !== String(user._id)) {
       throw new ApiError(httpStatus.FORBIDDEN, 'Not authorized to reset password for this user');
     }
   } else if (!['Admin', 'sales-admin'].includes(user.role)) {
