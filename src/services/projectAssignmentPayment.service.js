@@ -3,6 +3,8 @@ import ProjectAssignmentPayment from '../models/projectAssignmentPaymant.model.j
 import ApiError from '../utils/ApiError.js';
 import Project from '../models/project.model.js';
 import User from '../models/user.model.js';
+import Sitework from '../models/sitework.model.js';
+import Attendance from '../models/attendance.model.js';
 
 /**
  * Query project assignment payments
@@ -107,6 +109,10 @@ export const queryProjectAssignmentPayments = async (filter, options) => {
             path: 'createdBy',
             select: 'name email role'
         })
+        .populate({
+            path: 'sitework',
+            select: 'name description startDate endDate workingHoursPerDay dateType status assignedUsers'
+        })
         .sort(sort)
         .skip((page - 1) * limit)
         .limit(limit)
@@ -115,6 +121,112 @@ export const queryProjectAssignmentPayments = async (filter, options) => {
     const totalResults = await ProjectAssignmentPayment.countDocuments(mongoFilter);
 
     console.log(`Found ${payments.length} payments out of ${totalResults} total`);
+
+    // Enhance payments with attendance information for custom users
+    const enhancedPayments = await Promise.all(payments.map(async (payment) => {
+        // Only add attendance info for custom users
+        if (payment.user && payment.user.role === 'custom') {
+            // Find attendance records for this user and project
+            const attendanceRecords = await Attendance.find({
+                fabricator: payment.user._id,
+                project: payment.project._id
+            }).select('clockInTime clockOutTime workDuration sitework siteworkName status').lean();
+
+            // If there's a specific sitework linked to this payment
+            if (payment.sitework) {
+                // Find attendance records for this specific sitework
+                const siteworkAttendance = attendanceRecords.filter(att => 
+                    att.sitework && att.sitework.toString() === payment.sitework._id.toString()
+                );
+
+                // Calculate time tracking for this sitework
+                const totalWorkedMinutes = siteworkAttendance.reduce((total, att) => {
+                    return total + (att.workDuration || 0);
+                }, 0);
+
+                // Calculate expected time based on sitework duration and working hours per day
+                let expectedMinutes = 0;
+                if (payment.sitework.startDate && payment.sitework.endDate) {
+                    const startDate = new Date(payment.sitework.startDate);
+                    const endDate = new Date(payment.sitework.endDate);
+                    const diffInMs = endDate.getTime() - startDate.getTime();
+                    const diffInDays = Math.ceil(diffInMs / (1000 * 60 * 60 * 24));
+                    // Use workingHoursPerDay from sitework, default to 8 hours if not set
+                    const workingHoursPerDay = payment.sitework.workingHoursPerDay || 8;
+                    expectedMinutes = diffInDays * workingHoursPerDay * 60;
+                }
+
+                // Calculate time difference
+                const timeDifference = totalWorkedMinutes - expectedMinutes;
+                const timeDifferenceHours = Math.round((timeDifference / 60) * 10) / 10;
+
+                // Get user's assignment details from sitework
+                const userAssignment = payment.sitework.assignedUsers.find(au => 
+                    au.user.toString() === payment.user._id.toString()
+                );
+
+                return {
+                    ...payment,
+                    siteworkInfo: {
+                        siteworkId: payment.sitework._id,
+                        siteworkName: payment.sitework.name,
+                        siteworkDescription: payment.sitework.description,
+                        startDate: payment.sitework.startDate,
+                        endDate: payment.sitework.endDate,
+                        workingHoursPerDay: payment.sitework.workingHoursPerDay || 8,
+                        dateType: payment.sitework.dateType || 'range',
+                        status: payment.sitework.status,
+                        assignedAmount: userAssignment?.assignmentAmount || 0,
+                        perDayAmount: userAssignment?.perDayAmount || 0,
+                        expectedTimeHours: Math.round((expectedMinutes / 60) * 10) / 10,
+                        actualTimeHours: Math.round((totalWorkedMinutes / 60) * 10) / 10,
+                        timeDifferenceHours: timeDifferenceHours,
+                        isOverTime: timeDifference > 0,
+                        isUnderTime: timeDifference < 0,
+                        attendanceRecords: siteworkAttendance.map(att => ({
+                            clockInTime: att.clockInTime,
+                            clockOutTime: att.clockOutTime,
+                            workDuration: att.workDuration,
+                            status: att.status,
+                            siteworkName: att.siteworkName
+                        }))
+                    },
+                    timeTrackingSummary: {
+                        totalExpectedTimeHours: Math.round((expectedMinutes / 60) * 10) / 10,
+                        totalActualTimeHours: Math.round((totalWorkedMinutes / 60) * 10) / 10,
+                        overallTimeDifferenceHours: timeDifferenceHours,
+                        isOverTime: timeDifference > 0,
+                        isUnderTime: timeDifference < 0,
+                        totalSiteworks: 1,
+                        completedSiteworks: payment.sitework.status === 'completed' ? 1 : 0
+                    }
+                };
+            } else {
+                // If no specific sitework, show general attendance info
+                const totalWorkedMinutes = attendanceRecords.reduce((total, att) => {
+                    return total + (att.workDuration || 0);
+                }, 0);
+
+                return {
+                    ...payment,
+                    generalAttendanceInfo: {
+                        totalActualTimeHours: Math.round((totalWorkedMinutes / 60) * 10) / 10,
+                        totalAttendanceRecords: attendanceRecords.length,
+                        attendanceRecords: attendanceRecords.map(att => ({
+                            clockInTime: att.clockInTime,
+                            clockOutTime: att.clockOutTime,
+                            workDuration: att.workDuration,
+                            status: att.status,
+                            siteworkName: att.siteworkName
+                        }))
+                    }
+                };
+            }
+        } else {
+            // For non-custom users, return payment as is
+            return payment;
+        }
+    }));
 
     // Compute totals for the current filter for pagination-friendly stats
     // Important: aggregation does not cast string IDs, so cast user to ObjectId explicitly when present
@@ -139,7 +251,7 @@ export const queryProjectAssignmentPayments = async (filter, options) => {
     const totalPaid = Math.max(0, (totals.totalAssigned || 0) - (totals.totalRemaining || 0));
 
     return {
-        results: payments,
+        results: enhancedPayments,
         page,
         limit,
         totalPages: Math.ceil(totalResults / limit),
@@ -202,4 +314,4 @@ export const deleteProjectAssignmentPaymentById = async (paymentId) => {
     const payment = await getProjectAssignmentPaymentById(paymentId);
     await ProjectAssignmentPayment.deleteOne({ _id: paymentId });
     return payment;
-}; 
+};

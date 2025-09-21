@@ -56,28 +56,38 @@ export const clockInService = async (req, session) => {
             throw new ApiError(httpStatus.BAD_REQUEST, 'Clock-in is only allowed between 5:00 AM and 11:00 PM IST');
         }
 
-        // Check if fabricator has already clocked in today (regardless of status)
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const tomorrow = new Date(today);
-        tomorrow.setDate(tomorrow.getDate() + 1);
+// Check if fabricator has already clocked in today for the same project and sitework
+const today = new Date();
+today.setHours(0, 0, 0, 0);
+const tomorrow = new Date(today);
+tomorrow.setDate(tomorrow.getDate() + 1);
 
-        const existingAttendance = await Attendance.findOne({
-            fabricator: fabricatorId,
-            project: projectId,
-            clockInTime: {
-                $gte: today,
-                $lt: tomorrow,
-            },
-        }).session(session);
+const query = {
+    fabricator: fabricatorId,
+    project: projectId,
+    clockInTime: {
+        $gte: today,
+        $lt: tomorrow,
+    },
+};
 
-        if (existingAttendance) {
-            if (existingAttendance.status === 'clocked-in') {
-                throw new ApiError(httpStatus.BAD_REQUEST, 'You are already clocked in today');
-            } else if (existingAttendance.status === 'clocked-out') {
-                throw new ApiError(httpStatus.BAD_REQUEST, 'You have already completed attendance for today');
-            }
-        }
+// If siteworkId is provided, check for the same sitework
+if (siteworkId) {
+    query.sitework = siteworkId;
+} else {
+    // If no siteworkId, check for records with no sitework
+    query.sitework = { $exists: false };
+}
+
+const existingAttendance = await Attendance.findOne(query).session(session);
+
+if (existingAttendance) {
+    if (existingAttendance.status === 'clocked-in') {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'You are already clocked in for this site work today');
+    }
+    // Allow clocking in again if the previous session was clocked out
+    // This enables multiple clock in/out sessions per day for different site works
+}
 
         // Validate sitework if provided
         let sitework = null;

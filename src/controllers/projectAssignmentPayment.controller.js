@@ -74,7 +74,9 @@ export const getProjectAssignmentPayments = catchAsync(async (req, res) => {
         filter.userId = req.user?.id || req.user?._id;
     }
 
+    // The service now automatically includes sitework and attendance info for custom users
     const result = await projectAssignmentPaymentService.queryProjectAssignmentPayments(filter, options);
+
     res.status(httpStatus.OK).send({
         status: 1,
         message: 'Project assignment payments fetched successfully.',
