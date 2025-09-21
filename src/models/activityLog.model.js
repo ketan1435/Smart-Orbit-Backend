@@ -28,7 +28,8 @@ const activityLogSchema = new mongoose.Schema({
         enum: [
             'User', 'Admin', 'Project', 'ClientProposal', 'BOM', 'PO',
             'Vendor', 'SiteVisit', 'Message', 'File', 'CustomerLead',
-            'Quote', 'Sitework', 'ProjectAssignmentPayment', 'WalletTransaction'
+            'Quote', 'Sitework', 'ProjectAssignmentPayment', 'WalletTransaction',
+            'Requirement'
         ],
     },
     targetId: {

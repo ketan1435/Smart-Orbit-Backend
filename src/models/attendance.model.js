@@ -20,6 +20,15 @@ const attendanceSchema = new mongoose.Schema({
         type: String,
         required: true,
     },
+    sitework: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Sitework',
+        required: false, // Optional - can be null for general project attendance
+    },
+    siteworkName: {
+        type: String,
+        required: false,
+    },
     clockInTime: {
         type: Date,
         required: true,
@@ -74,6 +83,9 @@ attendanceSchema.index({ fabricator: 1, clockInTime: -1 });
 attendanceSchema.index({ fabricator: 1, status: 1 });
 attendanceSchema.index({ project: 1, clockInTime: -1 });
 attendanceSchema.index({ fabricator: 1, project: 1, clockInTime: -1 });
+attendanceSchema.index({ sitework: 1, clockInTime: -1 });
+attendanceSchema.index({ fabricator: 1, sitework: 1, clockInTime: -1 });
+attendanceSchema.index({ project: 1, sitework: 1, clockInTime: -1 });
 
 // Virtual for formatted work duration
 attendanceSchema.virtual('formattedWorkDuration').get(function() {

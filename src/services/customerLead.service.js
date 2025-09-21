@@ -1011,8 +1011,8 @@ export const shareRequirementWithUsersService = async (req, leadId, requirementI
 
   // Check if any of the users are procurement team members
   const users = await User.find({ _id: { $in: userIds } }).select('_id role name email');
-  const procurementUsers = users.filter(user => user.role === 'procurement-team');
-  const otherUsers = users.filter(user => user.role !== 'procurement-team');
+  const procurementUsers = users.filter(user => user.role === 'planning-engineer');
+  const otherUsers = users.filter(user => user.role !== 'planning-engineer');
 
   // Find the project associated with this requirement
   const project = await Project.findOne({ requirement: requirementId });
@@ -1149,7 +1149,7 @@ export const shareRequirementWithUsersService = async (req, leadId, requirementI
           // Create admin object for the service
           const admin = { _id: adminId };
 
-          await sendDocumentToProcurement(project._id.toString(), documentId, admin);
+          await sendDocumentToProcurement(req, project._id.toString(), documentId, admin);
           logger.info(`Document ${documentId} successfully sent to procurement`);
           documentSent = true;
         } else {

@@ -6,6 +6,7 @@ export const createSitework = {
         name: Joi.string().required(),
         description: Joi.string().allow(''),
         project: Joi.string().custom(objectId).required(),
+        dateType: Joi.string().valid('single', 'range').optional(),
         startDate: Joi.date().optional(),
         endDate: Joi.date().optional(),
         status: Joi.string().valid('not-started', 'in-progress', 'completed', 'cancelled').optional(),
@@ -31,6 +32,7 @@ export const updateSitework = {
     body: Joi.object().keys({
         name: Joi.string().required(),
         description: Joi.string().allow(''),
+        dateType: Joi.string().valid('single', 'range').optional(),
         assignedUsers: Joi.array().items(Joi.object().keys({
             user: Joi.string().custom(objectId).required(),
             assignmentAmount: Joi.number().required(),

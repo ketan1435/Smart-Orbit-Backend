@@ -83,6 +83,11 @@ const siteworkSchema = new mongoose.Schema({
     name: { type: String, required: true },
     description: { type: String },
     project: { type: mongoose.Schema.Types.ObjectId, ref: 'Project', required: true },
+    dateType: {
+        type: String,
+        enum: ['single', 'range'],
+        default: 'range',
+    },
     startDate: { type: Date },
     endDate: { type: Date },
     status: {

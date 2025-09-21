@@ -8,7 +8,7 @@ import logger from '../config/logger.js';
 import httpStatus from 'http-status';
 
 export const clockInService = async (req, session) => {
-    const { clockInTime, photoKey, projectId } = req.body;
+    const { clockInTime, photoKey, projectId, siteworkId } = req.body;
     const fabricatorId = req.user.id;
 
     try {
@@ -79,12 +79,39 @@ export const clockInService = async (req, session) => {
             }
         }
 
+        // Validate sitework if provided
+        let sitework = null;
+        let siteworkName = null;
+        if (siteworkId) {
+            sitework = await Sitework.findById(siteworkId).session(session);
+            if (!sitework) {
+                throw new ApiError(httpStatus.NOT_FOUND, 'Sitework not found');
+            }
+            
+            // Verify sitework belongs to the project
+            if (sitework.project.toString() !== projectId) {
+                throw new ApiError(httpStatus.BAD_REQUEST, 'Sitework does not belong to the specified project');
+            }
+            
+            // Verify fabricator is assigned to this sitework
+            const isAssignedToSitework = sitework.assignedUsers.some(
+                assignedUser => assignedUser.user.toString() === fabricatorId
+            );
+            if (!isAssignedToSitework) {
+                throw new ApiError(httpStatus.FORBIDDEN, 'You are not assigned to this sitework');
+            }
+            
+            siteworkName = sitework.name;
+        }
+
         // Create attendance record - store client time as is (it's already in the correct timezone)
         const attendance = new Attendance({
             fabricator: fabricatorId,
             fabricatorName: fabricator.name,
             project: projectId,
             projectName: project.projectName,
+            sitework: siteworkId || null,
+            siteworkName: siteworkName || null,
             clockInTime: clientClockInTime,
             clockInPhotoKey: photoKey,
             status: 'clocked-in',
@@ -133,7 +160,7 @@ export const clockInService = async (req, session) => {
 };
 
 export const clockOutService = async (req, session) => {
-    const { clockOutTime, photoKey, projectId } = req.body;
+    const { clockOutTime, photoKey, projectId, siteworkId } = req.body;
     const fabricatorId = req.user.id;
 
     try {
@@ -172,14 +199,21 @@ export const clockOutService = async (req, session) => {
         const tomorrow = new Date(today);
         tomorrow.setDate(tomorrow.getDate() + 1);
 
-        const attendance = await Attendance.findOne({
+        const query = {
             fabricator: fabricatorId,
             project: projectId,
             clockInTime: {
                 $gte: today,
                 $lt: tomorrow,
             },
-        }).session(session);
+        };
+
+        // If siteworkId is provided, filter by sitework
+        if (siteworkId) {
+            query.sitework = siteworkId;
+        }
+
+        const attendance = await Attendance.findOne(query).session(session);
 
         if (!attendance) {
             throw new ApiError(httpStatus.BAD_REQUEST, 'No clock-in record found for today. Please clock in first.');
@@ -258,7 +292,7 @@ export const clockOutService = async (req, session) => {
 
 export const getAttendanceRecordsService = async (req, res, next) => {
     try {
-        const { page = 1, limit = 10, fabricatorId, projectId, startDate, endDate } = req.query;
+        const { page = 1, limit = 10, fabricatorId, projectId, siteworkId, startDate, endDate } = req.query;
         const userId = req.user.id;
 
         // Build query
@@ -280,6 +314,11 @@ export const getAttendanceRecordsService = async (req, res, next) => {
             query.project = projectId;
         }
 
+        // If siteworkId is provided, filter by it
+        if (siteworkId) {
+            query.sitework = siteworkId;
+        }
+
         // Date range filter
         if (startDate || endDate) {
             query.clockInTime = {};
@@ -297,7 +336,8 @@ export const getAttendanceRecordsService = async (req, res, next) => {
             sort: { clockInTime: -1 },
             populate: [
                 { path: 'fabricator', select: 'name email role' },
-                { path: 'project', select: 'projectName projectCode status' }
+                { path: 'project', select: 'projectName projectCode status' },
+                { path: 'sitework', select: 'name description status startDate endDate' }
             ],
         };
 
@@ -323,7 +363,7 @@ export const getAttendanceRecordsService = async (req, res, next) => {
 export const getCurrentAttendanceService = async (req, res, next) => {
     try {
         const userId = req.user.id;
-        const { projectId } = req.query;
+        const { projectId, siteworkId } = req.query;
 
         // Find today's active attendance
         const today = new Date();
@@ -345,9 +385,15 @@ export const getCurrentAttendanceService = async (req, res, next) => {
             query.project = projectId;
         }
 
+        // If siteworkId is provided, filter by it
+        if (siteworkId) {
+            query.sitework = siteworkId;
+        }
+
         const attendance = await Attendance.findOne(query).populate([
             { path: 'fabricator', select: 'name email role' },
-            { path: 'project', select: 'projectName projectCode status' }
+            { path: 'project', select: 'projectName projectCode status' },
+            { path: 'sitework', select: 'name description status startDate endDate' }
         ]);
 
         if (!attendance) {
@@ -371,7 +417,7 @@ export const getCurrentAttendanceService = async (req, res, next) => {
 
 export const getAttendanceStatsService = async (req, res, next) => {
     try {
-        const { fabricatorId, projectId, month, year } = req.query;
+        const { fabricatorId, projectId, siteworkId, month, year } = req.query;
         const userId = req.user.id;
 
         // Determine fabricator ID
@@ -408,6 +454,11 @@ export const getAttendanceStatsService = async (req, res, next) => {
         // If projectId is provided, filter by it
         if (projectId) {
             query.project = projectId;
+        }
+
+        // If siteworkId is provided, filter by it
+        if (siteworkId) {
+            query.sitework = siteworkId;
         }
 
         // Get attendance records for the month
@@ -490,12 +541,25 @@ export const getInProgressProjectsService = async (req, res, next) => {
             status: 'inprogress'
         }).select('_id projectName projectCode status').sort({ projectName: 1 });
 
-        console.log('Found assigned in-progress projects:', projects.length, projects);
+        // 3. Get siteworks for each project
+        const projectsWithSiteworks = await Promise.all(projects.map(async (project) => {
+            const projectSiteworks = await Sitework.find({
+                project: project._id,
+                'assignedUsers.user': userId
+            }).select('_id name description status startDate endDate').sort({ name: 1 });
+            
+            return {
+                ...project.toObject(),
+                siteworks: projectSiteworks
+            };
+        }));
+
+        console.log('Found assigned in-progress projects with siteworks:', projectsWithSiteworks.length, projectsWithSiteworks);
 
         res.status(httpStatus.OK).json({
             status: 1,
-            message: 'In-progress projects fetched successfully',
-            data: projects,
+            message: 'In-progress projects with siteworks fetched successfully',
+            data: projectsWithSiteworks,
         });
 
     } catch (error) {
@@ -557,7 +621,7 @@ export const getProjectWorkersStatusService = async (req, res, next) => {
             fabricator: { $in: userIds },
             project: projectId,
             clockInTime: { $gte: today, $lt: tomorrow },
-        }).select('_id fabricator status clockInTime clockOutTime');
+        }).select('_id fabricator status clockInTime clockOutTime sitework siteworkName').populate('sitework', 'name description status');
 
         const attendanceMap = new Map();
         for (const rec of todaysAttendance) {
@@ -584,6 +648,8 @@ export const getProjectWorkersStatusService = async (req, res, next) => {
                 clockInTime: att?.clockInTime || null,
                 clockOutTime: att?.clockOutTime || null,
                 attendanceId: att?._id || null,
+                sitework: att?.sitework || null,
+                siteworkName: att?.siteworkName || null,
             };
         }).sort((a, b) => a.name.localeCompare(b.name));
 
