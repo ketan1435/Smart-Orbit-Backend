@@ -11,6 +11,7 @@ const allRoles = {
   Admin: [
     'getUsers',
     'manageUsers',
+    'resetPassword',
     'getProjects',
     'exportLeads',
     'manageProjects',
@@ -107,6 +108,7 @@ const allRoles = {
 
   'site-engineer': [
     'manageVendors',
+    'resetPassword',
     'procurement',
     'getSiteworks',
     'manageTasks',

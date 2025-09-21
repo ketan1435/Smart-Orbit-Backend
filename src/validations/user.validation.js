@@ -173,12 +173,19 @@ export const updateWorkerBySiteEngineer = {
     name: Joi.string().optional(),
     email: Joi.string().email().optional(),
     mobileNumber: Joi.string().optional(),
+    phoneNumber: Joi.string().optional(),
     role: Joi.string().valid('worker', 'fabricator', 'custom').optional(),
     subRole: Joi.string().when('role', {
       is: 'custom',
       then: Joi.string().required().min(1).max(50),
       otherwise: Joi.string().optional()
     }),
+    city: Joi.string().optional(),
+    state: Joi.string().optional(),
+    region: Joi.string().optional(),
+    address: Joi.string().optional(),
+    education: Joi.string().optional(),
+    experience: Joi.string().optional(),
     documents: Joi.array().items(
       Joi.object({
         fileType: Joi.string().valid('image', 'pdf', 'document').required(),
