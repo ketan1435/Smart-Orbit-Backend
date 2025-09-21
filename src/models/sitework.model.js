@@ -90,6 +90,12 @@ const siteworkSchema = new mongoose.Schema({
     },
     startDate: { type: Date },
     endDate: { type: Date },
+    workingHoursPerDay: { 
+        type: Number, 
+        default: 8,
+        min: 0,
+        max: 24
+    },
     status: {
         type: String,
         enum: ['not-started', 'in-progress', 'completed', 'cancelled'],

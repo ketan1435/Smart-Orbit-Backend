@@ -53,6 +53,7 @@ export const createSiteworkService = async (req, data, user) => {
         project: data.project,
         startDate: data.startDate,
         endDate: data.endDate,
+        workingHoursPerDay: data.workingHoursPerDay || 8,
         status: data.status,
         assignedUsers: data.assignedUsers,
         attachment: attachmentData,
@@ -75,6 +76,8 @@ export const createSiteworkService = async (req, data, user) => {
                 project: data.project,
                 assignedAmount: assigned.assignmentAmount,
                 perDayAmount: assigned.perDayAmount,
+                sitework: sitework._id,
+                siteworkName: sitework.name,
             });
             paymentRecords.push(paymentRecord);
         }
@@ -250,6 +253,7 @@ export const updateSiteworkService = async (req, id, data, user) => {
     if (data.description !== undefined) sitework.description = data.description;
     if (data.assignedUsers !== undefined) sitework.assignedUsers = data.assignedUsers;
     if (data.endDate !== undefined) sitework.endDate = data.endDate;
+    if (data.workingHoursPerDay !== undefined) sitework.workingHoursPerDay = data.workingHoursPerDay;
     if (data.status !== undefined) sitework.status = data.status;
 
     // Update assignment payment details
@@ -417,7 +421,7 @@ export const getSiteworksByProjectService = async (projectId, user) => {
     }
     const siteworks = await Sitework.find(filter)
         .sort({ sequence: 1, createdAt: 1 })
-        .select('name description status startDate endDate assignedUsers sequence isActive siteworkDocuments attachment')
+        .select('name description status startDate endDate workingHoursPerDay assignedUsers sequence isActive siteworkDocuments attachment')
         .populate('assignedUsers', 'name email role');
 
     // Populate attachment.uploadedBy for each sitework

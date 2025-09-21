@@ -86,6 +86,11 @@ export const queryWalletTransactions = async (filter, options) => {
         }
     }
 
+    // Handle bonus payment filtering
+    if (filter.isBonus !== undefined) {
+        mongoFilter.isBonus = filter.isBonus;
+    }
+
     const transactions = await WalletTransaction.find(mongoFilter)
         .populate({
             path: 'userId',
@@ -153,15 +158,21 @@ export const getWalletTransactionById = async (id) => {
  */
 export const createWalletTransaction = async (transactionBody) => {
     // If a projectAssignmentPaymentId is provided, deduct the amount from its remainingAmount atomically
-    const { projectAssignmentPaymentId, amount } = transactionBody;
+    const { projectAssignmentPaymentId, amount, isBonus } = transactionBody;
 
     if (!projectAssignmentPaymentId) {
-    const transaction = await WalletTransaction.create(transactionBody);
-    return transaction;
+        const transaction = await WalletTransaction.create(transactionBody);
+        return transaction;
     }
 
     if (typeof amount !== 'number' || Number.isNaN(amount) || amount <= 0) {
         throw new ApiError(httpStatus.BAD_REQUEST, 'Amount must be a positive number');
+    }
+
+    // For bonus payments, don't deduct from project assignment remaining amount
+    if (isBonus) {
+        const transaction = await WalletTransaction.create(transactionBody);
+        return transaction;
     }
 
     const session = await mongoose.startSession();
@@ -234,12 +245,12 @@ export const deleteWalletTransactionById = async (transactionId) => {
  */
 export const getUserWalletTransactions = async (userId, options) => {
     const filter = { userId };
-    
+
     // Add projectName filter if provided
     if (options.projectName) {
         filter.projectName = options.projectName;
     }
-    
+
     return queryWalletTransactions(filter, options);
 };
 

@@ -12,6 +12,7 @@ export const getWalletTransactions = {
         maxAmount: Joi.number().min(0).description('Maximum amount filter'),
         startDate: Joi.date().description('Start date for date range filter'),
         endDate: Joi.date().description('End date for date range filter'),
+        isBonus: Joi.boolean().description('Filter by bonus payment status'),
         sortBy: Joi.string(),
         limit: Joi.number().integer(),
         page: Joi.number().integer(),
@@ -37,6 +38,7 @@ export const createWalletTransaction = {
         requirement: Joi.string().custom(objectId).optional(),
         description: Joi.string().required().trim(),
         notes: Joi.string().allow('').trim(),
+        isBonus: Joi.boolean().default(false),
         createdBy: Joi.string().custom(objectId).optional(),
         createdByModel: Joi.string().valid('Admin', 'User').optional(),
     }),
@@ -52,6 +54,7 @@ export const updateWalletTransaction = {
             currency: Joi.string().valid('INR', 'USD', 'EUR'),
             description: Joi.string().trim(),
             notes: Joi.string().allow('').trim(),
+            isBonus: Joi.boolean(),
         })
         .min(1),
 };

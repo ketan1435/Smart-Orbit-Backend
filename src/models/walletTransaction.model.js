@@ -16,6 +16,7 @@ const walletTransactionSchema = new mongoose.Schema({
             'SITE_ENGINEER_PAYMENT',    // Site engineer assignment payment
             'ARCHITECT_PAYMENT',        // Architect payment
             'PROCURERMENT_PAYMENT',     // Procurment payment
+            'WORKER_PAYMENT',           // Worker payment
         ],
         required: true
     },
@@ -66,6 +67,12 @@ const walletTransactionSchema = new mongoose.Schema({
     notes: {
         type: String,
         trim: true
+    },
+
+    // Bonus payment indicator
+    isBonus: {
+        type: Boolean,
+        default: false
     },
 
     // Who created/processed this transaction
