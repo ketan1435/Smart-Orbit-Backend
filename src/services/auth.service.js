@@ -26,6 +26,10 @@ export const loginUserWithEmailAndPassword = async (email, password) => {
     if (!user || !(await user.isPasswordMatch(password))) {
       throw new ApiError(httpStatus.UNAUTHORIZED, 'Incorrect email or password');
     }
+    // if user is not active, throw an error
+    if (!user.isActive) {
+      throw new ApiError(httpStatus.UNAUTHORIZED, 'User is not active');
+    }
   }
   delete user.password;
   const tokens = await tokenService.generateAuthTokens(user);

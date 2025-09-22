@@ -4,7 +4,7 @@ import ApiError from '../utils/ApiError.js';
 import catchAsync from '../utils/catchAsync.js';
 import fs from 'fs';
 import { userService } from '../services/index.js';
-import { createWorkerBySiteEngineerService, getWorkersBySiteEngineerService, updateWorkerBySiteEngineerService, activateWorkerBySiteEngineerService, deactivateWorkerBySiteEngineerService, getScpUsersService, generateSampleUsersCSV, importUsersService, generateSampleWorkersCSV, importWorkersBySiteEngineerService } from '../services/user.service.js';
+import { createWorkerBySiteEngineerService, getWorkersBySiteEngineerService, updateWorkerBySiteEngineerService, activateWorkerBySiteEngineerService, deactivateWorkerBySiteEngineerService, getScpUsersService, generateSampleUsersCSV, importUsersService, generateSampleWorkersCSV, importWorkersBySiteEngineerService, exportWorkersBySiteEngineerService } from '../services/user.service.js';
 
 const createUser = catchAsync(async (req, res) => {
   const user = await userService.createUser(req, req.body);
@@ -59,6 +59,7 @@ export const deactivateUserController = catchAsync(async (req, res) => {
 
 export const exportUsersController = catchAsync(async (req, res) => {
   const filter = pick(req.query, ['name', 'role', 'isActive']);
+  const selectedFields = req.query.fields ? req.query.fields.split(',').map(field => field.trim()) : [];
 
   if (filter.role && typeof filter.role === 'string') {
     filter.role = filter.role.split(',').map(role => role.trim());
@@ -87,7 +88,7 @@ export const exportUsersController = catchAsync(async (req, res) => {
     filter.createdAt = { $gte: rangeStart, $lte: rangeEnd };
   }
 
-  const fileBuffer = await userService.exportUsersService(filter);
+  const fileBuffer = await userService.exportUsersService(filter, selectedFields);
 
   if (!fileBuffer) {
     throw new ApiError(httpStatus.NOT_FOUND, 'No users found for the selected criteria.');
@@ -288,6 +289,32 @@ const importWorkersController = catchAsync(async (req, res) => {
   });
 });
 
+// Export workers for site engineers
+const exportWorkersController = catchAsync(async (req, res) => {
+  const filter = pick(req.query, ['name', 'isActive']);
+  const selectedFields = req.query.fields ? req.query.fields.split(',').map(field => field.trim()) : [];
+
+  // Only apply isActive filter if it's explicitly provided in the query
+  if (req.query.isActive !== undefined && req.query.isActive !== null) {
+    filter.isActive = req.query.isActive === 'true';
+  } else {
+    delete filter.isActive;
+  }
+
+  const fileBuffer = await exportWorkersBySiteEngineerService(filter, req.user.id, selectedFields);
+
+  if (!fileBuffer) {
+    return res.status(httpStatus.NOT_FOUND).send({
+      status: 0,
+      message: 'No workers found to export'
+    });
+  }
+
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename="workers_export.xlsx"');
+  res.send(fileBuffer);
+});
+
 export {
   createUser,
   getUsers,
@@ -301,4 +328,5 @@ export {
   importUsersController,
   downloadSampleWorkersController,
   importWorkersController,
+  exportWorkersController,
 };

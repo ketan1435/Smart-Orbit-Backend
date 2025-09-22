@@ -978,4 +978,10 @@ router.post(
   userController.importWorkersController
 );
 
+router.get(
+  '/site-engineer/workers/export',
+  auth('manageWorkers'),
+  userController.exportWorkersController
+);
+
 export default router; 

@@ -641,27 +641,43 @@ export const deactivateUser = async (req, userId) => {
   return user;
 };
 
-export const exportUsersService = async (filter = {}) => {
+export const exportUsersService = async (filter = {}, selectedFields = []) => {
   const users = await User.find(filter).lean();
 
   if (users.length === 0) {
     return null;
   }
 
-  const worksheetData = users.map((user) => ({
-    Name: user.name,
-    Email: user.email,
-    Role: user.role,
-    'Phone Number': user.phoneNumber,
-    City: user.city,
-    Region: user.region,
-    Address: user.address,
-    Education: user.education,
-    Experience: user.experience,
-    'Active Status': user.isActive ? 'Active' : 'Inactive',
-    'Email Verified': user.isEmailVerified ? 'Yes' : 'No',
-    'Joined Date': user.createdAt,
-  }));
+  // Default fields if none selected
+  const defaultFields = [
+    'name', 'email', 'role', 'phoneNumber', 'city', 'region', 'address',
+    'education', 'experience', 'isActive', 'isEmailVerified', 'createdAt'
+  ];
+
+  const fieldsToExport = selectedFields.length > 0 ? selectedFields : defaultFields;
+
+  const worksheetData = users.map((user) => {
+    const row = {};
+
+    if (fieldsToExport.includes('name')) row.Name = user.name;
+    if (fieldsToExport.includes('email')) row.Email = user.email;
+    if (fieldsToExport.includes('role')) row.Role = user.role;
+    if (fieldsToExport.includes('subRole')) row['Custom Role'] = user.subRole || '';
+    if (fieldsToExport.includes('phoneNumber')) row['Phone Number'] = user.phoneNumber;
+    if (fieldsToExport.includes('mobileNumber')) row['Mobile Number'] = user.mobileNumber;
+    if (fieldsToExport.includes('state')) row.State = user.state;
+    if (fieldsToExport.includes('city')) row.City = user.city;
+    if (fieldsToExport.includes('region')) row.Region = user.region;
+    if (fieldsToExport.includes('address')) row.Address = user.address;
+    if (fieldsToExport.includes('education')) row.Education = user.education;
+    if (fieldsToExport.includes('experience')) row.Experience = user.experience;
+    if (fieldsToExport.includes('isActive')) row['Active Status'] = user.isActive ? 'Active' : 'Inactive';
+    if (fieldsToExport.includes('isEmailVerified')) row['Email Verified'] = user.isEmailVerified ? 'Yes' : 'No';
+    if (fieldsToExport.includes('createdAt')) row['Created Date'] = user.createdAt;
+    if (fieldsToExport.includes('createdBy')) row['Created By'] = user.createdBy;
+
+    return row;
+  });
 
   const worksheet = xlsx.utils.json_to_sheet(worksheetData);
   const workbook = xlsx.utils.book_new();
@@ -844,7 +860,7 @@ export const getWorkersBySiteEngineerService = async (siteEngineerId, query) => 
   const skip = (parseInt(page) - 1) * parseInt(limit);
   const [users, total] = await Promise.all([
     User.find(filter)
-      .select('name email mobileNumber role subRole state city region address education experience isActive createdAt')
+      .select('_id name email mobileNumber role subRole state city region address phoneNumber education experience isActive createdAt')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit)),
@@ -1750,6 +1766,94 @@ export const importUsersService = async (filePath, req) => {
   }
 
   return { importedCount, errors };
+};
+
+// Export workers for site engineers
+
+export const exportWorkersBySiteEngineerService = async (filter = {}, siteEngineerId, selectedFields = []) => {
+  // Filter workers created by this site engineer with custom roles
+  const workersFilter = {
+    ...filter,
+    createdBy: siteEngineerId,
+    role: { $in: ['custom'] }
+  };
+
+  const workers = await User.find(workersFilter).lean();
+
+  if (workers.length === 0) {
+    return null;
+  }
+
+  // Default fields if none selected
+  const defaultFields = [
+    'name', 'email', 'role', 'subRole', 'phoneNumber', 'state', 'city', 'region',
+    'address', 'education', 'experience', 'isActive', 'isEmailVerified', 'createdAt'
+  ];
+
+  const fieldsToExport = selectedFields.length > 0 ? selectedFields : defaultFields;
+
+  const worksheetData = workers.map((worker) => {
+    const row = {};
+
+    if (fieldsToExport.includes('name')) row.Name = worker.name;
+    if (fieldsToExport.includes('email')) row.Email = worker.email;
+    if (fieldsToExport.includes('role')) row.Role = worker.role;
+    if (fieldsToExport.includes('subRole')) row['Custom Role'] = worker.subRole || '';
+    if (fieldsToExport.includes('phoneNumber')) row['Phone Number'] = worker.phoneNumber;
+    if (fieldsToExport.includes('mobileNumber')) row['Mobile Number'] = worker.mobileNumber;
+    if (fieldsToExport.includes('state')) row.State = worker.state;
+    if (fieldsToExport.includes('city')) row.City = worker.city;
+    if (fieldsToExport.includes('region')) row.Region = worker.region;
+    if (fieldsToExport.includes('address')) row.Address = worker.address;
+    if (fieldsToExport.includes('education')) row.Education = worker.education;
+    if (fieldsToExport.includes('experience')) row.Experience = worker.experience;
+    if (fieldsToExport.includes('isActive')) row['Active Status'] = worker.isActive ? 'Active' : 'Inactive';
+    if (fieldsToExport.includes('isEmailVerified')) row['Email Verified'] = worker.isEmailVerified ? 'Yes' : 'No';
+    if (fieldsToExport.includes('createdAt')) row['Created Date'] = worker.createdAt ? new Date(worker.createdAt) : '';
+    if (fieldsToExport.includes('createdBy')) row['Created By'] = worker.createdBy;
+
+    return row;
+  });
+
+  const worksheet = xlsx.utils.json_to_sheet(worksheetData, {
+    header: [
+      'Name', 'Email', 'Role', 'Custom Role', 'Phone Number', 'State', 'City',
+      'Region', 'Address', 'Education', 'Experience', 'Active Status',
+      'Email Verified', 'Created Date'
+    ]
+  });
+
+  const workbook = xlsx.utils.book_new();
+  xlsx.utils.book_append_sheet(workbook, worksheet, 'Workers');
+
+  // Set column widths
+  worksheet['!cols'] = [
+    { wch: 25 }, // Name
+    { wch: 30 }, // Email
+    { wch: 15 }, // Role
+    { wch: 20 }, // Custom Role
+    { wch: 20 }, // Phone Number
+    { wch: 15 }, // State
+    { wch: 15 }, // City
+    { wch: 15 }, // Region
+    { wch: 30 }, // Address
+    { wch: 20 }, // Education
+    { wch: 20 }, // Experience
+    { wch: 15 }, // Active Status
+    { wch: 15 }, // Email Verified
+    { wch: 20 }  // Created Date
+  ];
+
+  // Apply date format to the Created Date column (index 13 = column N)
+  workers.forEach((_worker, index) => {
+    const cellRef = xlsx.utils.encode_cell({ c: 13, r: index + 1 }); // row +1 to skip header
+    if (worksheet[cellRef]) {
+      worksheet[cellRef].t = 'd'; // explicitly mark as date
+      worksheet[cellRef].z = 'yyyy-mm-dd';
+    }
+  });
+
+  return xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' });
 };
 
 // Helper function to normalize user headers
