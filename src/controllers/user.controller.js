@@ -2,8 +2,9 @@ import httpStatus from 'http-status';
 import pick from '../utils/pick.js';
 import ApiError from '../utils/ApiError.js';
 import catchAsync from '../utils/catchAsync.js';
+import fs from 'fs';
 import { userService } from '../services/index.js';
-import { createWorkerBySiteEngineerService, getWorkersBySiteEngineerService, updateWorkerBySiteEngineerService, activateWorkerBySiteEngineerService, deactivateWorkerBySiteEngineerService, getScpUsersService } from '../services/user.service.js';
+import { createWorkerBySiteEngineerService, getWorkersBySiteEngineerService, updateWorkerBySiteEngineerService, activateWorkerBySiteEngineerService, deactivateWorkerBySiteEngineerService, getScpUsersService, generateSampleUsersCSV, importUsersService, generateSampleWorkersCSV, importWorkersBySiteEngineerService } from '../services/user.service.js';
 
 const createUser = catchAsync(async (req, res) => {
   const user = await userService.createUser(req, req.body);
@@ -228,6 +229,65 @@ export const getScpUsers = catchAsync(async (req, res) => {
   res.send({ status: 1, users });
 });
 
+// Download sample users CSV
+const downloadSampleUsersController = catchAsync(async (req, res) => {
+  const fileBuffer = generateSampleUsersCSV();
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename="users_sample.xlsx"');
+  res.send(fileBuffer);
+});
+
+// Import users from Excel/CSV
+const importUsersController = catchAsync(async (req, res) => {
+  if (!req.file) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'No file uploaded');
+  }
+
+  const result = await importUsersService(req.file.path, req);
+
+  // Clean up the uploaded file
+  if (fs.existsSync(req.file.path)) {
+    fs.unlinkSync(req.file.path);
+  }
+
+  res.send({
+    status: 1,
+    message: `${result.importedCount} users imported successfully.`,
+    importedCount: result.importedCount,
+    errors: result.errors
+  });
+});
+
+// Download sample workers CSV for site engineers
+const downloadSampleWorkersController = catchAsync(async (req, res) => {
+  const csvBuffer = generateSampleWorkersCSV();
+
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename=workers_sample.xlsx');
+  res.send(csvBuffer);
+});
+
+// Import workers for site engineers
+const importWorkersController = catchAsync(async (req, res) => {
+  if (!req.file) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'No file uploaded');
+  }
+
+  const result = await importWorkersBySiteEngineerService(req.file.path, req);
+
+  // Clean up the uploaded file
+  if (req.file && req.file.path) {
+    fs.unlinkSync(req.file.path);
+  }
+
+  res.send({
+    status: 1,
+    message: `${result.importedCount} workers imported successfully.`,
+    importedCount: result.importedCount,
+    errors: result.errors
+  });
+});
+
 export {
   createUser,
   getUsers,
@@ -237,4 +297,8 @@ export {
   searchUsers,
   getMySiteVisits,
   getSiteEngineers,
+  downloadSampleUsersController,
+  importUsersController,
+  downloadSampleWorkersController,
+  importWorkersController,
 };

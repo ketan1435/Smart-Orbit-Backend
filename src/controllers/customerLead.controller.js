@@ -196,11 +196,11 @@ export const importCustomerLeadsController = catchAsync(async (req, res) => {
 });
 
 export const downloadSampleCustomerLeadsController = catchAsync(async (req, res) => {
-  const csvBuffer = generateSampleCustomerLeadsCSV();
+  const fileBuffer = generateSampleCustomerLeadsCSV();
 
-  res.setHeader('Content-Type', 'text/csv');
-  res.setHeader('Content-Disposition', 'attachment; filename="customer_leads_sample.csv"');
-  res.send(csvBuffer);
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename="customer_leads_sample.xlsx"');
+  res.send(fileBuffer);
 });
 
 export const exportCustomerLeadsController = catchAsync(async (req, res) => {

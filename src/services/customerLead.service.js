@@ -2426,12 +2426,16 @@ const normalizeHeaders = (headers) => {
     customerName: ['customername', 'customer name', 'name'],
     mobileNumber: ['mobilenumber', 'mobile number', 'mobile'],
     alternateContactNumber: ['alternatecontactnumber', 'alternate contact'],
+    whatsappNumber: ['whatsappnumber', 'whatsapp number', 'whatsapp'],
     email: ['email', 'email address'],
+    preferredLanguages: ['preferredlanguages', 'preferred languages', 'languages'],
     state: ['state'],
     city: ['city'],
+    town: ['town', 'townvillage', 'town village'],
 
     // Requirement specific
     requirementType: ['requirementtype', 'requirement type'],
+    projectName: ['projectname', 'project name'],
     otherRequirement: ['otherrequirement', 'other requirement'],
     requirementDescription: ['requirementdescription', 'requirement description'],
     urgency: ['urgency'],
@@ -2463,7 +2467,13 @@ const normalizeHeaders = (headers) => {
 
   const mapping = {};
   headers.forEach((header, index) => {
-    const cleanHeader = header.toLowerCase().replace(/\s+/g, '');
+    // Clean header by removing (MANDATORY), (OPTIONAL) tags and extra spaces
+    const cleanHeader = header.toLowerCase()
+      .replace(/\s*\(mandatory\)\s*/gi, '')
+      .replace(/\s*\(optional\)\s*/gi, '')
+      .replace(/\s+/g, '')
+      .trim();
+
     for (const key in headerMap) {
       if (headerMap[key].includes(cleanHeader)) {
         mapping[key] = index;
@@ -2488,10 +2498,81 @@ const generatePassword = (customerName) => {
   return `${firstWord}@123`;
 };
 
+// Field validation options (matching CustomerLeadForm)
+const leadSourceOptions = ['Meta Ads', 'WhatsApp', 'Instagram', 'Referral'];
+const languageOptions = ['English', 'Hindi', 'Marathi'];
+const urgencyOptions = ['Immediate', 'Within 1 month', '2-3 months', 'Not Sure'];
+const requirementTypeOptions = [
+  'Cottage / Structure Proposal',
+  'Manpower Requirement',
+  'Tourism Consultancy',
+  'Wants to Invest in Tourism Project',
+  'Wants to Invest in Smart Orbiters',
+  'Seeks Tourism Infrastructure Development',
+  'Other'
+];
+
+// Normalize urgency values to standard format
+const normalizeUrgency = (urgency) => {
+  if (!urgency) return urgency;
+
+  const urgencyLower = urgency.toLowerCase().trim();
+
+  // Map common variations to standard values
+  if (urgencyLower.includes('immediate') || urgencyLower.includes('urgent') || urgencyLower === 'high') {
+    return 'Immediate';
+  } else if (urgencyLower.includes('1 month') || urgencyLower.includes('within 1 month')) {
+    return 'Within 1 month';
+  } else if (urgencyLower.includes('2-3') || urgencyLower.includes('2 to 3') || urgencyLower.includes('2 months') || urgencyLower === 'medium') {
+    return '2-3 months';
+  } else if (urgencyLower.includes('not sure') || urgencyLower.includes('unsure') || urgencyLower === 'low') {
+    return 'Not Sure';
+  }
+
+  return urgency; // Return original if no match
+};
+
+// Validate field values against allowed options (lenient validation)
+const validateFieldOptions = (fieldName, value) => {
+  if (!value) return true; // Empty values are allowed
+
+  switch (fieldName) {
+    case 'leadSource':
+      // Allow any non-empty value for lead source
+      return value.trim() !== '';
+    case 'preferredLanguages':
+      // Allow any languages, just check they're not empty
+      const languages = value.split(',').map(lang => lang.trim());
+      return languages.every(lang => lang.trim() !== '');
+    case 'urgency':
+      // Allow common urgency variations
+      const urgencyLower = value.toLowerCase().trim();
+      return urgencyOptions.some(option =>
+        option.toLowerCase() === urgencyLower ||
+        urgencyLower.includes('immediate') ||
+        urgencyLower.includes('high') ||
+        urgencyLower.includes('urgent') ||
+        urgencyLower.includes('medium') ||
+        urgencyLower.includes('low') ||
+        urgencyLower.includes('month') ||
+        urgencyLower.includes('sure')
+      );
+    case 'requirementType':
+      // Allow any non-empty requirement type
+      return value.trim() !== '';
+    default:
+      return true;
+  }
+};
+
 // Helper function to process requirement and create project (extracted from createCustomerLeadService)
 const processRequirementAndProject = async (req, lead, requirementData, session) => {
   const requirementId = new mongoose.Types.ObjectId();
   const files = [];
+
+  // Check if req.user exists, if not use a default admin user ID
+  const createdBy = req?.user?.id || '000000000000000000000000'; // Default admin ID
+  const createdByModel = req?.user?.constructor?.modelName || 'Admin';
 
   // Handle file processing if needed (for now, empty files array)
   const fileKeys = {
@@ -2532,8 +2613,8 @@ const processRequirementAndProject = async (req, lead, requirementData, session)
     requirement: requirementId,
     lead: lead._id,
     budget: requirementData.budget ? parseFloat(requirementData.budget.replace(/[^0-9.-]+/g, '')) : 0,
-    createdBy: req.user.id,
-    createdByModel: req.user.constructor.modelName,
+    createdBy: createdBy,
+    createdByModel: createdByModel,
   }, session);
 
   // Update the requirement with the project ID
@@ -2556,13 +2637,18 @@ export const importCustomerLeadsService = async (filePath, req) => {
   const worksheet = workbook.Sheets[sheetName];
   const data = xlsx.utils.sheet_to_json(worksheet, { header: 1, cellDates: true, raw: false });
 
+  // Check if req.user exists, if not use a default admin user ID
+  const createdBy = req?.user?.id || '000000000000000000000000'; // Default admin ID
+  const createdByModel = req?.user?.role === 'Admin' ? 'Admin' : 'User';
+
   if (data.length < 2) {
     return { importedCount: 0, errors: [] };
   }
 
   const headers = data[0];
   const headerMapping = normalizeHeaders(headers);
-  const rows = data.slice(1);
+  // Skip the first row (headers) and second row (options/instructions)
+  const rows = data.slice(2);
 
   const leadsByCustomer = new Map();
   const errors = [];
@@ -2583,28 +2669,73 @@ export const importCustomerLeadsService = async (filePath, req) => {
 
     // Use a unique identifier for the customer, e.g., email or mobile.
     // Fallback to customer name if others are not present.
-    const customerId = getVal('email') || getVal('mobileNumber') || getVal('customerName');
+    const email = getVal('email');
+    const mobileNumber = getVal('mobileNumber');
+    const customerName = getVal('customerName');
 
-    if (!customerId) {
-      errors.push({ row: index + 2, error: 'Missing customer identifier (Email, Mobile, or Name).' });
+    // More lenient customer identification - allow partial matches
+    const customerId = email || mobileNumber || customerName || `customer_${index + 3}`;
+
+    // Only require customer name if no other identifier is present
+    if (!customerName && !email && !mobileNumber) {
+      errors.push({ row: index + 3, error: 'Missing customer identifier (Email, Mobile, or Name). At least one is required.' });
+      return;
+    }
+
+    // Get and normalize field values
+    const leadSource = getVal('leadSource');
+    const preferredLanguages = getVal('preferredLanguages');
+    const urgency = getVal('urgency');
+    const requirementType = getVal('requirementType');
+
+    // Normalize urgency values to standard format
+    const normalizedUrgency = normalizeUrgency(urgency);
+
+    // Get other required fields
+    const alternateContactNumber = getVal('alternateContactNumber');
+    const whatsappNumber = getVal('whatsappNumber');
+    const state = getVal('state');
+    const city = getVal('city');
+    const town = getVal('town');
+    const googleLocationLink = getVal('googleLocationLink');
+    const projectName = getVal('projectName');
+    const requirementDescription = getVal('requirementDescription');
+    const budget = getVal('budget');
+
+    if (leadSource && !validateFieldOptions('leadSource', leadSource)) {
+      errors.push({ row: index + 3, error: `Invalid leadSource: ${leadSource}. Please provide a valid lead source.` });
+      return;
+    }
+
+    if (preferredLanguages && !validateFieldOptions('preferredLanguages', preferredLanguages)) {
+      errors.push({ row: index + 3, error: `Invalid preferredLanguages: ${preferredLanguages}. Please provide comma-separated language values.` });
+      return;
+    }
+
+    if (urgency && !validateFieldOptions('urgency', normalizedUrgency)) {
+      errors.push({ row: index + 3, error: `Invalid urgency: ${urgency}. Please use values like: Immediate, High, Medium, Low, Within 1 month, 2-3 months, Not Sure.` });
+      return;
+    }
+
+    if (requirementType && !validateFieldOptions('requirementType', requirementType)) {
+      errors.push({ row: index + 3, error: `Invalid requirementType: ${requirementType}. Please provide a valid requirement type.` });
       return;
     }
 
     if (!leadsByCustomer.has(customerId)) {
-      const customerName = getVal('customerName');
       leadsByCustomer.set(customerId, {
-        leadSource: getVal('leadSource') || 'Meta Ads',
+        leadSource: leadSource || 'Meta Ads',
         customerName: customerName,
-        mobileNumber: getVal('mobileNumber'),
-        alternateContactNumber: getVal('alternateContactNumber'),
-        whatsappNumber: getVal('whatsappNumber'),
-        preferredLanguages: getVal('preferredLanguages'),
-        email: getVal('email'),
-        state: getVal('state'),
-        city: getVal('city'),
-        town: getVal('town'),
-        townVillage: getVal('town'),
-        googleLocationLink: getVal('googleLocationLink'),
+        mobileNumber: mobileNumber,
+        alternateContactNumber: alternateContactNumber,
+        whatsappNumber: whatsappNumber,
+        preferredLanguages: preferredLanguages,
+        email: email,
+        state: state,
+        city: city,
+        town: town,
+        townVillage: town,
+        googleLocationLink: googleLocationLink,
         status: STATUS_ENUM.INPROGRESS,
         password: generatePassword(customerName), // Auto-generate password
         requirements: [],
@@ -2613,15 +2744,15 @@ export const importCustomerLeadsService = async (filePath, req) => {
     }
 
     const customerData = leadsByCustomer.get(customerId);
-    customerData._sourceRows.push(index + 2); // Store original row number (2-based index)
+    customerData._sourceRows.push(index + 3); // Store original row number (3-based index, skipping headers and options)
 
     // Simplified requirement data - only basic fields
     const requirement = {
-      projectName: getVal('projectName'),
-      requirementType: getVal('requirementType'),
-      requirementDescription: getVal('requirementDescription'),
-      urgency: getVal('urgency'),
-      budget: getVal('budget') ? getVal('budget').toString() : undefined,
+      projectName: projectName,
+      requirementType: requirementType,
+      requirementDescription: requirementDescription,
+      urgency: normalizedUrgency || urgency, // Use normalized urgency if available
+      budget: budget ? budget.toString() : undefined,
       scpData: {}, // Empty SCP data for simplified import
     };
 
@@ -2655,8 +2786,8 @@ export const importCustomerLeadsService = async (filePath, req) => {
 
           const leadPayloadData = {
             ...basicLeadInfo,
-            createdBy: req.user.id,
-            createdByModel: req.user.role === 'Admin' ? 'Admin' : 'User',
+            createdBy: createdBy,
+            createdByModel: createdByModel,
             status: STATUS_ENUM.INPROGRESS,
             requirements: [],
           };
@@ -2707,26 +2838,45 @@ export const importCustomerLeadsService = async (filePath, req) => {
 
 export const generateSampleCustomerLeadsCSV = () => {
   const sampleData = [
-    // Headers - Basic Information Only
+    // Headers with field type indicators
     [
-      'customerName',
-      'email',
-      'mobileNumber',
-      'alternateContactNumber',
-      'whatsappNumber',
-      'preferredLanguages',
-      'leadSource',
-      'state',
-      'city',
-      'town',
-      'googleLocationLink',
-      'requirementType',
-      'projectName',
-      'requirementDescription',
-      'urgency',
-      'budget'
+      'customerName (MANDATORY)',
+      'email (MANDATORY)',
+      'mobileNumber (MANDATORY)',
+      'alternateContactNumber (OPTIONAL)',
+      'whatsappNumber (OPTIONAL)',
+      'preferredLanguages (OPTIONAL)',
+      'leadSource (MANDATORY)',
+      'state (MANDATORY)',
+      'city (MANDATORY)',
+      'town (OPTIONAL)',
+      'googleLocationLink (OPTIONAL)',
+      'requirementType (MANDATORY)',
+      'projectName (MANDATORY)',
+      'requirementDescription (MANDATORY)',
+      'urgency (MANDATORY)',
+      'budget (MANDATORY)'
     ],
-    // Sample data row 1
+    // Field options and validation rules
+    [
+      'Enter Full Name',
+      'Enter Email Address',
+      'Enter Contact Number',
+      'Enter Alternate Contact Number',
+      'Enter WhatsApp Number',
+      'English, Hindi, Marathi (comma-separated)',
+      'Meta Ads, WhatsApp, Instagram, Referral',
+      'Maharashtra, Karnataka, Delhi, Gujarat, Tamil Nadu, etc.',
+      'Mumbai, Bangalore, New Delhi, Ahmedabad, Chennai, etc.',
+      'Enter Town/Village Name',
+      'Enter Google Maps Link',
+      'Cottage / Structure Proposal, Manpower Requirement, Tourism Consultancy, etc.',
+      'Enter Project Name',
+      'Enter Project Description',
+      'Immediate, Within 1 month, 2-3 months, Not Sure',
+      'Enter Budget Amount (numbers only)'
+    ],
+    // Sample data row 1 - Residential Project
     [
       'John Doe',
       'john.doe@example.com',
@@ -2742,10 +2892,10 @@ export const generateSampleCustomerLeadsCSV = () => {
       'Cottage / Structure Proposal',
       'Residential Villa Project',
       'Need a 3BHK villa with modern amenities',
-      'High',
+      'Immediate',
       '5000000'
     ],
-    // Sample data row 2
+    // Sample data row 2 - Commercial Project
     [
       'Jane Smith',
       'jane.smith@example.com',
@@ -2758,19 +2908,200 @@ export const generateSampleCustomerLeadsCSV = () => {
       'Bangalore',
       'Whitefield',
       'https://maps.google.com/example2',
-      'Commercial',
+      'Manpower Requirement',
       'Office Space Project',
       'Need office space for 50 employees',
-      'Medium',
+      'Within 1 month',
       '10000000'
+    ],
+    // Sample data row 3 - Different Lead Source
+    [
+      'Rajesh Kumar',
+      'rajesh.kumar@example.com',
+      '9876543213',
+      '9876543214',
+      '9876543213',
+      'Hindi,English',
+      'WhatsApp',
+      'Delhi',
+      'New Delhi',
+      'Connaught Place',
+      'https://maps.google.com/example3',
+      'Tourism Consultancy',
+      'Home Renovation Project',
+      'Complete home renovation with modern design',
+      '2-3 months',
+      '2000000'
+    ],
+    // Sample data row 4 - Instagram Lead
+    [
+      'Priya Sharma',
+      'priya.sharma@example.com',
+      '9876543215',
+      '',
+      '9876543215',
+      'English',
+      'Instagram',
+      'Gujarat',
+      'Ahmedabad',
+      'Vastrapur',
+      'https://maps.google.com/example4',
+      'Wants to Invest in Tourism Project',
+      'Modern Interior Design',
+      'Complete interior design for 2BHK apartment',
+      'Not Sure',
+      '1500000'
     ]
   ];
 
   const worksheet = xlsx.utils.aoa_to_sheet(sampleData);
+
+  // Set column widths for better readability
+  const columnWidths = [
+    { wch: 25 }, // customerName
+    { wch: 30 }, // email
+    { wch: 18 }, // mobileNumber
+    { wch: 30 }, // alternateContactNumber
+    { wch: 22 }, // whatsappNumber
+    { wch: 35 }, // preferredLanguages
+    { wch: 15 }, // leadSource
+    { wch: 20 }, // state
+    { wch: 20 }, // city
+    { wch: 20 }, // town
+    { wch: 40 }, // googleLocationLink
+    { wch: 30 }, // requirementType
+    { wch: 30 }, // projectName
+    { wch: 40 }, // requirementDescription
+    { wch: 15 }, // urgency
+    { wch: 15 }  // budget
+  ];
+
+  worksheet['!cols'] = columnWidths;
+
+  // Add data validation for dropdown options
+  const dataValidation = [];
+
+  // Lead Source dropdown (Column G)
+  dataValidation.push({
+    ref: 'G3:G1000', // Apply to all data rows
+    type: 'list',
+    allowBlank: false,
+    showDropDown: true,
+    formula1: '"Meta Ads,WhatsApp,Instagram,Referral"'
+  });
+
+  // Preferred Languages dropdown (Column F)
+  dataValidation.push({
+    ref: 'F3:F1000',
+    type: 'list',
+    allowBlank: true,
+    showDropDown: true,
+    formula1: '"English,Hindi,Marathi"'
+  });
+
+  // State dropdown (Column H) - Major Indian states
+  dataValidation.push({
+    ref: 'H3:H1000',
+    type: 'list',
+    allowBlank: false,
+    showDropDown: true,
+    formula1: '"Maharashtra,Karnataka,Delhi,Gujarat,Tamil Nadu,West Bengal,Uttar Pradesh,Rajasthan,Madhya Pradesh,Andhra Pradesh,Telangana,Kerala,Punjab,Haryana,Bihar,Odisha,Assam,Chhattisgarh,Jharkhand,Uttarakhand,Himachal Pradesh,Tripura,Meghalaya,Manipur,Nagaland,Goa,Arunachal Pradesh,Mizoram,Sikkim"'
+  });
+
+  // Requirement Type dropdown (Column L)
+  dataValidation.push({
+    ref: 'L3:L1000',
+    type: 'list',
+    allowBlank: false,
+    showDropDown: true,
+    formula1: '"Cottage / Structure Proposal,Manpower Requirement,Tourism Consultancy,Wants to Invest in Tourism Project,Wants to Invest in Smart Orbiters,Seeks Tourism Infrastructure Development,Other"'
+  });
+
+  // Urgency dropdown (Column O)
+  dataValidation.push({
+    ref: 'O3:O1000',
+    type: 'list',
+    allowBlank: false,
+    showDropDown: true,
+    formula1: '"Immediate,Within 1 month,2-3 months,Not Sure"'
+  });
+
+  // Apply data validation to worksheet
+  worksheet['!dataValidation'] = dataValidation;
+
+  // Style the header row (row 1) and options row (row 2)
+  const headerRow = 1;
+  const optionsRow = 2;
+
+  // Apply styling to header row
+  for (let col = 0; col < sampleData[0].length; col++) {
+    const cellRef = xlsx.utils.encode_cell({ r: headerRow - 1, c: col });
+    if (!worksheet[cellRef]) continue;
+
+    worksheet[cellRef].s = {
+      font: { bold: true, color: { rgb: "FFFFFF" } },
+      fill: { fgColor: { rgb: "366092" } },
+      alignment: { horizontal: "center", vertical: "center" }
+    };
+  }
+
+  // Apply styling to options row
+  for (let col = 0; col < sampleData[1].length; col++) {
+    const cellRef = xlsx.utils.encode_cell({ r: optionsRow - 1, c: col });
+    if (!worksheet[cellRef]) continue;
+
+    worksheet[cellRef].s = {
+      font: { italic: true, color: { rgb: "666666" } },
+      fill: { fgColor: { rgb: "F2F2F2" } },
+      alignment: { horizontal: "center", vertical: "center" }
+    };
+  }
+
+  // Create a helper sheet with all dropdown options
+  const helperData = [
+    ['Field', 'Options', 'Description'],
+    ['Lead Source', 'Meta Ads, WhatsApp, Instagram, Referral', 'Select how the customer found you'],
+    ['Preferred Languages', 'English, Hindi, Marathi', 'Comma-separated for multiple languages'],
+    ['State', 'Maharashtra, Karnataka, Delhi, Gujarat, Tamil Nadu, West Bengal, Uttar Pradesh, Rajasthan, Madhya Pradesh, Andhra Pradesh, Telangana, Kerala, Punjab, Haryana, Bihar, Odisha, Assam, Chhattisgarh, Jharkhand, Uttarakhand, Himachal Pradesh, Tripura, Meghalaya, Manipur, Nagaland, Goa, Arunachal Pradesh, Mizoram, Sikkim', 'Select the state where the customer is located'],
+    ['Requirement Type', 'Cottage / Structure Proposal, Manpower Requirement, Tourism Consultancy, Wants to Invest in Tourism Project, Wants to Invest in Smart Orbiters, Seeks Tourism Infrastructure Development, Other', 'Type of project the customer needs'],
+    ['Urgency', 'Immediate, Within 1 month, 2-3 months, Not Sure', 'How urgent is this project'],
+    ['Budget', 'Enter numeric value only (e.g., 5000000)', 'Project budget in rupees'],
+    ['', '', ''],
+    ['Instructions:', '', ''],
+    ['1. Use the dropdowns in the main sheet for accurate data entry', '', ''],
+    ['2. All MANDATORY fields must be filled', '', ''],
+    ['3. OPTIONAL fields can be left empty', '', ''],
+    ['4. Passwords will be auto-generated as "FirstName@123"', '', ''],
+    ['5. Save as CSV or XLSX format for import', '', '']
+  ];
+
+  const helperWorksheet = xlsx.utils.aoa_to_sheet(helperData);
+
+  // Set column widths for helper sheet
+  helperWorksheet['!cols'] = [
+    { wch: 20 }, // Field
+    { wch: 80 }, // Options
+    { wch: 50 }  // Description
+  ];
+
+  // Style the helper sheet
+  const helperHeaderRow = 1;
+  for (let col = 0; col < 3; col++) {
+    const cellRef = xlsx.utils.encode_cell({ r: helperHeaderRow - 1, c: col });
+    if (helperWorksheet[cellRef]) {
+      helperWorksheet[cellRef].s = {
+        font: { bold: true, color: { rgb: "FFFFFF" } },
+        fill: { fgColor: { rgb: "366092" } },
+        alignment: { horizontal: "center", vertical: "center" }
+      };
+    }
+  }
+
   const workbook = xlsx.utils.book_new();
   xlsx.utils.book_append_sheet(workbook, worksheet, 'Customer Leads Sample');
+  xlsx.utils.book_append_sheet(workbook, helperWorksheet, 'Field Options & Help');
 
-  return xlsx.write(workbook, { type: 'buffer', bookType: 'csv' });
+  return xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' });
 };
 
 export const exportCustomerLeadsService = async (filter = {}) => {

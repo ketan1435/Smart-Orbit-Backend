@@ -1,9 +1,30 @@
 import express from 'express';
+import multer from 'multer';
 import auth from '../../middlewares/auth.js';
 import validate from '../../middlewares/validate.js';
 import { userValidation } from '../../validations/index.js';
 import { userController } from '../../controllers/index.js';
 import { getMySharedRequirementsController } from '../../controllers/customerLead.controller.js';
+
+// Configure multer for file uploads
+const upload = multer({
+  dest: 'uploads/imports/',
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = [
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'text/csv'
+    ];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only Excel and CSV files are allowed.'), false);
+    }
+  },
+  limits: {
+    fileSize: 10 * 1024 * 1024 // 10MB limit
+  }
+});
 
 const router = express.Router();
 
@@ -927,6 +948,34 @@ router.patch(
   auth('resetPassword'),
   validate(userValidation.resetUserPassword),
   userController.resetUserPasswordById
+);
+
+// Import/Export routes
+router.get(
+  '/import/sample',
+  auth('manageUsers'),
+  userController.downloadSampleUsersController
+);
+
+router.post(
+  '/import',
+  auth('manageUsers'),
+  upload.single('file'),
+  userController.importUsersController
+);
+
+// Site Engineer Workers Import/Export routes
+router.get(
+  '/site-engineer/workers/import/sample',
+  auth('manageWorkers'),
+  userController.downloadSampleWorkersController
+);
+
+router.post(
+  '/site-engineer/workers/import',
+  auth('manageWorkers'),
+  upload.single('file'),
+  userController.importWorkersController
 );
 
 export default router; 

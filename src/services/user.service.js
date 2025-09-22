@@ -1,5 +1,6 @@
 import httpStatus from 'http-status';
 import path from 'path';
+import mongoose from 'mongoose';
 import User from '../models/user.model.js';
 import ApiError from '../utils/ApiError.js';
 import storage from '../factory/storage.factory.js';
@@ -686,9 +687,9 @@ export const createWorkerBySiteEngineerService = async (req, data, siteEngineerI
     throw new ApiError(httpStatus.FORBIDDEN, 'Only site engineers can create workers');
   }
 
-  // Ensure the user being created has worker, fabricator, or custom role
-  if (!['worker', 'fabricator', 'custom'].includes(data.role)) {
-    throw new ApiError(httpStatus.BAD_REQUEST, 'Site engineers can only create workers, fabricators, or custom role users');
+  // Ensure the user being created has custom role only
+  if (data.role !== 'custom') {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Site engineers can only create custom role users');
   }
 
   // Set the createdBy field to the site engineer
@@ -1396,4 +1397,690 @@ export const getScpUsersService = async (filter, options) => {
     .lean();
 
   return scpUsers;
+};
+
+// Generate sample users CSV for import
+export const generateSampleUsersCSV = () => {
+  const sampleData = [
+    // Headers with field type indicators
+    [
+      'name (MANDATORY)',
+      'email (MANDATORY)',
+      'password (MANDATORY)',
+      'role (MANDATORY)',
+      'subRole (OPTIONAL)',
+      'phoneNumber (OPTIONAL)',
+      'state (OPTIONAL)',
+      'city (OPTIONAL)',
+      'region (OPTIONAL)',
+      'address (OPTIONAL)',
+      'education (OPTIONAL)',
+      'experience (OPTIONAL)'
+    ],
+    // Field options and validation rules
+    [
+      'Enter Full Name',
+      'Enter Email Address',
+      'Auto-generated as FirstName@123',
+      'architect, planning-engineer, site-engineer, scp-user, fabricator, worker, custom',
+      'Enter custom role if role is "custom"',
+      'Enter Phone Number',
+      'Maharashtra, Karnataka, Delhi, Gujarat, Tamil Nadu, etc.',
+      'Mumbai, Bangalore, New Delhi, Ahmedabad, Chennai, etc.',
+      'Enter Region/Area',
+      'Enter Full Address',
+      'Enter Education Details',
+      'Enter Experience Details'
+    ],
+    // Sample data row 1 - Architect
+    [
+      'John Smith',
+      'john.smith@example.com',
+      'John@123',
+      'architect',
+      '',
+      '9876543210',
+      'Maharashtra',
+      'Mumbai',
+      'Andheri',
+      '123 Main Street, Andheri West',
+      'B.Arch from IIT',
+      '5 years experience'
+    ],
+    // Sample data row 2 - Site Engineer
+    [
+      'Jane Doe',
+      'jane.doe@example.com',
+      'Jane@123',
+      'site-engineer',
+      '',
+      '9876543211',
+      'Karnataka',
+      'Bangalore',
+      'Whitefield',
+      '456 Tech Park, Whitefield',
+      'B.E Civil Engineering',
+      '3 years experience'
+    ],
+    // Sample data row 3 - Custom Role
+    [
+      'Mike Johnson',
+      'mike.johnson@example.com',
+      'Mike@123',
+      'custom',
+      'Fitter',
+      '9876543212',
+      'Delhi',
+      'New Delhi',
+      'Connaught Place',
+      '789 Business Center, CP',
+      'ITI Fitter',
+      '2 years experience'
+    ],
+    // Sample data row 4 - Worker
+    [
+      'Sarah Wilson',
+      'sarah.wilson@example.com',
+      'Sarah@123',
+      'worker',
+      '',
+      '9876543213',
+      'Gujarat',
+      'Ahmedabad',
+      'Vastrapur',
+      '321 Industrial Area, Vastrapur',
+      'High School',
+      '1 year experience'
+    ]
+  ];
+
+  const worksheet = xlsx.utils.aoa_to_sheet(sampleData);
+
+  // Set column widths for better readability
+  const columnWidths = [
+    { wch: 20 }, // name
+    { wch: 30 }, // email
+    { wch: 20 }, // password
+    { wch: 20 }, // role
+    { wch: 20 }, // subRole
+    { wch: 18 }, // phoneNumber
+    { wch: 20 }, // state
+    { wch: 20 }, // city
+    { wch: 20 }, // region
+    { wch: 40 }, // address
+    { wch: 30 }, // education
+    { wch: 30 }  // experience
+  ];
+
+  worksheet['!cols'] = columnWidths;
+
+  // Add data validation for dropdown options
+  const dataValidation = [];
+
+  // Role dropdown (Column D)
+  dataValidation.push({
+    ref: 'D3:D1000', // Apply to all data rows
+    type: 'list',
+    allowBlank: false,
+    showDropDown: true,
+    formula1: '"architect,planning-engineer,site-engineer,scp-user,fabricator,worker,custom"'
+  });
+
+  // State dropdown (Column G) - Major Indian states
+  dataValidation.push({
+    ref: 'G3:G1000',
+    type: 'list',
+    allowBlank: true,
+    showDropDown: true,
+    formula1: '"Maharashtra,Karnataka,Delhi,Gujarat,Tamil Nadu,West Bengal,Uttar Pradesh,Rajasthan,Madhya Pradesh,Andhra Pradesh,Telangana,Kerala,Punjab,Haryana,Bihar,Odisha,Assam,Chhattisgarh,Jharkhand,Uttarakhand,Himachal Pradesh,Tripura,Meghalaya,Manipur,Nagaland,Goa,Arunachal Pradesh,Mizoram,Sikkim"'
+  });
+
+  // Apply data validation to worksheet
+  worksheet['!dataValidation'] = dataValidation;
+
+  // Style the header row (row 1) and options row (row 2)
+  const headerRow = 1;
+  const optionsRow = 2;
+
+  // Apply styling to header row
+  for (let col = 0; col < sampleData[0].length; col++) {
+    const cellRef = xlsx.utils.encode_cell({ r: headerRow - 1, c: col });
+    if (!worksheet[cellRef]) continue;
+
+    worksheet[cellRef].s = {
+      font: { bold: true, color: { rgb: "FFFFFF" } },
+      fill: { fgColor: { rgb: "366092" } },
+      alignment: { horizontal: "center", vertical: "center" }
+    };
+  }
+
+  // Apply styling to options row
+  for (let col = 0; col < sampleData[1].length; col++) {
+    const cellRef = xlsx.utils.encode_cell({ r: optionsRow - 1, c: col });
+    if (!worksheet[cellRef]) continue;
+
+    worksheet[cellRef].s = {
+      font: { italic: true, color: { rgb: "666666" } },
+      fill: { fgColor: { rgb: "F2F2F2" } },
+      alignment: { horizontal: "center", vertical: "center" }
+    };
+  }
+
+  // Create a helper sheet with all dropdown options
+  const helperData = [
+    ['Field', 'Options', 'Description'],
+    ['Role', 'architect, planning-engineer, site-engineer, scp-user, fabricator, worker, custom', 'Select the user role'],
+    ['State', 'Maharashtra, Karnataka, Delhi, Gujarat, Tamil Nadu, West Bengal, Uttar Pradesh, Rajasthan, Madhya Pradesh, Andhra Pradesh, Telangana, Kerala, Punjab, Haryana, Bihar, Odisha, Assam, Chhattisgarh, Jharkhand, Uttarakhand, Himachal Pradesh, Tripura, Meghalaya, Manipur, Nagaland, Goa, Arunachal Pradesh, Mizoram, Sikkim', 'Select the state where the user is located'],
+    ['Password', 'Auto-generated as "FirstName@123"', 'Password will be auto-generated from first name'],
+    ['Custom Role', 'Enter custom role if role is "custom"', 'Only required when role is set to "custom"'],
+    ['', '', ''],
+    ['Instructions:', '', ''],
+    ['1. Use the dropdowns in the main sheet for accurate data entry', '', ''],
+    ['2. All MANDATORY fields must be filled', '', ''],
+    ['3. OPTIONAL fields can be left empty', '', ''],
+    ['4. Passwords will be auto-generated as "FirstName@123"', '', ''],
+    ['5. Save as CSV or XLSX format for import', '', '']
+  ];
+
+  const helperWorksheet = xlsx.utils.aoa_to_sheet(helperData);
+
+  // Set column widths for helper sheet
+  helperWorksheet['!cols'] = [
+    { wch: 20 }, // Field
+    { wch: 80 }, // Options
+    { wch: 50 }  // Description
+  ];
+
+  // Style the helper sheet
+  const helperHeaderRow = 1;
+  for (let col = 0; col < 3; col++) {
+    const cellRef = xlsx.utils.encode_cell({ r: helperHeaderRow - 1, c: col });
+    if (helperWorksheet[cellRef]) {
+      helperWorksheet[cellRef].s = {
+        font: { bold: true, color: { rgb: "FFFFFF" } },
+        fill: { fgColor: { rgb: "366092" } },
+        alignment: { horizontal: "center", vertical: "center" }
+      };
+    }
+  }
+
+  const workbook = xlsx.utils.book_new();
+  xlsx.utils.book_append_sheet(workbook, worksheet, 'Users Sample');
+  xlsx.utils.book_append_sheet(workbook, helperWorksheet, 'Field Options & Help');
+
+  return xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+};
+
+// Import users from Excel/CSV file
+export const importUsersService = async (filePath, req) => {
+  const workbook = xlsx.readFile(filePath);
+  const sheetName = workbook.SheetNames[0];
+  const worksheet = workbook.Sheets[sheetName];
+  const data = xlsx.utils.sheet_to_json(worksheet, { header: 1, cellDates: true, raw: false });
+
+  // Check if req.user exists, if not use a default admin user ID
+  const createdBy = req?.user?.id || '000000000000000000000000'; // Default admin ID
+  const createdByModel = req?.user?.role === 'Admin' ? 'Admin' : 'User';
+
+  if (data.length < 2) {
+    return { importedCount: 0, errors: [] };
+  }
+
+  const headers = data[0];
+  const headerMapping = normalizeUserHeaders(headers);
+  // Skip the first row (headers) and second row (options/instructions)
+  const rows = data.slice(2);
+
+  const errors = [];
+  const usersToCreate = [];
+
+  // Role validation options
+  const validRoles = ['architect', 'planning-engineer', 'site-engineer', 'scp-user', 'fabricator', 'worker', 'custom'];
+
+  rows.forEach((row, index) => {
+    const getVal = (fieldName) => {
+      const colIndex = headerMapping[fieldName];
+      if (colIndex === undefined) return undefined;
+      const cellValue = row[colIndex];
+      if (cellValue === null || cellValue === undefined) return undefined;
+      if (cellValue instanceof Date) {
+        return cellValue;
+      }
+      return cellValue.toString().trim();
+    };
+
+    // Get required fields
+    const name = getVal('name');
+    const email = getVal('email');
+    const password = getVal('password');
+    const role = getVal('role');
+    const subRole = getVal('subRole');
+    const phoneNumber = getVal('phoneNumber');
+    const state = getVal('state');
+    const city = getVal('city');
+    const region = getVal('region');
+    const address = getVal('address');
+    const education = getVal('education');
+    const experience = getVal('experience');
+
+    // Validate required fields
+    if (!name) {
+      errors.push({ row: index + 3, error: 'Missing name. Name is required.' });
+      return;
+    }
+
+    if (!email) {
+      errors.push({ row: index + 3, error: 'Missing email. Email is required.' });
+      return;
+    }
+
+    if (!role) {
+      errors.push({ row: index + 3, error: 'Missing role. Role is required.' });
+      return;
+    }
+
+    if (!validRoles.includes(role)) {
+      errors.push({ row: index + 3, error: `Invalid role: ${role}. Must be one of: ${validRoles.join(', ')}.` });
+      return;
+    }
+
+    if (role === 'custom' && !subRole) {
+      errors.push({ row: index + 3, error: 'Missing subRole. Custom role requires subRole field.' });
+      return;
+    }
+
+    // Generate password if not provided
+    const finalPassword = password || generateUserPassword(name);
+
+    // Create user object
+    const userData = {
+      name,
+      email,
+      password: finalPassword,
+      role,
+      subRole: role === 'custom' ? subRole : undefined,
+      phoneNumber: phoneNumber || undefined,
+      state: state || undefined,
+      city: city || undefined,
+      region: region || undefined,
+      address: address || undefined,
+      education: education || undefined,
+      experience: experience || undefined,
+      isActive: true,
+      createdBy,
+      createdByModel
+    };
+
+    // Remove undefined values
+    const cleanedUserData = Object.fromEntries(
+      Object.entries(userData).filter(([_, value]) => value !== undefined)
+    );
+
+    usersToCreate.push(cleanedUserData);
+  });
+
+  if (errors.length > 0) {
+    return { importedCount: 0, errors };
+  }
+
+  // Create users in database
+  let importedCount = 0;
+  const session = await mongoose.startSession();
+
+  try {
+    await session.withTransaction(async () => {
+      for (const userData of usersToCreate) {
+        // Check if user already exists
+        const existingUser = await User.findOne({ email: userData.email });
+        if (existingUser) {
+          errors.push({
+            row: usersToCreate.indexOf(userData) + 3,
+            error: `User with email ${userData.email} already exists.`
+          });
+          continue;
+        }
+
+        // Create user
+        const user = await User.create([userData], { session });
+        importedCount++;
+      }
+    });
+  } finally {
+    session.endSession();
+  }
+
+  return { importedCount, errors };
+};
+
+// Helper function to normalize user headers
+const normalizeUserHeaders = (headers) => {
+  const headerMap = {
+    name: ['name', 'full name', 'fullname'],
+    email: ['email', 'email address'],
+    password: ['password'],
+    role: ['role'],
+    subRole: ['subrole', 'sub role', 'custom role'],
+    phoneNumber: ['phonenumber', 'phone number', 'phone', 'mobile'],
+    state: ['state'],
+    city: ['city'],
+    region: ['region'],
+    address: ['address'],
+    education: ['education'],
+    experience: ['experience']
+  };
+
+  const mapping = {};
+  headers.forEach((header, index) => {
+    // Clean header by removing (MANDATORY), (OPTIONAL) tags and extra spaces
+    const cleanHeader = header.toLowerCase()
+      .replace(/\s*\(mandatory\)\s*/gi, '')
+      .replace(/\s*\(optional\)\s*/gi, '')
+      .replace(/\s+/g, '')
+      .trim();
+
+    for (const key in headerMap) {
+      if (headerMap[key].includes(cleanHeader)) {
+        mapping[key] = index;
+      }
+    }
+  });
+  return mapping;
+};
+
+// Helper function to generate user password
+const generateUserPassword = (name) => {
+  if (!name) return 'User@123';
+  const firstWord = name.trim().split(' ')[0];
+  return `${firstWord}@123`;
+};
+
+// Generate sample workers CSV for site engineer import
+export const generateSampleWorkersCSV = () => {
+  const sampleData = [
+    // Headers with field type indicators
+    [
+      'name (MANDATORY)',
+      'email (MANDATORY)',
+      'password (MANDATORY)',
+      'role (MANDATORY)',
+      'subRole (OPTIONAL)',
+      'phoneNumber (OPTIONAL)',
+      'state (OPTIONAL)',
+      'city (OPTIONAL)',
+      'region (OPTIONAL)',
+      'address (OPTIONAL)',
+      'education (OPTIONAL)',
+      'experience (OPTIONAL)'
+    ],
+    // Field options and validation rules
+    [
+      'Enter Full Name',
+      'Enter Email Address',
+      'Auto-generated as FirstName@123',
+      'custom (MANDATORY)',
+      'Enter custom role (MANDATORY)',
+      'Enter Phone Number',
+      'Maharashtra, Karnataka, Delhi, Gujarat, Tamil Nadu, etc.',
+      'Mumbai, Bangalore, New Delhi, Ahmedabad, Chennai, etc.',
+      'Enter Region/Area',
+      'Enter Full Address',
+      'Enter Education Details',
+      'Enter Experience Details'
+    ],
+    // Sample data row 1 - Custom Role: Welder
+    [
+      'Rajesh Kumar',
+      'rajesh.kumar@example.com',
+      'Rajesh@123',
+      'custom',
+      'Welder',
+      '9876543210',
+      'Maharashtra',
+      'Mumbai',
+      'Andheri',
+      '123 Industrial Area, Andheri West',
+      'ITI Welder',
+      '3 years experience'
+    ],
+    // Sample data row 2 - Custom Role: Fitter
+    [
+      'Priya Sharma',
+      'priya.sharma@example.com',
+      'Priya@123',
+      'custom',
+      'Fitter',
+      '9876543211',
+      'Karnataka',
+      'Bangalore',
+      'Whitefield',
+      '456 Tech Park, Whitefield',
+      'ITI Fitter',
+      '2 years experience'
+    ],
+    // Sample data row 3 - Custom Role: Electrician
+    [
+      'Amit Singh',
+      'amit.singh@example.com',
+      'Amit@123',
+      'custom',
+      'Electrician',
+      '9876543212',
+      'Delhi',
+      'New Delhi',
+      'Connaught Place',
+      '789 Business Center, CP',
+      'ITI Electrician',
+      '4 years experience'
+    ],
+    // Sample data row 4 - Custom Role: Painter
+    [
+      'Sunita Patel',
+      'sunita.patel@example.com',
+      'Sunita@123',
+      'custom',
+      'Painter',
+      '9876543213',
+      'Gujarat',
+      'Ahmedabad',
+      'Vastrapur',
+      '321 Industrial Area, Vastrapur',
+      'High School',
+      '1 year experience'
+    ]
+  ];
+
+  const worksheet = xlsx.utils.aoa_to_sheet(sampleData);
+
+  // Set column widths for better readability
+  const columnWidths = [
+    { wch: 20 }, // name
+    { wch: 25 }, // email
+    { wch: 20 }, // password
+    { wch: 15 }, // role
+    { wch: 15 }, // subRole
+    { wch: 15 }, // phoneNumber
+    { wch: 15 }, // state
+    { wch: 15 }, // city
+    { wch: 15 }, // region
+    { wch: 30 }, // address
+    { wch: 20 }, // education
+    { wch: 20 }  // experience
+  ];
+  worksheet['!cols'] = columnWidths;
+
+  const workbook = xlsx.utils.book_new();
+  xlsx.utils.book_append_sheet(workbook, worksheet, 'Workers Sample');
+
+  return xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+};
+
+// Import workers from Excel/CSV file (Site Engineer only)
+export const importWorkersBySiteEngineerService = async (filePath, req) => {
+  const workbook = xlsx.readFile(filePath);
+  const sheetName = workbook.SheetNames[0];
+  const worksheet = workbook.Sheets[sheetName];
+  const data = xlsx.utils.sheet_to_json(worksheet, { header: 1, cellDates: true, raw: false });
+
+  // Validate that the creator is a site engineer
+  const siteEngineerId = req?.user?.id;
+  if (!siteEngineerId) {
+    throw new ApiError(httpStatus.UNAUTHORIZED, 'Authentication required');
+  }
+
+  const siteEngineer = await User.findById(siteEngineerId);
+  if (!siteEngineer || siteEngineer.role !== 'site-engineer') {
+    throw new ApiError(httpStatus.FORBIDDEN, 'Only site engineers can import workers');
+  }
+
+  if (data.length < 2) {
+    return { importedCount: 0, errors: [] };
+  }
+
+  const headers = data[0];
+  const headerMapping = normalizeUserHeaders(headers);
+  // Skip the first row (headers) and second row (options/instructions)
+  const rows = data.slice(2);
+
+  const errors = [];
+  const workersToCreate = [];
+
+  // Role validation options for site engineers (only custom)
+  const validRoles = ['custom'];
+
+  rows.forEach((row, index) => {
+    const getVal = (fieldName) => {
+      const colIndex = headerMapping[fieldName];
+      if (colIndex === undefined) return undefined;
+      const cellValue = row[colIndex];
+      if (cellValue === null || cellValue === undefined) return undefined;
+      if (cellValue instanceof Date) {
+        return cellValue;
+      }
+      return cellValue.toString().trim();
+    };
+
+    // Get required fields
+    const name = getVal('name');
+    const email = getVal('email');
+    const password = getVal('password');
+    const role = getVal('role');
+    const subRole = getVal('subRole');
+    const phoneNumber = getVal('phoneNumber');
+    const state = getVal('state');
+    const city = getVal('city');
+    const region = getVal('region');
+    const address = getVal('address');
+    const education = getVal('education');
+    const experience = getVal('experience');
+
+    // Validate required fields
+    if (!name) {
+      errors.push({ row: index + 3, error: 'Missing name. Name is required.' });
+      return;
+    }
+
+    if (!email) {
+      errors.push({ row: index + 3, error: 'Missing email. Email is required.' });
+      return;
+    }
+
+    if (!role) {
+      errors.push({ row: index + 3, error: 'Missing role. Role is required.' });
+      return;
+    }
+
+    if (!validRoles.includes(role)) {
+      errors.push({ row: index + 3, error: `Invalid role: ${role}. Site engineers can only create custom role users.` });
+      return;
+    }
+
+    if (role === 'custom' && !subRole) {
+      errors.push({ row: index + 3, error: 'Missing subRole. Custom role requires subRole field.' });
+      return;
+    }
+
+    // Generate password if not provided
+    const finalPassword = password || generateUserPassword(name);
+
+    // Create worker object
+    const workerData = {
+      name,
+      email,
+      password: finalPassword,
+      role,
+      subRole: role === 'custom' ? subRole : undefined,
+      phoneNumber: phoneNumber || undefined,
+      state: state || undefined,
+      city: city || undefined,
+      region: region || undefined,
+      address: address || undefined,
+      education: education || undefined,
+      experience: experience || undefined,
+      isActive: true,
+      createdBy: siteEngineerId,
+      createdByModel: 'User'
+    };
+
+    // Remove undefined values
+    const cleanedWorkerData = Object.fromEntries(
+      Object.entries(workerData).filter(([_, value]) => value !== undefined)
+    );
+
+    workersToCreate.push(cleanedWorkerData);
+  });
+
+  if (errors.length > 0) {
+    return { importedCount: 0, errors };
+  }
+
+  // Create workers in database
+  let importedCount = 0;
+  const session = await mongoose.startSession();
+
+  try {
+    await session.withTransaction(async () => {
+      for (const workerData of workersToCreate) {
+        // Check if worker already exists
+        const existingWorker = await User.findOne({ email: workerData.email });
+        if (existingWorker) {
+          errors.push({
+            row: workersToCreate.indexOf(workerData) + 3,
+            error: `Worker with email ${workerData.email} already exists.`
+          });
+          continue;
+        }
+
+        // Create worker
+        const worker = await User.create([workerData], { session });
+        importedCount++;
+
+        // Log the worker creation activity
+        try {
+          await logActivity(req, {
+            action: 'create',
+            targetModel: 'User',
+            targetId: worker[0]._id,
+            targetName: worker[0].name,
+            description: `Imported ${workerData.role}: ${worker[0].name} (${worker[0].email}) by site engineer: ${siteEngineer.name}`,
+            changes: {
+              role: {
+                from: null,
+                to: workerData.role
+              },
+              isActive: {
+                from: null,
+                to: true
+              }
+            }
+          });
+        } catch (logError) {
+          console.error('Error logging worker import activity:', logError);
+        }
+      }
+    });
+  } finally {
+    session.endSession();
+  }
+
+  return { importedCount, errors };
 };
