@@ -308,6 +308,9 @@ export const getProjectLogs = async (projectId, options = {}) => {
                 { targetModel: 'PO', 'metadata.projectId': projectObjectId },
                 { targetModel: 'Quote', 'metadata.projectId': projectObjectId },
                 { targetModel: 'Sitework', 'metadata.projectId': projectObjectId },
+                // { targetModel: 'SCP', 'metadata.projectId': projectObjectId },
+                { targetModel: 'Requirement', 'metadata.projectId': projectObjectId },
+                
                 // { targetModel: 'SiteVisit', 'metadata.projectId': projectId },
                 // { targetModel: 'File', 'metadata.projectId': projectId }
             ];
