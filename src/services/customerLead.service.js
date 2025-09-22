@@ -1781,12 +1781,10 @@ export const updateScpDataByAdminService = async (req, leadId, requirementId, ad
   });
 
   // Detect file changes
-  // const fileChanges = {
-  //   filesAdded: newlyCopiedFiles.length,
-  //   filesExisting: existingFiles.length,
-  //   totalFiles: allFiles.length,
-  //   previousFileCount: requirement.files.length - allFiles.length + existingFiles.length
-  // };
+  // Note: Detailed diff requires newlyCopiedFiles/existingFiles context. Provide a safe summary instead.
+  const fileChanges = {
+    totalFiles: Array.isArray(requirement.files) ? requirement.files.length : 0
+  };
 
   // Log the admin SCP data update activity
   try {
