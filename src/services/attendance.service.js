@@ -45,16 +45,12 @@ export const clockInService = async (req, session) => {
         const timeDifference = Math.abs(currentTime - clientClockInTime);
 
         // Allow up to 10 minutes difference between client and server time
-        if (timeDifference > 10 * 60 * 1000) {
-            throw new ApiError(httpStatus.BAD_REQUEST, 'Clock-in time is too far from current time');
-        }
+
 
         // Check if clock-in is within reasonable working hours (5 AM to 11 PM) in Indian time
         const indianTime = new Date(clientClockInTime.getTime() + (5.5 * 60 * 60 * 1000)); // Convert to IST
         const hour = indianTime.getHours();
-        if (hour < 5 || hour > 23) {
-            throw new ApiError(httpStatus.BAD_REQUEST, 'Clock-in is only allowed between 5:00 AM and 11:00 PM IST');
-        }
+
 
         // Check if fabricator has already clocked in today for the same project and sitework
         const today = new Date();
@@ -196,10 +192,7 @@ export const clockOutService = async (req, session) => {
         // Calculate time difference (accounting for timezone)
         const timeDifference = Math.abs(currentTime - clientClockOutTime);
 
-        // Allow up to 10 minutes difference between client and server time
-        if (timeDifference > 10 * 60 * 1000) {
-            throw new ApiError(httpStatus.BAD_REQUEST, 'Clock-out time is too far from current time');
-        }
+
 
         // Clock out can happen at any time (people might work late or early)
         // No working hours restriction for clock out
