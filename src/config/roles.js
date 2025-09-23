@@ -86,6 +86,7 @@ const allRoles = {
     'assignBOMToSiteEngineer',
     'getRoughBOMsForPlanning',
     'procurement',
+    'getSiteEngineers',
     'getProcurementTeam',
     'createFinalizedBOM',
     'getSiteworks',
@@ -104,6 +105,7 @@ const allRoles = {
     'updateBOMBySiteEngineer',
     'submitUpdatedBOMToPlanning',
     'manageVendors',
+    'updateBOM',
   ],
 
   'site-engineer': [

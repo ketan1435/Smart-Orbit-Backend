@@ -321,3 +321,35 @@ export const getFinalizedBOMs = catchAsync(async (req, res) => {
         data: result,
     });
 }); 
+
+/**
+ * Mark a BOM as reusable
+ */
+export const makeBOMReusable = catchAsync(async (req, res) => {
+    const bom = await bomService.makeBOMReusable(
+        req,
+        req.params.projectId,
+        req.params.bomId,
+        req.body,
+        req.user
+    );
+    res.status(httpStatus.OK).send({
+        status: 1,
+        message: 'BOM marked as reusable successfully',
+        data: bom,
+    });
+});
+
+export const disableBOMReusable = catchAsync(async (req, res) => {
+    const bom = await bomService.disableBOMReusable(
+        req,
+        req.params.projectId,
+        req.params.bomId,
+        req.user
+    );
+    res.status(httpStatus.OK).send({
+        status: 1,
+        message: 'BOM reusable disabled successfully',
+        data: bom,
+    });
+});

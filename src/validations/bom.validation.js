@@ -88,6 +88,27 @@ export const updateBOM = {
         .unknown(true),
 };
 
+// New validation for making a BOM reusable
+export const makeBOMReusable = {
+    params: Joi.object().keys({
+        projectId: Joi.string().custom(objectId).required(),
+        bomId: Joi.string().custom(objectId).required(),
+    }),
+    body: Joi.object()
+        .keys({
+            title: Joi.string().trim().required(),
+            remarks: Joi.string().optional(),
+        })
+        .required(),
+};
+
+export const disableBOMReusable = {
+    params: Joi.object().keys({
+        projectId: Joi.string().custom(objectId).required(),
+        bomId: Joi.string().custom(objectId).required(),
+    }),
+};
+
 export const updateBOMStatus = {
     params: Joi.object().keys({
         projectId: Joi.string().custom(objectId).required(),

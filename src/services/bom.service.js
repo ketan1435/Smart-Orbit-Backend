@@ -2338,3 +2338,109 @@ export const getFinalizedBOMs = async (options = {}) => {
         totalResults,
     };
 }; 
+
+/**
+ * Mark a BOM as reusable
+ * @param {*} projectId
+ * @param {*} bomId
+ * @param {{title: string, remarks?: string}} data
+ * @param {*} user
+ */
+export const makeBOMReusable = async (req, projectId, bomId, data, user) => {
+    const bom = await BOM.findOne({ _id: bomId, projectId }).populate('projectId', 'projectName projectCode status customerName requirementType architect');
+    if (!bom) {
+        throw new ApiError(httpStatus.NOT_FOUND, 'BOM not found');
+    }
+
+    // Only allow if BOM is approved or finalized; adjust rules if needed
+    const allowedStatuses = ['approved', 'finalized'];
+    if (!allowedStatuses.includes(bom.status)) {
+        throw new ApiError(httpStatus.BAD_REQUEST, 'Only approved or finalized BOMs can be made reusable');
+    }
+
+    const originalIsReusable = bom.isReusable;
+    const originalTitle = bom.title;
+    const originalRemarks = bom.remarks;
+
+    bom.isReusable = true;
+    bom.title = data.title;
+    if (data.remarks) bom.remarks = data.remarks;
+    await bom.save();
+
+    // Log activity
+    try {
+        await logActivity(req, {
+            action: 'make_bom_reusable',
+            targetModel: 'BOM',
+            targetId: bom._id,
+            targetName: bom.title || `BOM v${bom.version}`,
+            description: `${user.role === 'admin' ? 'Admin' : 'User'} ${user.name} (${user.email}) marked BOM version ${bom.version} reusable for project: ${bom.projectId?.projectName || 'Unknown Project'}`,
+            changes: {
+                isReusable: {
+                    from: originalIsReusable,
+                    to: true
+                },
+                title: {
+                    from: originalTitle,
+                    to: bom.title
+                },
+                remarks: data.remarks ? {
+                    from: originalRemarks,
+                    to: bom.remarks
+                } : undefined
+            },
+            metadata: {
+                projectId: bom.projectId?._id,
+                projectData: {
+                    projectId: bom.projectId?._id,
+                    projectName: bom.projectId?.projectName,
+                    projectCode: bom.projectId?.projectCode,
+                    status: bom.projectId?.status,
+                    customerName: bom.projectId?.customerName,
+                    requirementType: bom.projectId?.requirementType,
+                    architect: bom.projectId?.architect
+                },
+                user: {
+                    userId: user._id,
+                    userName: user.name,
+                    userEmail: user.email,
+                    userRole: user.role,
+                    userType: user.role === 'admin' ? 'Admin' : 'User'
+                },
+                bomData: {
+                    bomId: bom._id,
+                    title: bom.title,
+                    version: bom.version,
+                    status: bom.status,
+                    isReusable: bom.isReusable,
+                    remarks: bom.remarks,
+                    architectDocumentId: bom.architectDocumentId,
+                    sourceBOMId: bom.sourceBOMId,
+                    projectId: bom.projectId,
+                    createdBy: bom.createdBy,
+                    createdAt: bom.createdAt,
+                    updatedAt: bom.updatedAt
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Error logging make BOM reusable:', error);
+    }
+
+    return bom.populate(['createdBy', 'projectId', 'items.addedBy']);
+};
+
+export const disableBOMReusable = async (req, projectId, bomId, user) => {
+    const bom = await BOM.findOne({ _id: bomId, projectId });
+    if (!bom) {
+        throw new ApiError(httpStatus.NOT_FOUND, 'BOM not found');
+    }
+    // Only allow if currently reusable
+    if (!bom.isReusable) {
+        return bom;
+    }
+    bom.isReusable = false;
+    bom.title = undefined;
+    await bom.save();
+    return bom;
+};

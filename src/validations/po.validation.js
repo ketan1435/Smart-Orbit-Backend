@@ -66,6 +66,7 @@ const getPOs = {
         vendor: Joi.string().optional(),
         project: Joi.string().optional(),
         name: Joi.string().optional(),
+        withoutBom: Joi.boolean().optional(),
     }),
 };
 

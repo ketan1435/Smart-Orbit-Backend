@@ -26,6 +26,22 @@ const poItemSchema = new mongoose.Schema({
         required: true,
         min: 0,
     },
+    description: {
+        type: String,
+        trim: true,
+    },
+    brand: {
+        type: String,
+        trim: true,
+    },
+    location: {
+        type: String,
+        trim: true,
+    },
+    category: {
+        type: String,
+        trim: true,
+    },
     vendor: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Vendor',

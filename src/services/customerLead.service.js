@@ -1674,7 +1674,32 @@ export const updateScpDataByAdminService = async (req, leadId, requirementId, ad
   }
 
   // Get admin information for logging
-  const admin = await User.findById(adminId).select('_id name email role');
+  let admin = await User.findById(adminId).select('_id name email role');
+  if (!admin) {
+    try {
+      const AdminModelModule = await import('../models/admin.model.js');
+      const AdminModel = AdminModelModule.default;
+      const adminDoc = await AdminModel.findById(adminId).select('_id adminName email role');
+      if (adminDoc) {
+        admin = {
+          _id: adminDoc._id,
+          name: adminDoc.adminName,
+          email: adminDoc.email,
+          role: adminDoc.role || 'admin',
+        };
+      }
+    } catch (e) {
+      // ignore dynamic import errors and fallback to req.user if available
+    }
+  }
+  if (!admin && req?.user) {
+    admin = {
+      _id: adminId,
+      name: req.user.name || req.user.adminName || 'Admin',
+      email: req.user.email || '',
+      role: req.user.role || 'admin',
+    };
+  }
   if (!admin) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Admin user not found');
   }

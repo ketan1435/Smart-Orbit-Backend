@@ -117,18 +117,24 @@ export const createPOService = async (req, data) => {
         await po.save();
 
         // Throw API error after cleanup
-        throw new Error(`WhatsApp message failed: ${wabaError.message}`);
+        throw new Error(`PO saved but WhatsApp message failed`);
     }
 
     return po;
 };
 
 export const getPOsService = async (query) => {
-    const { page = 1, limit = 10, vendor, project, name } = query;
+    const { page = 1, limit = 10, vendor, project, name, withoutBom } = query;
     const filter = {};
     if (vendor) filter.vendor = vendor;
     if (project) filter.project = project;
     if (name) filter.name = { $regex: name, $options: 'i' };
+    if (withoutBom) {
+        filter.$or = [
+            { originalBomId: { $exists: false } },
+            { originalBomId: null }
+        ];
+    }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const [pos, total] = await Promise.all([

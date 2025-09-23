@@ -1518,4 +1518,59 @@ router
     .route('/finalized')
     .get(auth('getBoms'), bomController.getFinalizedBOMs);
 
+/**
+ * @swagger
+ * /boms/projects/{projectId}/boms/{bomId}/make-reusable:
+ *   post:
+ *     summary: Mark a BOM as reusable
+ *     description: Set isReusable to true with a required title. Only approved/finalized BOMs are allowed.
+ *     tags: [BOM]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: projectId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Project ID
+ *       - in: path
+ *         name: bomId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: BOM ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - title
+ *             properties:
+ *               title:
+ *                 type: string
+ *                 description: Title/name for the reusable BOM
+ *               remarks:
+ *                 type: string
+ *                 description: Optional remarks
+ *     responses:
+ *       "200":
+ *         description: BOM marked as reusable
+ *       "400":
+ *         $ref: '#/components/responses/BadRequest'
+ *       "401":
+ *         $ref: '#/components/responses/Unauthorized'
+ *       "404":
+ *         $ref: '#/components/responses/NotFound'
+ */
+router
+    .route('/projects/:projectId/boms/:bomId/make-reusable')
+    .post(auth('updateBOM'), validate(bomValidation.makeBOMReusable), bomController.makeBOMReusable);
+
+router
+    .route('/projects/:projectId/boms/:bomId/disable-reusable')
+    .post(auth('updateBOM'), validate(bomValidation.disableBOMReusable), bomController.disableBOMReusable);
+
 export default router; 
