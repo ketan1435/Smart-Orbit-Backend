@@ -860,7 +860,7 @@ export const getWorkersBySiteEngineerService = async (siteEngineerId, query) => 
   const skip = (parseInt(page) - 1) * parseInt(limit);
   const [users, total] = await Promise.all([
     User.find(filter)
-      .select('_id name email mobileNumber role subRole state city region address phoneNumber education experience isActive createdAt')
+      .select('_id name email mobileNumber role subRole state city region address phoneNumber education experience isActive createdAt documents')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit)),
