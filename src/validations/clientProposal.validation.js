@@ -159,6 +159,14 @@ const convertToWorkOrder = {
     }),
 };
 
+const sendProposalDocumentToCustomer = {
+    body: Joi.object().keys({
+        projectId: Joi.string().required(),
+        // For S3-based uploads, we require the S3 object key
+        s3Key: Joi.string().required(),
+    }),
+};
+
 const getWorkOrders = {
     query: Joi.object().keys({
         project: Joi.string(),
@@ -193,4 +201,5 @@ export default {
     convertToWorkOrder,
     getWorkOrders,
     sendWorkOrderToPlanningEngineer,
+    sendProposalDocumentToCustomer,
 }; 

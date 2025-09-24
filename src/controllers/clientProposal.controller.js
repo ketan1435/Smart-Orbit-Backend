@@ -175,3 +175,21 @@ export const sendWorkOrderToPlanningEngineer = catchAsync(async (req, res) => {
         data: clientProposal,
     });
 });
+
+export const sendProposalDocumentToCustomer = catchAsync(async (req, res) => {
+    const file = req.file || (Array.isArray(req.files) ? req.files[0] : undefined);
+    const result = await clientProposalService.sendProposalDocumentToCustomer(req, req.body.projectId, file, req.user.id);
+    res.status(httpStatus.OK).send({
+        status: 1,
+        message: 'Document sent to customer successfully',
+        data: result,
+    });
+});
+
+export const streamProposalFileById = catchAsync(async (req, res) => {
+  const { file, filename } = await clientProposalService.getProposalFileById(req.params.fileId, req.user.id);
+  res.setHeader('Content-Type', file.mimeType);
+  res.setHeader('Content-Length', file.size);
+  res.setHeader('Content-Disposition', `inline; filename="${filename || file.originalName}"`);
+  res.send(file.data);
+});

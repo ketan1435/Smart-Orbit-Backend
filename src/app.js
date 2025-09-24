@@ -37,9 +37,22 @@ app.use(mongoSanitize());
 // gzip compression
 app.use(compression());
 
-// enable cors
-app.use(cors());
-app.options('*', cors());
+// enable CORS with credentials for known frontend origins
+const allowedOrigins = [
+  'http://localhost:8080',
+  'http://127.0.0.1:8080',
+];
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) return callback(null, true);
+      return callback(null, false);
+    },
+    credentials: true,
+  })
+);
+app.options('*', cors({ origin: allowedOrigins, credentials: true }));
 
 // jwt authentication
 app.use(passport.initialize());
@@ -52,6 +65,9 @@ if (config.env === 'production') {
 
 // v1 api routes
 app.use('/v1', routes);
+
+// serve uploaded files publicly
+app.use('/uploads', express.static('uploads'));
 
 // send back a 404 error for any unknown api request
 app.use((req, res, next) => {

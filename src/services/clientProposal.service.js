@@ -7,6 +7,7 @@ import Admin from '../models/admin.model.js';
 import Project from '../models/project.model.js';
 import { generateClientProposalPDF } from './jsreport.service.js';
 import { logActivity } from '../middlewares/activityLog.middleware.js';
+import ClientProposalFile from '../models/clientProposalFile.model.js';
 
 /**
  * Helper function to determine user type
@@ -1645,4 +1646,84 @@ export const sendWorkOrderToPlanningEngineer = async (req, clientProposalId, use
     }
 
     return clientProposal.populate(['project', 'createdBy', 'updatedBy']);
+};
+
+export const sendProposalDocumentToCustomer = async (req, projectId, file, userId) => {
+  // For S3 flow, the frontend will pass s3Key in body (uploaded via /files/initiate-upload)
+  const s3Key = req.body?.s3Key;
+  if (!s3Key) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 's3Key is required');
+  }
+
+  // Find project and customer info
+  const project = await Project.findById(projectId).populate('lead');
+  if (!project) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Project not found');
+  }
+
+  const { user, userType } = await getUserAndType(userId);
+
+  // Create a minimal proposal marked as sent with attachment reference
+  const clientProposal = await ClientProposal.create({
+    project: project._id,
+    customerInfo: {
+      name: project.lead?.customerName || 'Customer',
+      email: project.lead?.email || '',
+      phone: project.lead?.mobileNumber || '',
+      address: [project.lead?.city, project.lead?.state].filter(Boolean).join(', '),
+    },
+    proposalFor: 'Shared Document',
+    projectLocation: [project.lead?.city, project.lead?.state].filter(Boolean).join(', '),
+    status: 'sent',
+    sentToCustomer: true,
+    sentToCustomerAt: new Date(),
+    createdBy: userId,
+    createdByModel: userType,
+    updatedBy: userId,
+    updatedByModel: userType,
+  });
+
+  // Store S3 reference (no DB blob). Frontend will use /v1/files/signed-url/{key} to view/download
+  clientProposal.additionalFeatures = `Attachment: ${s3Key}`;
+  await clientProposal.save();
+
+  try {
+    await logActivity(req, {
+      action: 'upload',
+      targetModel: 'ClientProposal',
+      targetId: clientProposal._id,
+      targetName: 'Shared Document',
+      description: `${userType} ${user.name} sent a document to customer for project: ${project.projectName}`,
+      metadata: {
+        projectId: project._id,
+        s3Key,
+      },
+    });
+  } catch (e) {
+    console.error('Log activity failed for sendProposalDocumentToCustomer:', e);
+  }
+
+  return clientProposal;
+};
+
+export const getProposalFileById = async (fileId, userId) => {
+  const file = await ClientProposalFile.findById(fileId).populate('proposal', 'sentToCustomer customerInfo createdBy');
+  if (!file) throw new ApiError(httpStatus.NOT_FOUND, 'File not found');
+
+  // Authorization: allow creator/admin or the customer the proposal was sent to
+  const proposal = await ClientProposal.findById(file.proposal).populate('createdBy', 'email role').lean();
+  if (!proposal) throw new ApiError(httpStatus.NOT_FOUND, 'Parent proposal not found');
+
+  const requesterUser = await User.findById(userId) || await Admin.findById(userId);
+  if (!requesterUser) throw new ApiError(httpStatus.FORBIDDEN, 'Forbidden');
+
+  const isCreator = proposal.createdBy && proposal.createdBy._id?.toString() === userId.toString();
+  const isAdmin = requesterUser.role && String(requesterUser.role).toLowerCase() === 'admin';
+  const isCustomer = proposal.sentToCustomer && proposal.customerInfo?.email && proposal.customerInfo.email === requesterUser.email;
+
+  if (!(isCreator || isAdmin || isCustomer)) {
+    throw new ApiError(httpStatus.FORBIDDEN, 'Forbidden');
+  }
+
+  return { file, filename: file.originalName };
 };

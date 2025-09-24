@@ -166,6 +166,9 @@ export const updateCustomerLead = {
       urgency: Joi.string().allow('', null),
       budget: Joi.string().allow('', null),
       scpData: Joi.object().allow(null),
+      // Allow sharing fields during updates
+      sendToScp: Joi.boolean(),
+      selectedScpUser: Joi.alternatives().try(Joi.string(), Joi.array().items(Joi.string())).allow('', null),
     })).optional(),
   }).min(1),
 };

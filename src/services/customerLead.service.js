@@ -535,9 +535,45 @@ export const updateCustomerLeadService = async (req, session) => {
       // Store original requirement data for change detection
       const originalRequirement = { ...requirement.toObject() };
 
+      // Extract sharing fields so they are not blindly assigned to the document
+      const { _id, sendToScp, selectedScpUser, ...updateFields } = reqUpdate;
+
+      // If selectedScpUser is provided, share requirement with the SCP user(s)
+      if (selectedScpUser) {
+        const scpUserIds = Array.isArray(selectedScpUser) ? selectedScpUser : [selectedScpUser];
+
+        // Validate users are SCP users
+        for (const scpUserId of scpUserIds) {
+          const scpUser = await User.findById(scpUserId).session(session);
+          if (!scpUser || scpUser.role !== 'scp-user') {
+            throw new ApiError(httpStatus.BAD_REQUEST, `Invalid SCP user ID: ${scpUserId}`);
+          }
+        }
+
+        // Share with each SCP user if not already shared
+        for (const scpUserId of scpUserIds) {
+          await Requirement.updateOne(
+            { _id: requirement._id, 'sharedWith.user': { $ne: scpUserId } },
+            {
+              $push: {
+                sharedWith: {
+                  user: scpUserId,
+                  sharedBy: req.user.id,
+                  sharedAt: new Date(),
+                  isSeen: false,
+                  canUpdateScpData: true,
+                  scpDataUpdated: false,
+                },
+              },
+            },
+            { session }
+          );
+        }
+      }
+
       // Update the requirement fields
-      const { _id, ...updateFields } = reqUpdate;
-      Object.assign(requirement, updateFields);
+      const { /* _id removed above */ ...rest } = updateFields;
+      Object.assign(requirement, rest);
 
       await requirement.save({ session });
 
@@ -547,11 +583,11 @@ export const updateCustomerLeadService = async (req, session) => {
         projectName: requirement.projectName,
         originalData: originalRequirement,
         updatedData: requirement.toObject(),
-        changes: Object.keys(updateFields).reduce((acc, key) => {
-          if (originalRequirement[key] !== updateFields[key]) {
+        changes: Object.keys(rest).reduce((acc, key) => {
+          if (originalRequirement[key] !== rest[key]) {
             acc[key] = {
               from: originalRequirement[key],
-              to: updateFields[key]
+              to: rest[key]
             };
           }
           return acc;

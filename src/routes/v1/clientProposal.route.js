@@ -3,8 +3,11 @@ import validate from '../../middlewares/validate.js';
 import auth from '../../middlewares/auth.js';
 import * as clientProposalValidation from '../../validations/clientProposal.validation.js';
 import * as clientProposalController from '../../controllers/clientProposal.controller.js';
+import multer from 'multer';
 
 const router = express.Router();
+// Not needed for S3 presigned upload path; keep instance if other routes need it
+const upload = multer({ storage: multer.memoryStorage() });
 
 /**
  * @swagger
@@ -1074,5 +1077,16 @@ router
         validate(clientProposalValidation.sendWorkOrderToPlanningEngineer),
         clientProposalController.sendWorkOrderToPlanningEngineer
     );
+
+// Upload and send a simple proposal document to customer by project
+router.post(
+    '/send-document',
+    auth(),
+    validate(clientProposalValidation.sendProposalDocumentToCustomer),
+    clientProposalController.sendProposalDocumentToCustomer
+);
+
+// DB-backed file streaming endpoint
+router.get('/files/:fileId', auth(), clientProposalController.streamProposalFileById);
 
 export default router;
