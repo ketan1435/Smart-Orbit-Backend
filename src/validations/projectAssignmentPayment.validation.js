@@ -9,6 +9,8 @@ export const getProjectAssignmentPayments = {
     userId: Joi.string().custom(objectId).description('Filter by assigned user ID'),
     createdBy: Joi.string().custom(objectId),
     createdByModel: Joi.string().valid('Admin', 'User'),
+    startDate: Joi.date().iso().description('Filter payments created on/after this date (ISO string)'),
+    endDate: Joi.date().iso().description('Filter payments created on/before this date (ISO string)'),
     sortBy: Joi.string(),
     limit: Joi.number().integer(),
     page: Joi.number().integer(),

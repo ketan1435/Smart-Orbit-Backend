@@ -22,6 +22,7 @@ import socketRoute from './socket.route.js';
 import attendanceRoute from './attendance.route.js';
 import activityLogRoute from './activityLog.route.js';
 import remarkRoute from './remark.route.js';
+import attachmentRoute from './attachment.route.js';
 
 const router = express.Router();
 
@@ -109,6 +110,10 @@ const defaultRoutes = [
   {
     path: '/remarks',
     route: remarkRoute,
+  },
+  {
+    path: '/attachments',
+    route: attachmentRoute,
   },
   // {
   //   path: '/income',

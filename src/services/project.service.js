@@ -13,6 +13,7 @@ import ProjectAssignmentPayment from '../models/projectAssignmentPaymant.model.j
 import { STATUS_VALUES } from '../config/enums/status.enum.js';
 import { STATUS_ENUM } from '../config/enums/status.enum.js';
 import { updateProjectStatusWithReflection } from './statusCascade.service.js';
+import Attachment from '../models/attachment.model.js';
 
 /**
  * Generates a unique project code.
@@ -642,15 +643,28 @@ export const getArchitectDocuments = async (projectId) => {
   const requirementId = project.requirement._id;
   const customerLeadId = project.lead;
 
-  // Add the isSharedWithAnyPlanningEngineer flag to each architect document
-  const architectDocumentsWithFlag = project.architectDocuments.map(doc => ({
-    ...doc.toObject(),
-    isSharedWithAnyPlanningEngineer,
-    requirementId,
-    customerLeadId
-  }));
+  // Get attachments for each document
+  const architectDocumentsWithAttachments = await Promise.all(
+    project.architectDocuments.map(async (doc) => {
+      // Get attachments for this document
+      const attachments = await Attachment.find({
+        documentId: doc._id,
+        projectId: projectId
+      }).populate('sentBy', 'name email')
+        .populate('reviewedBy', 'name email')
+        .sort({ createdAt: -1 });
 
-  return architectDocumentsWithFlag;
+      return {
+        ...doc.toObject(),
+        isSharedWithAnyPlanningEngineer,
+        requirementId,
+        customerLeadId,
+        attachments
+      };
+    })
+  );
+
+  return architectDocumentsWithAttachments;
 };
 
 /**
@@ -887,11 +901,11 @@ export const customerReviewDocument = async (req, projectId, documentId, reviewD
 
   const document = project.architectDocuments[documentIndex];
 
-  // Check if document has been sent to customer
-  if (!document.sentToCustomer) {
+  // Check if document has been approved by admin (customers can review approved documents)
+  if (document.adminStatus !== 'Approved') {
     throw new ApiError(
       httpStatus.BAD_REQUEST,
-      'Document has not been sent to customer for review yet'
+      'Document has not been approved by admin yet'
     );
   }
 
@@ -1004,9 +1018,37 @@ export const getArchitectDocumentsForCustomer = async (projectId, user) => {
     throw new ApiError(httpStatus.FORBIDDEN, 'You are not authorized to view documents for this project.');
   }
 
-  return project.architectDocuments.filter(
-    (doc) => doc.sentToCustomer
+  // Get approved architect documents
+  const approvedDocuments = project.architectDocuments.filter(
+    (doc) => doc.adminStatus === 'Approved'
   );
+
+  // Get attachments for each document and filter out documents without admin attachments
+  const documentsWithAttachments = await Promise.all(
+    approvedDocuments.map(async (doc) => {
+      // Get attachments for this document
+      const attachments = await Attachment.find({
+        documentId: doc._id,
+        projectId: projectId
+      }).populate('sentBy', 'name email')
+        .populate('reviewedBy', 'name email')
+        .sort({ createdAt: -1 });
+
+      // Include documents that have admin attachments OR have been sent to customer
+      if (attachments.length > 0 || doc.sentToCustomer) {
+        return {
+          ...doc.toObject(),
+          // Keep architect's original files if document was sent to customer
+          files: doc.sentToCustomer ? doc.files : [], // Show LayoutPlan files only if sent to customer
+          attachments // Include admin attachments
+        };
+      }
+      return null; // Exclude documents without attachments and not sent to customer
+    })
+  );
+
+  // Filter out null values (documents without attachments)
+  return documentsWithAttachments.filter(doc => doc !== null);
 };
 
 /**

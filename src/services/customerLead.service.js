@@ -1103,7 +1103,7 @@ export const shareRequirementWithUsersService = async (req, leadId, requirementI
     if (project) {
       // Check if there are any approved architect documents
       const approvedDocuments = project.architectDocuments.filter(doc =>
-        doc.adminStatus === 'Approved' && doc.customerStatus === 'Approved'
+        doc.adminStatus === 'Approved' 
       );
 
       if (approvedDocuments.length > 0) {

@@ -66,7 +66,7 @@ export const debugAllSiteVisits = catchAsync(async (req, res) => {
  * Get project assignment payments
  */
 export const getProjectAssignmentPayments = catchAsync(async (req, res) => {
-    const filter = pick(req.query, ['projectName', 'userName', 'userRole', 'createdBy', 'createdByModel', 'userId']);
+    const filter = pick(req.query, ['projectName', 'userName', 'userRole', 'createdBy', 'createdByModel', 'userId', 'startDate', 'endDate']);
     const options = pick(req.query, ['sortBy', 'limit', 'page']);
 
     // Restrict non-admins to their own data only

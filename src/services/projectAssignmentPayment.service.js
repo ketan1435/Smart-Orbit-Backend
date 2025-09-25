@@ -90,6 +90,28 @@ export const queryProjectAssignmentPayments = async (filter, options) => {
         mongoFilter.user = filter.userId;
     }
 
+    // Date range filter on createdAt
+    if (filter.startDate || filter.endDate) {
+        mongoFilter.createdAt = {};
+        if (filter.startDate) {
+            mongoFilter.createdAt.$gte = new Date(filter.startDate);
+        }
+        if (filter.endDate) {
+            // include the end date fully (end of day)
+            const end = new Date(filter.endDate);
+            if (!isNaN(end.getTime())) {
+                end.setHours(23, 59, 59, 999);
+                mongoFilter.createdAt.$lte = end;
+            } else {
+                mongoFilter.createdAt.$lte = new Date(filter.endDate);
+            }
+        }
+        // Clean up if empty
+        if (Object.keys(mongoFilter.createdAt).length === 0) {
+            delete mongoFilter.createdAt;
+        }
+    }
+
     console.log('Final mongoFilter:', JSON.stringify(mongoFilter, null, 2));
 
     const payments = await ProjectAssignmentPayment.find(mongoFilter)
