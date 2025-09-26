@@ -1901,6 +1901,25 @@ export const getProjectDocumentsForProcurement = async (projectId, user) => {
     doc.adminStatus === 'Approved' && doc.customerStatus === 'Approved'
   );
 
+  // Get attachments for each approved document
+  const documentsWithAttachments = await Promise.all(
+    approvedDocuments.map(async (doc) => {
+      // Get approved attachments for this document
+      const attachments = await Attachment.find({
+        documentId: doc._id,
+        projectId: projectId,
+        status: 'approved' // Only get approved attachments
+      }).populate('sentBy', 'name email')
+        .populate('reviewedBy', 'name email')
+        .sort({ createdAt: -1 });
+
+      return {
+        ...doc.toObject(),
+        attachments // Include approved attachments
+      };
+    })
+  );
+
   return {
     project: {
       _id: project._id,
@@ -1910,7 +1929,7 @@ export const getProjectDocumentsForProcurement = async (projectId, user) => {
       lead: project.lead,
       requirement: project.requirement
     },
-    documents: approvedDocuments
+    documents: documentsWithAttachments
   };
 };
 
