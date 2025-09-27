@@ -18,6 +18,7 @@ export const getServices = {
     search: Joi.string().allow(''),
     category: Joi.string().valid('Project Management', 'Design', 'Procurement', 'Quality Control', 'Supervision', 'Equipment'),
     status: Joi.string().valid('Active', 'Inactive', 'Draft'),
+    includeAttachments: Joi.boolean().default(false),
   }),
 };
 

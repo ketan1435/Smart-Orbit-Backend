@@ -18,7 +18,7 @@ export const createService = catchAsync(async (req, res) => {
 });
 
 export const getServices = catchAsync(async (req, res) => {
-  const { page = 1, limit = 10, search, category, status } = req.query;
+  const { page = 1, limit = 10, search, category, status, includeAttachments } = req.query;
   const skip = (page - 1) * limit;
 
   // Build filter object
@@ -39,13 +39,20 @@ export const getServices = catchAsync(async (req, res) => {
     filter.status = status;
   }
 
-  const services = await Service.find(filter)
+  // Build query with optional attachments population
+  let query = Service.find(filter)
     .populate('createdBy', 'name email')
     .populate('updatedBy', 'name email')
     .sort({ createdAt: -1 })
     .skip(skip)
     .limit(parseInt(limit));
 
+  // Include attachments if requested
+  if (includeAttachments === 'true') {
+    query = query.select('+attachments');
+  }
+
+  const services = await query;
   const total = await Service.countDocuments(filter);
 
   res.json({
