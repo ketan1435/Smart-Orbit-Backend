@@ -68,12 +68,22 @@ export const createClientProposal = async (req, clientProposalBody, userId) => {
 
     // Log the client proposal creation activity
     try {
-        await logActivity(req, {
+        console.log('Creating activity log for client proposal:', {
+            userRole: user.role,
+            isArchitect: user.role === 'architect',
+            description: user.role === 'architect' 
+                ? `Architect User Send Proposal to Admin`
+                : `${userType} ${user.name} (${user.email}) created a new client proposal `
+        });
+        
+        const activityLogResult = await logActivity(req, {
             action: 'create_client_proposal',
             targetModel: 'ClientProposal',
             targetId: clientProposal._id,
             targetName: clientProposalBody.proposalFor || 'Client Proposal',
-            description: `${userType} ${user.name} (${user.email}) created a new client proposal for project: ${project.projectName}`,
+            description: user.role === 'architect' 
+                ? `Architect User Send Proposal to Admin`
+                : `${userType} ${user.name} (${user.email}) created a new client proposal`,
             changes: {
                 proposalCreated: {
                     from: null,
@@ -162,6 +172,8 @@ export const createClientProposal = async (req, clientProposalBody, userId) => {
                 }
             }
         });
+        
+        console.log('Activity log created successfully:', activityLogResult);
     } catch (error) {
         console.error('Error logging client proposal creation:', error);
     }
@@ -251,7 +263,7 @@ export const sendToCustomer = async (req, clientProposalId, userId) => {
             targetModel: 'ClientProposal',
             targetId: clientProposal._id,
             targetName: clientProposal.proposalFor || 'Client Proposal',
-            description: `${userType} ${user.name} (${user.email}) sent client proposal to customer for project: ${clientProposal.project?.projectName || 'Unknown Project'}`,
+            description: `${userType} ${user.name} (${user.email}) sent client proposal to customer`,
             changes: {
                 status: {
                     from: originalStatus,
@@ -362,7 +374,7 @@ export const customerReview = async (req, clientProposalId, reviewData, userId) 
             targetModel: 'ClientProposal',
             targetId: clientProposal._id,
             targetName: clientProposal.proposalFor || 'Client Proposal',
-            description: `Customer ${user.name} (${user.email}) ${reviewData.status} the client proposal for project: ${clientProposal.project?.projectName || 'Unknown Project'}`,
+            description: `Customer ${user.name} (${user.email}) ${reviewData.status} the client proposal`,
             changes: {
                 status: {
                     from: originalStatus,
@@ -586,7 +598,7 @@ export const updateClientProposalById = async (req, clientProposalId, updateBody
             targetModel: 'ClientProposal',
             targetId: clientProposal._id,
             targetName: clientProposal.proposalFor || 'Client Proposal',
-            description: `${userType} ${user.name} (${user.email}) updated client proposal for project: ${clientProposal.project?.projectName || 'Unknown Project'}`,
+            description: `${userType} ${user.name} (${user.email}) updated client proposal `,
             changes: {
                 proposalFor: updateBody.proposalFor ? {
                     from: originalProposal.proposalFor,
@@ -775,7 +787,7 @@ export const updateClientProposalStatus = async (req, clientProposalId, status, 
             targetModel: 'ClientProposal',
             targetId: clientProposal._id,
             targetName: clientProposal.proposalFor || 'Client Proposal',
-            description: `${userType} ${user.name} (${user.email}) updated client proposal status from '${originalStatus}' to '${status}' for project: ${clientProposal.project?.projectName || 'Unknown Project'}`,
+            description: `${userType} ${user.name} (${user.email}) updated client proposal status from '${originalStatus}' to '${status}' `,
             changes: {
                 status: {
                     from: originalStatus,
@@ -932,7 +944,7 @@ export const createNewVersion = async (req, clientProposalId, updateBody, userId
             targetModel: 'ClientProposal',
             targetId: newProposal._id,
             targetName: newProposal.proposalFor || 'Client Proposal',
-            description: `${userType} ${user.name} (${user.email}) created new version ${newVersion} of client proposal for project: ${newProposal.project?.projectName || 'Unknown Project'}`,
+            description: `${userType} ${user.name} (${user.email}) created new  client proposal `,
             changes: {
                 version: {
                     from: originalProposal.version,
@@ -1139,7 +1151,7 @@ export const deleteClientProposalById = async (req, clientProposalId, userId) =>
             targetModel: 'ClientProposal',
             targetId: clientProposal._id,
             targetName: clientProposal.proposalFor || 'Client Proposal',
-            description: `${userType} ${user.name} (${user.email}) deleted client proposal version ${clientProposal.version} for project: ${clientProposal.project?.projectName || 'Unknown Project'}`,
+            description: `${userType} ${user.name} (${user.email}) deleted client proposal `,
             changes: {
                 proposalDeleted: {
                     from: clientProposal._id,
@@ -1369,7 +1381,7 @@ export const convertToWorkOrder = async (req, clientProposalId, userId) => {
             targetModel: 'ClientProposal',
             targetId: clientProposal._id,
             targetName: clientProposal.proposalFor || 'Client Proposal',
-            description: `${userType} ${user.name} (${user.email}) converted client proposal version ${clientProposal.version} to work order for project: ${clientProposal.project?.projectName || 'Unknown Project'}`,
+            description: `${userType} ${user.name} (${user.email}) converted client proposal to work order `,
             changes: {
                 convertedToWorkOrder: {
                     from: originalConvertedToWorkOrder,
@@ -1527,7 +1539,7 @@ export const sendWorkOrderToPlanningEngineer = async (req, clientProposalId, use
             targetModel: 'ClientProposal',
             targetId: clientProposal._id,
             targetName: clientProposal.proposalFor || 'Client Proposal',
-            description: `${userType} ${user.name} (${user.email}) sent work order version ${clientProposal.version} to planning engineer for project: ${clientProposal.project?.projectName || 'Unknown Project'}`,
+            description: `${userType} ${user.name} (${user.email}) sent work order to planning engineer `,
             changes: {
                 workOrderSentToPlanningEngineer: {
                     from: originalWorkOrderSentToPlanningEngineer,
@@ -1693,7 +1705,7 @@ export const sendProposalDocumentToCustomer = async (req, projectId, file, userI
       targetModel: 'ClientProposal',
       targetId: clientProposal._id,
       targetName: 'Shared Document',
-      description: `${userType} ${user.name} sent a document to customer for project: ${project.projectName}`,
+      description: `${userType} ${user.name} sent a document to customer`,
       metadata: {
         projectId: project._id,
         s3Key,

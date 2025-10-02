@@ -14,6 +14,7 @@ import { STATUS_VALUES } from '../config/enums/status.enum.js';
 import { STATUS_ENUM } from '../config/enums/status.enum.js';
 import { updateProjectStatusWithReflection } from './statusCascade.service.js';
 import Attachment from '../models/attachment.model.js';
+import { logActivity } from '../middlewares/activityLog.middleware.js';
 
 /**
  * Generates a unique project code.
@@ -204,12 +205,19 @@ export const addArchitectProposal = async (req, projectId, architect, proposalBo
 
   // Log the architect proposal submission activity
   try {
+    console.log('Creating activity log for architect proposal submission:', {
+      architectName: architect.name,
+      architectEmail: architect.email,
+      projectName: project.projectName,
+      description: 'Vendor Send Proposal to Admin'
+    });
+    
     await logActivity(req, {
       action: 'submit_proposal',
       targetModel: 'Project',
       targetId: project._id,
       targetName: project.projectName,
-      description: `Architect ${architect.name} (${architect.email}) submitted proposal for project: ${project.projectName}`,
+      description: `Vendor Send Proposal to Admin`,
       changes: {
         proposals: {
           from: originalProposalsCount,
@@ -250,6 +258,8 @@ export const addArchitectProposal = async (req, projectId, architect, proposalBo
         submittedAt: new Date()
       }
     });
+    
+    console.log('Activity log created successfully for architect proposal submission');
   } catch (error) {
     console.error('Error logging architect proposal submission:', error);
   }
@@ -318,12 +328,19 @@ export const acceptArchitectProposal = async (req, projectId, proposalId, adminU
 
   // Log the architect proposal acceptance activity
   try {
+    console.log('Creating activity log for vendor proposal approval:', {
+      adminName: adminUser.name,
+      adminEmail: adminUser.email,
+      projectName: project.projectName,
+      description: 'Vendor Proposal is Approve From Admin'
+    });
+    
     await logActivity(req, {
       action: 'accept_proposal',
       targetModel: 'Project',
       targetId: project._id,
       targetName: project.projectName,
-      description: `Admin ${adminUser.name} (${adminUser.email}) accepted architect proposal for project: ${project.projectName}`,
+      description: `Vendor Proposal is Approve From Admin`,
       changes: {
         proposalStatus: {
           from: originalProposalStatus,
@@ -372,6 +389,8 @@ export const acceptArchitectProposal = async (req, projectId, proposalId, adminU
         acceptedAt: new Date()
       }
     });
+    
+    console.log('Activity log created successfully for vendor proposal approval');
   } catch (error) {
     console.error('Error logging architect proposal acceptance:', error);
   }
@@ -499,7 +518,7 @@ export const submitArchitectDocument = async (req, projectId, architect, documen
         targetModel: 'Project',
         targetId: project._id,
         targetName: project.projectName,
-        description: `Architect ${architect.name} (${architect.email}) submitted document version ${version} for project: ${project.projectName}`,
+        description: `Vendor Send Document to Admin`,
         changes: {
           architectDocuments: {
             from: originalDocumentsCount,
@@ -558,7 +577,7 @@ export const submitArchitectDocument = async (req, projectId, architect, documen
           targetModel: 'Project',
           targetId: project._id,
           targetName: project.projectName,
-          description: `Architect ${architect.name} uploaded ${file.fileType} file for project: ${project.projectName} (version ${version})`,
+          description: `Vendor Send Document to Admin`,
           changes: {
             files: {
               from: null,
@@ -717,7 +736,9 @@ export const reviewArchitectDocument = async (req, projectId, documentId, review
       targetModel: 'Project',
       targetId: project._id,
       targetName: project.projectName,
-      description: `Admin ${admin.name} (${admin.email}) ${reviewData.status.toLowerCase()} architect document version ${updatedDocument.version} for project: ${project.projectName}`,
+      description: (String(reviewData.status).toLowerCase() === 'approved')
+        ? `Admin Aprove Vendor Document`
+        : `Admin Reject Vendor Document`,
       changes: {
         adminStatus: {
           from: originalDocument.adminStatus,
@@ -828,7 +849,7 @@ export const sendDocumentToCustomer = async (req, projectId, documentId, admin) 
       targetModel: 'Project',
       targetId: project._id,
       targetName: project.projectName,
-      description: `Admin ${admin.name} (${admin.email}) sent architect document version ${document.version} to customer for project: ${project.projectName}`,
+      description: `Admin sent architect document  to customer`,
       changes: {
         sentToCustomer: {
           from: originalSentToCustomer,
@@ -939,7 +960,7 @@ export const customerReviewDocument = async (req, projectId, documentId, reviewD
       targetModel: 'Project',
       targetId: project._id,
       targetName: project.projectName,
-      description: `Customer ${reviewData.status.toLowerCase()} architect document version ${updatedDocument.version} for project: ${project.projectName}`,
+      description: `Customer ${reviewData.status.toLowerCase()} Vendor document`,
       changes: {
         customerStatus: {
           from: originalDocument.customerStatus,
@@ -1345,7 +1366,7 @@ export const deleteMyProposal = async (req, proposalId, user) => {
       targetModel: 'Project',
       targetId: project._id,
       targetName: project.projectName,
-      description: `Architect ${user.name} (${user.email}) deleted their proposal for project: ${project.projectName}`,
+      description: `Vendor deleted their proposal`,
       changes: {
         proposals: {
           from: originalProposalsCount,
@@ -1455,7 +1476,7 @@ export const rejectProposal = async (req, proposalId, adminUser, rejectData) => 
       targetModel: 'Project',
       targetId: project._id,
       targetName: project.projectName,
-      description: `Admin ${adminUser.name} (${adminUser.email}) rejected architect proposal for project: ${project.projectName}`,
+      description: `Admin Reject Vendor Proposal`,
       changes: {
         proposalStatus: {
           from: originalProposal.status,
@@ -1596,7 +1617,7 @@ export const sendDocumentToProcurement = async (req, projectId, documentId, admi
       targetModel: 'Project',
       targetId: project._id,
       targetName: project.projectName,
-      description: `Admin ${admin.name} (${admin.email}) sent approved architect document version ${document.version} to procurement for project: ${project.projectName}`,
+      description: `Admin sent approved Vendor document to Planning Engineer`,
       changes: {
         sentToPlanningEngineer: {
           from: originalSentToPlanningEngineer,
@@ -2048,7 +2069,7 @@ export const assignSiteEngineersService = async (req, projectId, siteEngineers) 
           targetModel: 'Project',
           targetId: project._id,
           targetName: project.projectName,
-          description: `Admin ${req.user.name} (${req.user.email}) attempted to assign site engineers to project: ${project.projectName} - No new engineers added (all already assigned)`,
+          description: `Admin ${req.user.name} to assign site engineers to project - No new engineers added (all already assigned)`,
           changes: {
             assignedSiteEngineers: {
               from: originalEngineersCount,
@@ -2121,7 +2142,7 @@ export const assignSiteEngineersService = async (req, projectId, siteEngineers) 
         targetModel: 'Project',
         targetId: project._id,
         targetName: project.projectName,
-        description: `Admin ${req.user.name} (${req.user.email}) assigned ${newEngineers.length} site engineer(s) to project: ${project.projectName}`,
+        description: `Admin ${req.user.name}  assigned ${newEngineers.length} site engineer(s) to project`,
         changes: {
           assignedSiteEngineers: {
             from: originalEngineersCount,
@@ -2307,7 +2328,7 @@ export const updateProjectStatusService = async (req, projectId, newStatus) => {
       targetModel: 'Project',
       targetId: project._id,
       targetName: project.projectName,
-      description: `${req.user.role === 'admin' ? 'Admin' : 'User'} ${req.user.name} (${req.user.email}) updated project status from '${originalStatus}' to '${newStatus}' for project: ${project.projectName}`,
+      description: `${req.user.role === 'admin' ? 'Admin' : 'User'} ${req.user.name} (${req.user.email}) updated project status from '${originalStatus}' to '${newStatus}`,
       changes: {
         status: {
           from: originalStatus,

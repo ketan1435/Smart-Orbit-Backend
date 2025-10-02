@@ -102,7 +102,7 @@ export const createCustomerLeadService = async (req, session) => {
         targetModel: 'Requirement',
         targetId: requirementId,
         targetName: reqData.projectName,
-        description: `Created requirement: ${reqData.projectName} for customer lead: ${lead.customerName}`,
+        description: `New requirement is Created for customer ${lead.customerName}`,
         metadata: {
           requirementData: {
             projectName: reqData.projectName,
@@ -127,7 +127,7 @@ export const createCustomerLeadService = async (req, session) => {
         targetModel: 'Project',
         targetId: project._id,
         targetName: reqData.projectName,
-        description: `Created project: ${reqData.projectName} for customer lead: ${lead.customerName}`,
+        description: `Project is Created for customer ${lead.customerName}`,
         metadata: {
           projectId: project._id,
           projectData: {
@@ -267,7 +267,7 @@ export const createCustomerLeadService = async (req, session) => {
             targetModel: 'SiteVisit',
             targetId: siteVisit._id,
             targetName: `Site visit for ${reqData.projectName}`,
-            description: `Created site visit for project: ${reqData.projectName} with site engineer`,
+            description: ` site visit is Created for project`,
             metadata: {
               siteVisitData: {
                 projectName: reqData.projectName,
@@ -391,7 +391,7 @@ export const createCustomerLeadService = async (req, session) => {
       targetModel: 'CustomerLead',
       targetId: lead._id,
       targetName: lead.customerName || 'Unknown Customer',
-      description: `Created customer lead: ${lead.customerName} (${lead.email})`,
+      description: `Created customer ${lead.customerName} (${lead.email})`,
       metadata: {
         leadData: {
           customerName: lead.customerName,
@@ -607,7 +607,7 @@ export const updateCustomerLeadService = async (req, session) => {
         targetModel: 'CustomerLead',
         targetId: lead._id,
         targetName: lead.customerName || 'Unknown Customer',
-        description: `Updated customer lead status: ${lead.customerName} - ${originalLead.status} → ${restUpdateBody.status} (cascade updated ${result.projectsUpdated} projects)`,
+        description: `Updated customer status: ${lead.customerName} - ${originalLead.status} → ${restUpdateBody.status} (cascade updated ${result.projectsUpdated} projects)`,
         changes: updatedFields,
         metadata: {
           leadData: {
@@ -632,15 +632,19 @@ export const updateCustomerLeadService = async (req, session) => {
 
     // Log individual requirement updates if any
     for (const reqUpdate of updatedRequirements) {
+      const isScpDataUpdate = Object.prototype.hasOwnProperty.call(reqUpdate.changes || {}, 'scpData');
       try {
         await logActivity(req, {
           action: 'update',
           targetModel: 'Requirement',
           targetId: reqUpdate.requirementId,
           targetName: reqUpdate.projectName,
-          description: `Updated requirement: ${reqUpdate.projectName} for customer lead: ${lead.customerName}`,
+          description: isScpDataUpdate
+            ? `SCP data updated by ${req.user.name} (${req.user.role})`
+            : `Updated requirement: ${reqUpdate.projectName} for customer lead: ${lead.customerName}`,
           changes: reqUpdate.changes,
           metadata: {
+            projectId: reqUpdate.updatedData?.project || originalRequirement.project,
             requirementData: {
               projectName: reqUpdate.projectName,
               requirementType: reqUpdate.updatedData.requirementType,
@@ -679,7 +683,7 @@ export const updateCustomerLeadService = async (req, session) => {
         targetModel: 'CustomerLead',
         targetId: lead._id,
         targetName: lead.customerName || 'Unknown Customer',
-        description: `Updated customer lead: ${lead.customerName} (${lead.email})`,
+        description: `Updated customer ${lead.customerName} (${lead.email})`,
         changes: updatedFields,
         metadata: {
           leadData: {
@@ -704,15 +708,19 @@ export const updateCustomerLeadService = async (req, session) => {
 
     // Log individual requirement updates if any
     for (const reqUpdate of updatedRequirements) {
+      const isScpDataUpdate = Object.prototype.hasOwnProperty.call(reqUpdate.changes || {}, 'scpData');
       try {
         await logActivity(req, {
           action: 'update',
           targetModel: 'Requirement',
           targetId: reqUpdate.requirementId,
           targetName: reqUpdate.projectName,
-          description: `Updated requirement: ${reqUpdate.projectName} for customer lead: ${lead.customerName}`,
+          description: isScpDataUpdate
+            ? `SCP data updated by ${req.user.name} (${req.user.role})`
+            : `Updated requirement: ${reqUpdate.projectName} for customer `,
           changes: reqUpdate.changes,
           metadata: {
+            projectId: reqUpdate.updatedData?.project || originalRequirement.project,
             requirementData: {
               projectName: reqUpdate.projectName,
               requirementType: reqUpdate.updatedData.requirementType,
@@ -1211,7 +1219,7 @@ export const shareRequirementWithUsersService = async (req, leadId, requirementI
       targetModel: 'Requirement',
       targetId: requirementId,
       targetName: requirement.projectName,
-      description: `Shared requirement: ${requirement.projectName} with ${sharedUsers.length} users for customer lead: ${lead.customerName}`,
+      description: `Shared requirement with ${sharedUsers.length} users `,
       metadata: {
         requirementData: {
           projectName: requirement.projectName,
@@ -1246,7 +1254,7 @@ export const shareRequirementWithUsersService = async (req, leadId, requirementI
         targetModel: 'User',
         targetId: sharedUser.userId,
         targetName: sharedUser.userName,
-        description: `Shared requirement: ${requirement.projectName} with user: ${sharedUser.userName} (${sharedUser.userEmail})`,
+        description: `Shared requirement with user: ${sharedUser.userName} (${sharedUser.userEmail})`,
         metadata: {
           requirementId: requirementId,
           requirementName: requirement.projectName,
@@ -1610,9 +1618,10 @@ export const updateScpDataByScpUserService = async (req, leadId, requirementId, 
       targetModel: 'Requirement',
       targetId: requirementId,
       targetName: requirement.projectName,
-      description: `Updated SCP data: ${requirement.projectName} by SCP user: ${scpUser.name} for customer lead: ${lead.customerName}`,
+      description: `SCP data updated by ${scpUser.name} (${scpUser.role})`,
       changes: scpDataChanges,
       metadata: {
+        projectId: requirement.project,
         requirementData: {
           projectName: requirement.projectName,
           requirementType: requirement.requirementType,
@@ -1854,7 +1863,7 @@ export const updateScpDataByAdminService = async (req, leadId, requirementId, ad
       targetModel: 'Requirement',
       targetId: requirementId,
       targetName: requirement.projectName,
-      description: `Updated SCP data by admin: ${requirement.projectName} - ${admin.name} for customer lead: ${lead.customerName}`,
+      description: `SCP data updated by ${admin.name} (${admin.role})`,
       changes: scpDataChanges,
       metadata: {
         projectId: requirement.project,

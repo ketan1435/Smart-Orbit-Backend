@@ -90,7 +90,7 @@ export const createSiteworkService = async (req, data, user) => {
             targetModel: 'Sitework',
             targetId: sitework._id,
             targetName: sitework.name || 'Sitework',
-            description: `${user.role === 'Admin' ? 'Admin' : 'User'} ${user.name} (${user.email}) created sitework "${sitework.name}" for project: ${project.projectName || 'Unknown Project'}`,
+            description: `${user.role === 'Admin' ? 'Admin' : 'User'} ${user.name} (${user.email}) created sitework "${sitework.name}" `,
             changes: {
                 siteworkCreated: {
                     from: null,
@@ -282,7 +282,7 @@ export const updateSiteworkService = async (req, id, data, user) => {
             targetModel: 'Sitework',
             targetId: sitework._id,
             targetName: sitework.name || 'Sitework',
-            description: `${user.role === 'Admin' ? 'Admin' : 'User'} ${user.name} (${user.email}) updated sitework "${sitework.name}" for project: ${sitework.project?.projectName || 'Unknown Project'}`,
+            description: `${user.role === 'Admin' ? 'Admin' : 'User'} ${user.name} (${user.email}) updated sitework "${sitework.name}"`,
             changes: {
                 description: {
                     from: originalDescription,
@@ -545,7 +545,7 @@ export const approveOrRejectSiteworkDocumentService = async (req, siteworkId, do
             targetModel: 'SiteworkDocument',
             targetId: doc._id,
             targetName: `Document in ${sitework.name || 'Sitework'}`,
-            description: `${user.role === 'Admin' ? 'Admin' : user.role === 'sales-admin' ? 'Sales Admin' : user.role === 'site-engineer' ? 'Site Engineer' : 'Customer'} ${user.name} (${user.email}) ${status.toLowerCase()}ed sitework document in "${sitework.name}" for project: ${sitework.project?.projectName || 'Unknown Project'}`,
+            description: `${user.role === 'Admin' ? 'Admin' : user.role === 'sales-admin' ? 'Sales Admin' : user.role === 'site-engineer' ? 'Site Engineer' : 'Customer'} ${user.name} (${user.email}) ${status.toLowerCase()}ed sitework document in "${sitework.name}" `,
             changes: {
                 adminStatus: {
                     from: originalAdminStatus,
@@ -964,7 +964,7 @@ export const customerReviewSiteworkDocumentService = async (req, projectId, site
             targetModel: 'SiteworkDocument',
             targetId: doc._id,
             targetName: `Document in ${sitework.name || 'Sitework'}`,
-            description: `Customer ${user.name} (${user.email}) ${status.toLowerCase()}ed sitework document in "${sitework.name}" for project: ${sitework.project?.projectName || 'Unknown Project'}`,
+            description: `Customer ${user.name} (${user.email}) ${status.toLowerCase()}ed sitework document in "${sitework.name}" `,
             changes: {
                 customerStatus: {
                     from: originalCustomerStatus,
@@ -1216,7 +1216,7 @@ export const sendSiteworkDocumentToCustomerService = async (req, projectId, site
             targetModel: 'SiteworkDocument',
             targetId: doc._id,
             targetName: `Document in ${sitework.name || 'Sitework'}`,
-            description: `${user.role === 'Admin' ? 'Admin' : 'Sales Admin'} ${user.name} (${user.email}) sent sitework document in "${sitework.name}" to customer for project: ${sitework.project?.projectName || 'Unknown Project'}`,
+            description: `${user.role === 'Admin' ? 'Admin' : 'Sales Admin'} ${user.name} (${user.email}) sent sitework document in "${sitework.name}" to customer `,
             changes: {
                 customerStatus: {
                     from: originalCustomerStatus,
