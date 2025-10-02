@@ -1039,14 +1039,13 @@ export const getArchitectDocumentsForCustomer = async (projectId, user) => {
     throw new ApiError(httpStatus.FORBIDDEN, 'You are not authorized to view documents for this project.');
   }
 
-  // Get approved architect documents
-  const approvedDocuments = project.architectDocuments.filter(
-    (doc) => doc.adminStatus === 'Approved'
-  );
+  // Get all architect documents (not just approved ones)
+  // Customers should see documents that have admin attachments regardless of admin status
+  const allDocuments = project.architectDocuments;
 
   // Get attachments for each document and filter out documents without admin attachments
   const documentsWithAttachments = await Promise.all(
-    approvedDocuments.map(async (doc) => {
+    allDocuments.map(async (doc) => {
       // Get attachments for this document
       const attachments = await Attachment.find({
         documentId: doc._id,
@@ -1056,6 +1055,7 @@ export const getArchitectDocumentsForCustomer = async (projectId, user) => {
         .sort({ createdAt: -1 });
 
       // Include documents that have admin attachments OR have been sent to customer
+      // This allows customers to see documents with admin attachments regardless of admin status
       if (attachments.length > 0 || doc.sentToCustomer) {
         return {
           ...doc.toObject(),
