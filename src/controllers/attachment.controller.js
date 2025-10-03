@@ -61,6 +61,11 @@ const createAttachment = catchAsync(async (req, res) => {
             requirementId: req.body.requirementId,
             note: req.body.note || '',
             sentBy: req.user.id,
+            sentByUser: {
+                _id: req.user.id,
+                name: req.user.name || 'Admin',
+                email: req.user.email || 'admin@system.com'
+            },
             file: req.body.file || {
                 buffer: req.file.buffer,
                 originalname: req.file.originalname,
@@ -142,7 +147,12 @@ const reviewAttachment = catchAsync(async (req, res) => {
         const reviewData = {
             status,
             remarks: remarks || '',
-            reviewedBy: req.user.id
+            reviewedBy: req.user.id,
+            reviewedByUser: {
+                _id: req.user.id,
+                name: req.user.name || 'Customer',
+                email: req.user.email || 'customer@system.com'
+            }
         };
 
         const attachment = await attachmentService.reviewAttachment(attachmentId, reviewData);

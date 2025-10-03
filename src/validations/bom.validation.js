@@ -54,6 +54,7 @@ export const getBOMs = {
         status: Joi.string().valid('draft', 'submitted', 'approved', 'rejected'),
         version: Joi.number().min(1),
         architectDocumentId: Joi.string().custom(objectId),
+        attachmentId: Joi.string().custom(objectId),
         isReusable: Joi.boolean(),
         sortBy: Joi.string(),
         limit: Joi.number().integer(),

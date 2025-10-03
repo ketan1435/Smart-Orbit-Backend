@@ -91,6 +91,11 @@ const bomSchema = new mongoose.Schema(
             type: String,
             default: null,
         },
+        attachmentId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Attachment',
+            default: null,
+        },
         sourceBOMId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: 'BOM',

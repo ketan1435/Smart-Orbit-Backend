@@ -43,7 +43,19 @@ export const createBOM = async (req, projectId, bomData, user) => {
         createdBy: user.id,
     };
 
+    // Debug logging for BOM creation
+    console.log('🔍 createBOM - BOM Data:', bomData);
+    console.log('🔍 createBOM - BOM Body:', bomBody);
+    console.log('🔍 createBOM - Attachment ID:', bomData.attachmentId);
+
     const bom = await BOM.create(bomBody);
+    
+    console.log('🔍 createBOM - Created BOM:', {
+        id: bom._id,
+        projectId: bom.projectId,
+        attachmentId: bom.attachmentId,
+        architectDocumentId: bom.architectDocumentId
+    });
 
     // Log the BOM creation activity
     try {
@@ -188,7 +200,33 @@ export const queryBOMs = async (projectId, filter, options) => {
         ? { [sortBy.split(':')[0]]: sortBy.split(':')[1] === 'desc' ? -1 : 1 }
         : { createdAt: -1 };
 
-    const bomFilter = { projectId, ...filter };
+    // Build the base filter
+    const bomFilter = { projectId };
+
+    // Handle document/attachment filtering with OR logic
+    if (filter.architectDocumentId && filter.attachmentId) {
+        // If both are provided, find BOMs that match either document OR attachment
+        bomFilter.$or = [
+            { architectDocumentId: filter.architectDocumentId },
+            { attachmentId: filter.attachmentId }
+        ];
+    } else if (filter.architectDocumentId) {
+        // Only document filter
+        bomFilter.architectDocumentId = filter.architectDocumentId;
+    } else if (filter.attachmentId) {
+        // Only attachment filter
+        bomFilter.attachmentId = filter.attachmentId;
+    }
+
+    // Add other filters (status, version, isReusable)
+    if (filter.status) bomFilter.status = filter.status;
+    if (filter.version) bomFilter.version = filter.version;
+    if (filter.isReusable !== undefined) bomFilter.isReusable = filter.isReusable;
+
+    // Debug logging for attachment BOMs
+    console.log('🔍 queryBOMs - Project ID:', projectId);
+    console.log('🔍 queryBOMs - Filter:', filter);
+    console.log('🔍 queryBOMs - Final BOM Filter:', bomFilter);
 
     const boms = await BOM.find(bomFilter)
         .populate('createdBy', 'name email')
@@ -200,7 +238,11 @@ export const queryBOMs = async (projectId, filter, options) => {
         .limit(limit)
         .lean();
 
+    console.log('🔍 queryBOMs - Found BOMs:', boms.length);
+    console.log('🔍 queryBOMs - BOMs:', boms);
+
     const totalResults = await BOM.countDocuments(bomFilter);
+    console.log('🔍 queryBOMs - Total Results:', totalResults);
 
     return {
         results: boms,
@@ -2149,7 +2191,7 @@ export const createFinalizedBOM = async (req, projectId, originalBomId, finalize
             targetModel: 'BOM',
             targetId: updatedBOM._id,
             targetName: updatedBOM.title || `BOM v${updatedBOM.version}`,
-            description: `${user.role === 'admin' ? 'Admin' : 'Planning Engineer'} ${user.name} (${user.email}) finalized BOM with vendor assignments `,
+            description: `${user.role === 'admin' ? 'Admin' : 'Planning Engineer'} ${user.name} (${user.email}) Send BOM For Approval `,
             changes: {
                 title: {
                     from: originalTitle,

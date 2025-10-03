@@ -5,6 +5,7 @@ import Requirement from '../models/requirement.model.js';
 import storage from '../factory/storage.factory.js';
 import ApiError from '../utils/ApiError.js';
 import httpStatus from 'http-status';
+import { createActivityLog } from './activityLog.service.js';
 
 /**
  * Create a new attachment
@@ -50,6 +51,45 @@ const createAttachment = async (attachmentBody) => {
                 type: 'admin_attachment'
             }
         });
+
+        // Create activity log for admin sending attachment to customer
+        try {
+            console.log('🔍 Creating attachment activity log for admin send:', {
+                projectId: project._id,
+                projectName: project.projectName,
+                attachmentId: attachment._id,
+                fileName: attachment.attachment.file.originalName
+            });
+            
+            await createActivityLog({
+                user: attachmentBody.sentBy,
+                userModel: 'Admin',
+                userName: attachmentBody.sentByUser?.name || 'Admin',
+                userEmail: attachmentBody.sentByUser?.email || 'admin@system.com',
+                targetModel: 'Project',
+                targetId: project._id,
+                targetName: project.projectName || 'Project',
+                action: 'send',
+                actionType: 'Communication',
+                description: `Admin sent attachment to customer for review`,
+                metadata: {
+                    projectId: project._id,
+                    documentId: attachmentBody.documentId,
+                    customerLeadId: attachmentBody.customerLeadId,
+                    requirementId: attachmentBody.requirementId,
+                    attachmentId: attachment._id,
+                    fileName: attachment.attachment.file.originalName,
+                    fileType: attachment.attachment.file.mimetype,
+                    fileSize: attachment.attachment.file.size,
+                    embeddedDocument: 'attachment'
+                }
+            });
+            
+            console.log('✅ Attachment activity log created successfully');
+        } catch (logError) {
+            console.error('Failed to create activity log for attachment creation:', logError);
+            // Don't throw error as attachment creation was successful
+        }
 
         return attachment;
     } catch (error) {
@@ -155,6 +195,60 @@ const reviewAttachment = async (attachmentId, reviewData) => {
          .populate('customerLeadId', 'customerName')
          .populate('sentBy', 'name email')
          .populate('reviewedBy', 'name email');
+
+        // Create activity log for customer review action
+        try {
+            const action = reviewData.status === 'approved' ? 'approve' : 'reject';
+            const actionDescription = reviewData.status === 'approved' 
+                ? `Customer approved attachment`
+                : `Customer rejected attachment`;
+
+            console.log('🔍 Creating attachment activity log for customer review:', {
+                projectId: attachment.projectId._id || attachment.projectId,
+                projectName: attachment.projectId?.projectName,
+                attachmentId: attachment._id,
+                fileName: attachment.attachment.file.originalName,
+                action: action
+            });
+
+            await createActivityLog({
+                user: reviewData.reviewedBy,
+                userModel: 'User',
+                userName: reviewData.reviewedByUser?.name || 'Customer',
+                userEmail: reviewData.reviewedByUser?.email || 'customer@system.com',
+                targetModel: 'Project',
+                targetId: attachment.projectId._id || attachment.projectId,
+                targetName: attachment.projectId?.projectName || 'Project',
+                action: reviewData.status === 'approved' ? 'approve' : 'reject',
+                actionType: 'Communication',
+                description: actionDescription,
+                changes: {
+                    status: {
+                        from: 'pending',
+                        to: reviewData.status
+                    },
+                    customerRemarks: reviewData.remarks || ''
+                },
+                metadata: {
+                    projectId: attachment.projectId._id || attachment.projectId,
+                    documentId: attachment.documentId,
+                    customerLeadId: attachment.customerLeadId,
+                    requirementId: attachment.requirementId,
+                    attachmentId: attachment._id,
+                    fileName: attachment.attachment.file.originalName,
+                    fileType: attachment.attachment.file.mimetype,
+                    fileSize: attachment.attachment.file.size,
+                    reviewStatus: reviewData.status,
+                    customerRemarks: reviewData.remarks || '',
+                    embeddedDocument: 'attachment'
+                }
+            });
+            
+            console.log('✅ Attachment review activity log created successfully');
+        } catch (logError) {
+            console.error('Failed to create activity log for attachment review:', logError);
+            // Don't throw error as attachment review was successful
+        }
 
         return updatedAttachment;
     } catch (error) {

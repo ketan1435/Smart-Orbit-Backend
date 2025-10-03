@@ -1037,6 +1037,11 @@ export const shareRequirementService = async (leadId, requirementId, userIdToSha
 };
 
 export const shareRequirementWithUsersService = async (req, leadId, requirementId, userIds, adminId, documentId = null, shouldSendToEngineer = false) => {
+  console.log('🔍 shareRequirementWithUsersService - leadId:', leadId);
+  console.log('🔍 shareRequirementWithUsersService - requirementId:', requirementId);
+  console.log('🔍 shareRequirementWithUsersService - userIds:', userIds);
+  console.log('🔍 shareRequirementWithUsersService - adminId:', adminId);
+
   const requirement = await Requirement.findOne({ _id: requirementId, lead: leadId });
   if (!requirement) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Requirement not found for this lead');
@@ -1055,8 +1060,13 @@ export const shareRequirementWithUsersService = async (req, leadId, requirementI
 
   // Check if any of the users are procurement team members
   const users = await User.find({ _id: { $in: userIds } }).select('_id role name email');
+  console.log('🔍 shareRequirementWithUsersService - Found users:', users);
+  
   const procurementUsers = users.filter(user => user.role === 'planning-engineer');
   const otherUsers = users.filter(user => user.role !== 'planning-engineer');
+  
+  console.log('🔍 shareRequirementWithUsersService - Procurement users:', procurementUsers);
+  console.log('🔍 shareRequirementWithUsersService - Other users:', otherUsers);
 
   // Find the project associated with this requirement
   const project = await Project.findOne({ requirement: requirementId });
@@ -1108,54 +1118,43 @@ export const shareRequirementWithUsersService = async (req, leadId, requirementI
 
   // Handle procurement team members specially
   if (procurementUsers.length > 0) {
+    console.log('🔍 shareRequirementWithUsersService - Processing procurement users:', procurementUsers.length);
     if (project) {
-      // Check if there are any approved architect documents
-      const approvedDocuments = project.architectDocuments.filter(doc =>
-        doc.adminStatus === 'Approved' 
-      );
-
-      if (approvedDocuments.length > 0) {
-        // Share requirement with procurement team only if there are approved documents
-        procurementUsers.forEach(user => {
-          const alreadyShared = requirement.sharedWith.some(share => share.user.toString() === user._id.toString());
-          if (!alreadyShared) {
-            requirement.sharedWith.push({
-              user: user._id,
-              sharedBy: adminId,
-              isSeen: false
-            });
-            updated = true;
-            sharedUsers.push({
-              userId: user._id,
-              userName: user.name,
-              userEmail: user.email,
-              role: user.role
-            });
-          } else {
-            skippedUsers.push({
-              userId: user._id,
-              userName: user.name,
-              userEmail: user.email,
-              role: user.role,
-              reason: 'Already shared'
-            });
-          }
-        });
-      } else {
-        // Log that procurement sharing was skipped due to no approved documents
-        logger.info(`Procurement sharing skipped for requirement ${requirementId}: No approved architect documents found`);
-        procurementUsers.forEach(user => {
+      console.log('🔍 shareRequirementWithUsersService - Project found:', project._id);
+      // Always share requirement with procurement team (planning engineers)
+      // They need access to see the project even without approved documents
+      procurementUsers.forEach(user => {
+        console.log('🔍 shareRequirementWithUsersService - Processing user:', user._id, user.name, user.role);
+        const alreadyShared = requirement.sharedWith.some(share => share.user.toString() === user._id.toString());
+        console.log('🔍 shareRequirementWithUsersService - Already shared:', alreadyShared);
+        if (!alreadyShared) {
+          requirement.sharedWith.push({
+            user: user._id,
+            sharedBy: adminId,
+            isSeen: false
+          });
+          updated = true;
+          sharedUsers.push({
+            userId: user._id,
+            userName: user.name,
+            userEmail: user.email,
+            role: user.role
+          });
+          console.log('🔍 shareRequirementWithUsersService - Added user to sharedWith');
+        } else {
           skippedUsers.push({
             userId: user._id,
             userName: user.name,
             userEmail: user.email,
             role: user.role,
-            reason: 'No approved architect documents'
+            reason: 'Already shared'
           });
-        });
-      }
+          console.log('🔍 shareRequirementWithUsersService - User already shared');
+        }
+      });
     } else {
       // Log that no project was found
+      console.log('🔍 shareRequirementWithUsersService - No project found for requirement');
       logger.warn(`No project found for requirement ${requirementId} when sharing with procurement team`);
       procurementUsers.forEach(user => {
         skippedUsers.push({
@@ -1271,6 +1270,12 @@ export const shareRequirementWithUsersService = async (req, leadId, requirementI
       console.error('Error logging individual user sharing:', error);
     }
   }
+
+  console.log('🔍 shareRequirementWithUsersService - Final result:');
+  console.log('🔍 shareRequirementWithUsersService - Updated:', updated);
+  console.log('🔍 shareRequirementWithUsersService - Shared users:', sharedUsers.length);
+  console.log('🔍 shareRequirementWithUsersService - Skipped users:', skippedUsers.length);
+  console.log('🔍 shareRequirementWithUsersService - Requirement sharedWith:', requirement.sharedWith.length);
 
   return requirement;
 };

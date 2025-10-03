@@ -52,7 +52,6 @@ const router = express.Router();
  */
 router.get(
   '/signed-url/:key(*)',
-  auth(),
   fileController.getSignedUrlController
 );
 

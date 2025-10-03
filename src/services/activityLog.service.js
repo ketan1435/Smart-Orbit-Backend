@@ -324,8 +324,10 @@ export const getProjectLogs = async (projectId, options = {}) => {
                 { 'metadata.embeddedDocument': 'architectProposal', 'metadata.projectId': projectObjectId },
                 { 'metadata.embeddedDocument': 'architectDocument', 'metadata.projectId': projectObjectId },
                 { 'metadata.embeddedDocument': 'proposal', 'metadata.projectId': projectObjectId },
-                { 'metadata.embeddedDocument': 'siteworkDocument', 'metadata.projectId': projectObjectId }
+                { 'metadata.embeddedDocument': 'siteworkDocument', 'metadata.projectId': projectObjectId },
+                { 'metadata.embeddedDocument': 'attachment', 'metadata.projectId': projectObjectId }
             ];
+
 
             baseQuery.$or = baseQuery.$or.concat(embeddedQueries);
         }
@@ -485,7 +487,8 @@ const categorizeProjectLogs = (logs) => {
             architectProposal: [],
             architectDocument: [],
             proposal: [],
-            siteworkDocument: []
+            siteworkDocument: [],
+            attachment: []
         },
         workflow: [],
         communication: [],

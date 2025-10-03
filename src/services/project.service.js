@@ -14,6 +14,7 @@ import { STATUS_VALUES } from '../config/enums/status.enum.js';
 import { STATUS_ENUM } from '../config/enums/status.enum.js';
 import { updateProjectStatusWithReflection } from './statusCascade.service.js';
 import Attachment from '../models/attachment.model.js';
+import ArchitectDocument from '../models/architectDocument.model.js';
 import { logActivity } from '../middlewares/activityLog.middleware.js';
 
 /**
@@ -1857,14 +1858,22 @@ export const getProjectsForProcurement = async (user, options) => {
     ? { [sortBy.split(':')[0]]: sortBy.split(':')[1] === 'desc' ? -1 : 1 }
     : { createdAt: -1 };
 
+  console.log('🔍 getProjectsForProcurement - User ID:', user._id);
+  console.log('🔍 getProjectsForProcurement - User role:', user.role);
+
   // Find requirements shared with this procurement user
   const sharedRequirements = await Requirement.find({
     'sharedWith.user': user._id
-  }).select('_id project');
+  }).select('_id project sharedWith');
+
+  console.log('🔍 getProjectsForProcurement - Found shared requirements:', sharedRequirements.length);
+  console.log('🔍 getProjectsForProcurement - Shared requirements details:', sharedRequirements);
 
   const projectIds = sharedRequirements.map(req => req.project).filter(Boolean);
+  console.log('🔍 getProjectsForProcurement - Project IDs:', projectIds);
 
   if (projectIds.length === 0) {
+    console.log('🔍 getProjectsForProcurement - No projects found for user');
     return { results: [], page, limit, totalPages: 0, totalResults: 0 };
   }
 
@@ -1878,6 +1887,9 @@ export const getProjectsForProcurement = async (user, options) => {
     .lean();
 
   const totalResults = await Project.countDocuments({ _id: { $in: projectIds } });
+
+  console.log('🔍 getProjectsForProcurement - Found projects:', projects.length);
+  console.log('🔍 getProjectsForProcurement - Projects details:', projects);
 
   return {
     results: projects,
@@ -1917,22 +1929,29 @@ export const getProjectDocumentsForProcurement = async (projectId, user) => {
     throw new ApiError(httpStatus.NOT_FOUND, 'Project not found');
   }
 
-  // Filter to only show approved documents
-  const approvedDocuments = project.architectDocuments.filter(doc =>
-    doc.adminStatus === 'Approved' && doc.customerStatus === 'Approved'
-  );
+  // Show all documents that have been shared with the planning engineer
+  // Planning engineers need to see all documents, not just fully approved ones
+  const allDocuments = project.architectDocuments || [];
 
-  // Get attachments for each approved document
+  console.log('🔍 getProjectDocumentsForProcurement - All documents:', allDocuments.length);
+  console.log('🔍 getProjectDocumentsForProcurement - Project ID:', projectId);
+  console.log('🔍 getProjectDocumentsForProcurement - User ID:', user._id);
+
+  // Get attachments for each document
   const documentsWithAttachments = await Promise.all(
-    approvedDocuments.map(async (doc) => {
-      // Get approved attachments for this document
+    allDocuments.map(async (doc) => {
+      console.log('🔍 getProjectDocumentsForProcurement - Processing document:', doc._id, 'Admin status:', doc.adminStatus, 'Customer status:', doc.customerStatus);
+      
+      // Get all attachments for this document (not just approved ones)
       const attachments = await Attachment.find({
         documentId: doc._id,
-        projectId: projectId,
-        status: 'approved' // Only get approved attachments
+        projectId: projectId
+        // Remove status filter to show all attachments
       }).populate('sentBy', 'name email')
         .populate('reviewedBy', 'name email')
         .sort({ createdAt: -1 });
+
+      console.log('🔍 getProjectDocumentsForProcurement - Found attachments:', attachments.length);
 
       return {
         ...doc.toObject(),
@@ -1940,6 +1959,10 @@ export const getProjectDocumentsForProcurement = async (projectId, user) => {
       };
     })
   );
+
+  console.log('🔍 getProjectDocumentsForProcurement - Final result:');
+  console.log('🔍 getProjectDocumentsForProcurement - Documents count:', documentsWithAttachments.length);
+  console.log('🔍 getProjectDocumentsForProcurement - Documents:', documentsWithAttachments);
 
   return {
     project: {
@@ -2530,3 +2553,5 @@ export const getProjectChatGroups = async (user, filter = {}, options = {}) => {
     };
   }
 };
+
+

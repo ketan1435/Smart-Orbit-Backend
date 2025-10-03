@@ -19,7 +19,7 @@ export const createBOM = catchAsync(async (req, res) => {
  * Get BOMs for a project
  */
 export const getBOMs = catchAsync(async (req, res) => {
-    const filter = pick(req.query, ['status', 'version', 'architectDocumentId', 'isReusable']);
+    const filter = pick(req.query, ['status', 'version', 'architectDocumentId', 'attachmentId', 'isReusable']);
     const options = pick(req.query, ['sortBy', 'limit', 'page']);
     const result = await bomService.queryBOMs(req.params.projectId, filter, options);
     res.status(httpStatus.OK).send({
