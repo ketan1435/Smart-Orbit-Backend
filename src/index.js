@@ -9,7 +9,7 @@ import socketManager from './config/socket.js';
 let server;
 
 const startServer = () => {
-  if (process.env.NODE_ENV === 'production') {
+  if (process.env.NODE_ENV === 'production/1') {
     logger.info('Starting server in HTTPS mode...');
 
     const sslOptions = {
