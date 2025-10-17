@@ -26,7 +26,7 @@ const activityLogSchema = new mongoose.Schema({
         type: String,
         required: true,
         enum: [
-            'User', 'Admin', 'Project', 'ClientProposal', 'BOM', 'PO',
+            'User', 'Admin', 'Project', 'ClientProposal', 'BOM', 'PO', 'PoRequest', 'POVerification',
             'Vendor', 'SiteVisit', 'Message', 'File', 'CustomerLead',
             'Quote', 'Sitework', 'ProjectAssignmentPayment', 'WalletTransaction',
             'Requirement'
@@ -39,6 +39,11 @@ const activityLogSchema = new mongoose.Schema({
     targetName: {
         type: String,
         required: true,
+    },
+    projectId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Project',
+        required: false, // Optional field for project association
     },
 
     // Action details
@@ -107,7 +112,17 @@ const activityLogSchema = new mongoose.Schema({
             'activate_vendor',
             'deactivate_vendor',
             'update_vendor',
-            'delete_vendor'
+            'delete_vendor',
+            // --- PO Request / PO actions ---
+            'po_request_created',
+            'send_po_request_to_admin',
+            'po_request_approved',
+            'po_request_rejected',
+            'po_sent_to_vendor',
+            'share_project',
+            'po_verification_created',
+            'po_verification_reviewed',
+            'po_delivered'
         ],
     },
     actionType: {

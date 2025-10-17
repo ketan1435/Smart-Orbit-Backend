@@ -18,6 +18,7 @@ import ProjectAssignmentPayment from '../models/projectAssignmentPaymant.model.j
 import { STATUS_ENUM, STATUS_VALUES } from '../config/enums/status.enum.js';
 import { updateCustomerStatusWithCascade } from './statusCascade.service.js';
 import { logActivity } from '../middlewares/activityLog.middleware.js';
+import { createActivityLog } from './activityLog.service.js';
 
 
 export const createCustomerLeadService = async (req, session) => {
@@ -1623,7 +1624,7 @@ export const updateScpDataByScpUserService = async (req, leadId, requirementId, 
       targetModel: 'Requirement',
       targetId: requirementId,
       targetName: requirement.projectName,
-      description: `SCP data updated by ${scpUser.name} (${scpUser.role})`,
+      description: `SCP data Updated by ${scpUser.name} (${scpUser.role})`,
       changes: scpDataChanges,
       metadata: {
         projectId: requirement.project,
@@ -1868,7 +1869,7 @@ export const updateScpDataByAdminService = async (req, leadId, requirementId, ad
       targetModel: 'Requirement',
       targetId: requirementId,
       targetName: requirement.projectName,
-      description: `SCP data updated by ${admin.name} (${admin.role})`,
+      description: `SCP data Updated by ${admin.name} (${admin.role})`,
       changes: scpDataChanges,
       metadata: {
         projectId: requirement.project,
@@ -2704,8 +2705,14 @@ const processRequirementAndProject = async (req, lead, requirementData, session)
   return { requirement, project };
 };
 
-export const importCustomerLeadsService = async (filePath, req) => {
-  const workbook = xlsx.readFile(filePath);
+export const importCustomerLeadsService = async (fileBufferOrPath, req) => {
+  // Support both old path and new buffer input
+  let workbook;
+  if (Buffer.isBuffer(fileBufferOrPath)) {
+    workbook = xlsx.read(fileBufferOrPath, { type: 'buffer' });
+  } else {
+    workbook = xlsx.readFile(fileBufferOrPath);
+  }
   const sheetName = workbook.SheetNames[0];
   const worksheet = workbook.Sheets[sheetName];
   const data = xlsx.utils.sheet_to_json(worksheet, { header: 1, cellDates: true, raw: false });
@@ -2727,6 +2734,16 @@ export const importCustomerLeadsService = async (filePath, req) => {
   const errors = [];
 
   rows.forEach((row, index) => {
+    // Skip completely empty rows (no values in any column)
+    const isRowEmpty = !row || row.every((cell) => {
+      if (cell === null || cell === undefined) return true;
+      if (cell instanceof Date) return false;
+      return String(cell).trim() === '';
+    });
+    if (isRowEmpty) {
+      return; // ignore this row silently
+    }
+
     const getVal = (fieldName) => {
       const colIndex = headerMapping[fieldName];
       if (colIndex === undefined) return undefined;
@@ -2740,26 +2757,33 @@ export const importCustomerLeadsService = async (filePath, req) => {
       return cellValue.toString().trim();
     };
 
-    // Use a unique identifier for the customer, e.g., email or mobile.
-    // Fallback to customer name if others are not present.
+    // Mandatory fields (as per latest sample template)
     const email = getVal('email');
     const mobileNumber = getVal('mobileNumber');
     const customerName = getVal('customerName');
+    const requirementType = getVal('requirementType');
+    const projectName = getVal('projectName');
 
-    // More lenient customer identification - allow partial matches
-    const customerId = email || mobileNumber || customerName || `customer_${index + 3}`;
-
-    // Only require customer name if no other identifier is present
-    if (!customerName && !email && !mobileNumber) {
-      errors.push({ row: index + 3, error: 'Missing customer identifier (Email, Mobile, or Name). At least one is required.' });
+    // Enforce mandatory fields
+    const missingMandatory = [];
+    if (!customerName) missingMandatory.push('customerName');
+    if (!email) missingMandatory.push('email');
+    if (!requirementType) missingMandatory.push('requirementType');
+    if (!projectName) missingMandatory.push('projectName');
+    if (!mobileNumber) missingMandatory.push('mobileNumber');
+    if (missingMandatory.length > 0) {
+      errors.push({ row: index + 3, error: `Missing mandatory field(s): ${missingMandatory.join(', ')}` });
       return;
     }
+
+    // Unique identifier for grouping rows belonging to same customer
+    const customerId = email || mobileNumber || customerName || `customer_${index + 3}`;
 
     // Get and normalize field values
     const leadSource = getVal('leadSource');
     const preferredLanguages = getVal('preferredLanguages');
     const urgency = getVal('urgency');
-    const requirementType = getVal('requirementType');
+    // requirementType already fetched above
 
     // Normalize urgency values to standard format
     const normalizedUrgency = normalizeUrgency(urgency);
@@ -2771,7 +2795,6 @@ export const importCustomerLeadsService = async (filePath, req) => {
     const city = getVal('city');
     const town = getVal('town');
     const googleLocationLink = getVal('googleLocationLink');
-    const projectName = getVal('projectName');
     const requirementDescription = getVal('requirementDescription');
     const budget = getVal('budget');
 
@@ -2851,7 +2874,47 @@ export const importCustomerLeadsService = async (filePath, req) => {
         if (existingLead) {
           // If lead exists, add new requirements and create projects
           for (const requirementData of leadPayload.requirements) {
-            await processRequirementAndProject(req, existingLead, requirementData, session);
+            const { project } = await processRequirementAndProject(req, existingLead, requirementData, session);
+            // Log per-project creation for visibility in project logs API
+            try {
+              await createActivityLog({
+                user: req?.user?.id || '000000000000000000000000',
+                userModel: req?.user?.role === 'Admin' ? 'Admin' : 'User',
+                userName: req?.user?.name || 'System',
+                userEmail: req?.user?.email || 'system@local',
+                targetModel: 'Project',
+                targetId: project._id,
+                targetName: project.projectName,
+                action: 'create',
+                actionType: 'Workflow',
+                description: 'Customer imported successfully (project created from import)',
+                ipAddress: req.ip,
+                userAgent: req.headers['user-agent'],
+                metadata: { source: 'import', projectId: project._id, rows: _sourceRows }
+              });
+            } catch (error) {
+              console.error('Error logging project creation during import (existing lead):', error);
+            }
+          }
+          // Log activity for import into existing customer
+          try {
+            await createActivityLog({
+              user: req?.user?.id || '000000000000000000000000',
+              userModel: req?.user?.role === 'Admin' ? 'Admin' : 'User',
+              userName: req?.user?.name || 'System',
+              userEmail: req?.user?.email || 'system@local',
+              targetModel: 'CustomerLead',
+              targetId: existingLead._id,
+              targetName: existingLead.customerName || leadPayload.customerName,
+              action: 'create',
+              actionType: 'Workflow',
+              description: `Customer imported successfully with ${leadPayload.requirements.length} requirement(s) added via import.`,
+              ipAddress: req.ip,
+              userAgent: req.headers['user-agent'],
+              metadata: { source: 'import', rows: _sourceRows }
+            });
+          } catch (error) {
+            console.error('Error logging customer import (existing lead):', error);
           }
         } else {
           // Create new lead with simplified functionality
@@ -2869,12 +2932,53 @@ export const importCustomerLeadsService = async (filePath, req) => {
 
           // Process each requirement and create projects
           for (const requirementData of requirements) {
-            await processRequirementAndProject(req, lead, requirementData, session);
+            const { project } = await processRequirementAndProject(req, lead, requirementData, session);
+            // Log per-project creation for visibility in project logs API
+            try {
+              await createActivityLog({
+                user: req?.user?.id || '000000000000000000000000',
+                userModel: req?.user?.role === 'Admin' ? 'Admin' : 'User',
+                userName: req?.user?.name || 'System',
+                userEmail: req?.user?.email || 'system@local',
+                targetModel: 'Project',
+                targetId: project._id,
+                targetName: project.projectName,
+                action: 'create',
+                actionType: 'Workflow',
+                description: 'Customer imported successfully (project created from import)',
+                ipAddress: req.ip,
+                userAgent: req.headers['user-agent'],
+                metadata: { source: 'import', projectId: project._id, rows: _sourceRows }
+              });
+            } catch (error) {
+              console.error('Error logging project creation during import (new lead):', error);
+            }
           }
 
           // Update lead with requirement references
           lead.requirements = lead.requirements;
           await lead.save({ session });
+
+          // Log activity for new customer import
+          try {
+            await createActivityLog({
+              user: req?.user?.id || '000000000000000000000000',
+              userModel: req?.user?.role === 'Admin' ? 'Admin' : 'User',
+              userName: req?.user?.name || 'System',
+              userEmail: req?.user?.email || 'system@local',
+              targetModel: 'CustomerLead',
+              targetId: lead._id,
+              targetName: lead.customerName,
+              action: 'create',
+              actionType: 'Workflow',
+              description: 'Customer imported successfully',
+              ipAddress: req.ip,
+              userAgent: req.headers['user-agent'],
+              metadata: { source: 'import', rows: _sourceRows }
+            });
+          } catch (error) {
+            console.error('Error logging customer import (new lead):', error);
+          }
 
           // Create user account if password is provided
           if (password) {
@@ -2915,25 +3019,27 @@ export const generateSampleCustomerLeadsCSV = () => {
     [
       'customerName (MANDATORY)',
       'email (MANDATORY)',
+      'requirementType (MANDATORY)',
+      'projectName (MANDATORY)',
       'mobileNumber (MANDATORY)',
       'alternateContactNumber (OPTIONAL)',
       'whatsappNumber (OPTIONAL)',
       'preferredLanguages (OPTIONAL)',
-      'leadSource (MANDATORY)',
-      'state (MANDATORY)',
-      'city (MANDATORY)',
+      'leadSource (OPTIONAL)',
+      'state (OPTIONAL)',
+      'city (OPTIONAL)',
       'town (OPTIONAL)',
       'googleLocationLink (OPTIONAL)',
-      'requirementType (MANDATORY)',
-      'projectName (MANDATORY)',
-      'requirementDescription (MANDATORY)',
-      'urgency (MANDATORY)',
-      'budget (MANDATORY)'
+      'requirementDescription (OPTIONAL)',
+      'urgency (OPTIONAL)',
+      'budget (OPTIONAL)'
     ],
     // Field options and validation rules
     [
       'Enter Full Name',
       'Enter Email Address',
+      'Cottage / Structure Proposal, Manpower Requirement, Tourism Consultancy, etc.',
+      'Enter Project Name',
       'Enter Contact Number',
       'Enter Alternate Contact Number',
       'Enter WhatsApp Number',
@@ -2943,8 +3049,6 @@ export const generateSampleCustomerLeadsCSV = () => {
       'Mumbai, Bangalore, New Delhi, Ahmedabad, Chennai, etc.',
       'Enter Town/Village Name',
       'Enter Google Maps Link',
-      'Cottage / Structure Proposal, Manpower Requirement, Tourism Consultancy, etc.',
-      'Enter Project Name',
       'Enter Project Description',
       'Immediate, Within 1 month, 2-3 months, Not Sure',
       'Enter Budget Amount (numbers only)'
@@ -2953,6 +3057,8 @@ export const generateSampleCustomerLeadsCSV = () => {
     [
       'John Doe',
       'john.doe@example.com',
+      'Cottage / Structure Proposal',
+      'Residential Villa Project',
       '9876543210',
       '9876543211',
       '9876543210',
@@ -2962,8 +3068,6 @@ export const generateSampleCustomerLeadsCSV = () => {
       'Mumbai',
       'Andheri',
       'https://maps.google.com/example',
-      'Cottage / Structure Proposal',
-      'Residential Villa Project',
       'Need a 3BHK villa with modern amenities',
       'Immediate',
       '5000000'
@@ -2972,6 +3076,8 @@ export const generateSampleCustomerLeadsCSV = () => {
     [
       'Jane Smith',
       'jane.smith@example.com',
+      'Manpower Requirement',
+      'Office Space Project',
       '9876543212',
       '',
       '9876543212',
@@ -2981,8 +3087,6 @@ export const generateSampleCustomerLeadsCSV = () => {
       'Bangalore',
       'Whitefield',
       'https://maps.google.com/example2',
-      'Manpower Requirement',
-      'Office Space Project',
       'Need office space for 50 employees',
       'Within 1 month',
       '10000000'
@@ -2991,6 +3095,8 @@ export const generateSampleCustomerLeadsCSV = () => {
     [
       'Rajesh Kumar',
       'rajesh.kumar@example.com',
+      'Tourism Consultancy',
+      'Home Renovation Project',
       '9876543213',
       '9876543214',
       '9876543213',
@@ -3000,8 +3106,6 @@ export const generateSampleCustomerLeadsCSV = () => {
       'New Delhi',
       'Connaught Place',
       'https://maps.google.com/example3',
-      'Tourism Consultancy',
-      'Home Renovation Project',
       'Complete home renovation with modern design',
       '2-3 months',
       '2000000'
@@ -3010,6 +3114,8 @@ export const generateSampleCustomerLeadsCSV = () => {
     [
       'Priya Sharma',
       'priya.sharma@example.com',
+      'Wants to Invest in Tourism Project',
+      'Modern Interior Design',
       '9876543215',
       '',
       '9876543215',
@@ -3019,8 +3125,6 @@ export const generateSampleCustomerLeadsCSV = () => {
       'Ahmedabad',
       'Vastrapur',
       'https://maps.google.com/example4',
-      'Wants to Invest in Tourism Project',
-      'Modern Interior Design',
       'Complete interior design for 2BHK apartment',
       'Not Sure',
       '1500000'
@@ -3029,10 +3133,12 @@ export const generateSampleCustomerLeadsCSV = () => {
 
   const worksheet = xlsx.utils.aoa_to_sheet(sampleData);
 
-  // Set column widths for better readability
+  // Set column widths for better readability (match new order)
   const columnWidths = [
     { wch: 25 }, // customerName
     { wch: 30 }, // email
+    { wch: 30 }, // requirementType
+    { wch: 30 }, // projectName
     { wch: 18 }, // mobileNumber
     { wch: 30 }, // alternateContactNumber
     { wch: 22 }, // whatsappNumber
@@ -3042,8 +3148,6 @@ export const generateSampleCustomerLeadsCSV = () => {
     { wch: 20 }, // city
     { wch: 20 }, // town
     { wch: 40 }, // googleLocationLink
-    { wch: 30 }, // requirementType
-    { wch: 30 }, // projectName
     { wch: 40 }, // requirementDescription
     { wch: 15 }, // urgency
     { wch: 15 }  // budget
@@ -3054,36 +3158,36 @@ export const generateSampleCustomerLeadsCSV = () => {
   // Add data validation for dropdown options
   const dataValidation = [];
 
-  // Lead Source dropdown (Column G)
+  // Lead Source dropdown (Column I)
   dataValidation.push({
-    ref: 'G3:G1000', // Apply to all data rows
+    ref: 'I3:I1000', // Apply to all data rows
     type: 'list',
-    allowBlank: false,
+    allowBlank: true,
     showDropDown: true,
     formula1: '"Meta Ads,WhatsApp,Instagram,Referral"'
   });
 
-  // Preferred Languages dropdown (Column F)
+  // Preferred Languages dropdown (Column H)
   dataValidation.push({
-    ref: 'F3:F1000',
+    ref: 'H3:H1000',
     type: 'list',
     allowBlank: true,
     showDropDown: true,
     formula1: '"English,Hindi,Marathi"'
   });
 
-  // State dropdown (Column H) - Major Indian states
+  // State dropdown (Column J) - Major Indian states
   dataValidation.push({
-    ref: 'H3:H1000',
+    ref: 'J3:J1000',
     type: 'list',
-    allowBlank: false,
+    allowBlank: true,
     showDropDown: true,
     formula1: '"Maharashtra,Karnataka,Delhi,Gujarat,Tamil Nadu,West Bengal,Uttar Pradesh,Rajasthan,Madhya Pradesh,Andhra Pradesh,Telangana,Kerala,Punjab,Haryana,Bihar,Odisha,Assam,Chhattisgarh,Jharkhand,Uttarakhand,Himachal Pradesh,Tripura,Meghalaya,Manipur,Nagaland,Goa,Arunachal Pradesh,Mizoram,Sikkim"'
   });
 
-  // Requirement Type dropdown (Column L)
+  // Requirement Type dropdown (Column C)
   dataValidation.push({
-    ref: 'L3:L1000',
+    ref: 'C3:C1000',
     type: 'list',
     allowBlank: false,
     showDropDown: true,
@@ -3094,7 +3198,7 @@ export const generateSampleCustomerLeadsCSV = () => {
   dataValidation.push({
     ref: 'O3:O1000',
     type: 'list',
-    allowBlank: false,
+    allowBlank: true,
     showDropDown: true,
     formula1: '"Immediate,Within 1 month,2-3 months,Not Sure"'
   });

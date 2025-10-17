@@ -404,6 +404,10 @@ router
     .patch(auth('updateProjectStatus'), validate(projectValidation.updateProjectStatus), projectController.updateProjectStatus);
 
 router
+    .route('/:projectId/share')
+    .post(auth('manageProjects'), projectController.shareProject);
+
+router
     .route('/:projectId')
     .get(auth('getProjects'), projectController.getProjectById);
 // Add these routes before the export statement

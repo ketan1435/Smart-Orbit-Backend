@@ -124,10 +124,13 @@ export const createPOService = async (req, data) => {
 };
 
 export const getPOsService = async (query) => {
-    const { page = 1, limit = 10, vendor, project, name, withoutBom } = query;
+    const { page = 1, limit = 10, vendor, project, projects, name, withoutBom } = query;
     const filter = {};
     if (vendor) filter.vendor = vendor;
     if (project) filter.project = project;
+    if (projects && Array.isArray(projects) && projects.length > 0) {
+        filter.project = { $in: projects };
+    }
     if (name) filter.name = { $regex: name, $options: 'i' };
     if (withoutBom) {
         filter.$or = [
@@ -155,6 +158,40 @@ export const getPOsService = async (query) => {
         total,
         totalPages: Math.ceil(total / parseInt(limit)),
     };
+};
+
+export const deliverPOService = async (req, poId, files) => {
+    const PO = (await import('../models/po.model.js')).default;
+    const { logActivity } = await import('../middlewares/activityLog.middleware.js');
+
+    const po = await PO.findById(poId);
+    if (!po) throw new Error('PO not found');
+
+    // Map uploaded files to fileSchema-like objects
+    const uploaded = (files || []).map((f) => ({
+        fileName: f.originalname,
+        mimeType: f.mimetype,
+        size: f.size,
+        url: f.location || f.path || '',
+        uploadedAt: new Date(),
+    }));
+
+    po.deliveryPhotos = [...(po.deliveryPhotos || []), ...uploaded];
+    po.deliveredAt = new Date();
+    await po.save();
+
+    await logActivity(req, {
+        action: 'po_delivered',
+        targetModel: 'PO',
+        targetId: po._id,
+        targetName: po.name,
+        projectId: po.project,
+        description: `Dispatch team marked PO delivered`,
+        changes: { deliveredAt: po.deliveredAt, photos: uploaded.length },
+        metadata: { poId: po._id, projectId: po.project, photoCount: uploaded.length },
+    });
+
+    return po;
 };
 
 export const activatePOService = async (req, id) => {

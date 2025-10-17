@@ -5,6 +5,7 @@ import Project from '../models/project.model.js';
 import User from '../models/user.model.js';
 import Sitework from '../models/sitework.model.js';
 import Attendance from '../models/attendance.model.js';
+import WalletTransaction from '../models/walletTransaction.model.js';
 
 /**
  * Query project assignment payments
@@ -144,7 +145,7 @@ export const queryProjectAssignmentPayments = async (filter, options) => {
 
     console.log(`Found ${payments.length} payments out of ${totalResults} total`);
 
-    // Enhance payments with attendance information for custom users
+    // Enhance payments with attendance information for custom users and bonus information
     const enhancedPayments = await Promise.all(payments.map(async (payment) => {
         // Only add attendance info for custom users
         if (payment.user && payment.user.role === 'custom') {
@@ -187,8 +188,24 @@ export const queryProjectAssignmentPayments = async (filter, options) => {
                     au.user.toString() === payment.user._id.toString()
                 );
 
+                // Get bonus amount for this specific payment (user + project combination)
+                let bonusAmount = 0;
+                try {
+                    const bonusTransactions = await WalletTransaction.find({
+                        userId: payment.user._id,
+                        project: payment.project._id,
+                        isBonus: true
+                    }).select('amount');
+                    
+                    bonusAmount = bonusTransactions.reduce((total, transaction) => total + (transaction.amount || 0), 0);
+                } catch (error) {
+                    console.error('Error calculating bonus for payment:', error);
+                    bonusAmount = 0;
+                }
+
                 return {
                     ...payment,
+                    bonusAmount,
                     siteworkInfo: {
                         siteworkId: payment.sitework._id,
                         siteworkName: payment.sitework.name,
@@ -229,8 +246,24 @@ export const queryProjectAssignmentPayments = async (filter, options) => {
                     return total + (att.workDuration || 0);
                 }, 0);
 
+                // Get bonus amount for this specific payment (user + project combination)
+                let bonusAmount = 0;
+                try {
+                    const bonusTransactions = await WalletTransaction.find({
+                        userId: payment.user._id,
+                        project: payment.project._id,
+                        isBonus: true
+                    }).select('amount');
+                    
+                    bonusAmount = bonusTransactions.reduce((total, transaction) => total + (transaction.amount || 0), 0);
+                } catch (error) {
+                    console.error('Error calculating bonus for payment:', error);
+                    bonusAmount = 0;
+                }
+
                 return {
                     ...payment,
+                    bonusAmount,
                     generalAttendanceInfo: {
                         totalActualTimeHours: Math.round((totalWorkedMinutes / 60) * 10) / 10,
                         totalAttendanceRecords: attendanceRecords.length,
@@ -245,8 +278,26 @@ export const queryProjectAssignmentPayments = async (filter, options) => {
                 };
             }
         } else {
-            // For non-custom users, return payment as is
-            return payment;
+            // For non-custom users, still add bonus information
+            // Get bonus amount for this specific payment (user + project combination)
+            let bonusAmount = 0;
+            try {
+                const bonusTransactions = await WalletTransaction.find({
+                    userId: payment.user._id,
+                    project: payment.project._id,
+                    isBonus: true
+                }).select('amount');
+                
+                bonusAmount = bonusTransactions.reduce((total, transaction) => total + (transaction.amount || 0), 0);
+            } catch (error) {
+                console.error('Error calculating bonus for payment:', error);
+                bonusAmount = 0;
+            }
+
+            return {
+                ...payment,
+                bonusAmount
+            };
         }
     }));
 
@@ -272,6 +323,58 @@ export const queryProjectAssignmentPayments = async (filter, options) => {
     const totals = totalsAgg[0] || { totalAssigned: 0, totalRemaining: 0, count: 0 };
     const totalPaid = Math.max(0, (totals.totalAssigned || 0) - (totals.totalRemaining || 0));
 
+    // Calculate total bonus amount from wallet transactions
+    let totalBonus = 0;
+    try {
+        // Get all project IDs from the current filter
+        const projectIds = [];
+        if (aggMatch.project && aggMatch.project.$in) {
+            projectIds.push(...aggMatch.project.$in);
+        } else if (aggMatch.project && typeof aggMatch.project === 'string') {
+            projectIds.push(aggMatch.project);
+        } else if (aggMatch.project && typeof aggMatch.project === 'object' && aggMatch.project.$in) {
+            projectIds.push(...aggMatch.project.$in);
+        }
+
+        // If we have project filters, get bonus amounts for those projects
+        if (projectIds.length > 0) {
+            const bonusAgg = await WalletTransaction.aggregate([
+                {
+                    $match: {
+                        project: { $in: projectIds },
+                        isBonus: true
+                    }
+                },
+                {
+                    $group: {
+                        _id: null,
+                        totalBonus: { $sum: '$amount' }
+                    }
+                }
+            ]);
+            totalBonus = bonusAgg[0]?.totalBonus || 0;
+        } else {
+            // If no specific project filter, get all bonus amounts
+            const bonusAgg = await WalletTransaction.aggregate([
+                {
+                    $match: {
+                        isBonus: true
+                    }
+                },
+                {
+                    $group: {
+                        _id: null,
+                        totalBonus: { $sum: '$amount' }
+                    }
+                }
+            ]);
+            totalBonus = bonusAgg[0]?.totalBonus || 0;
+        }
+    } catch (error) {
+        console.error('Error calculating bonus totals:', error);
+        totalBonus = 0;
+    }
+
     return {
         results: enhancedPayments,
         page,
@@ -281,7 +384,8 @@ export const queryProjectAssignmentPayments = async (filter, options) => {
         totals: {
             totalAssigned: totals.totalAssigned || 0,
             totalRemaining: totals.totalRemaining || 0,
-            totalPaid
+            totalPaid,
+            totalBonus
         }
     };
 };

@@ -1,5 +1,8 @@
 import express from 'express';
 import { createPO, getPOs, activatePO, deactivatePO, markItemsAsDelivered } from '../../controllers/po.controller.js';
+import { deliverPO } from '../../controllers/po.controller.js';
+import multer from 'multer';
+const upload = multer({ dest: 'uploads/tmp' });
 import auth from '../../middlewares/auth.js';
 import validate from '../../middlewares/validate.js';
 import * as poValidation from '../../validations/po.validation.js';
@@ -483,5 +486,8 @@ router.patch('/:id/deactivate', auth('procurement'), validate(poValidation.deact
  *                   example: PO not found
  */
 router.patch('/:id/mark-delivered', auth('procurement'), validate(poValidation.markItemsAsDelivered), markItemsAsDelivered);
+
+// Dispatch team: mark PO delivered with photos
+router.post('/:poId/deliver', auth('procurement'), upload.array('photos', 10), deliverPO);
 
 export default router; 

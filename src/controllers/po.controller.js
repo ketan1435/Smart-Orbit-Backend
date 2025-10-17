@@ -1,7 +1,14 @@
 import httpStatus from 'http-status';
 import catchAsync from '../utils/catchAsync.js';
-import { createPOService, getPOsService, activatePOService, deactivatePOService, markItemsAsDeliveredService } from '../services/po.service.js';
 import ApiError from '../utils/ApiError.js';
+import { 
+  createPOService, 
+  getPOsService, 
+  activatePOService, 
+  deactivatePOService, 
+  markItemsAsDeliveredService,
+  deliverPOService,
+} from '../services/po.service.js';
 
 export const createPO = catchAsync(async (req, res) => {
     const po = await createPOService(req, req.body);
@@ -41,4 +48,11 @@ export const markItemsAsDelivered = catchAsync(async (req, res) => {
             summary: result.summary
         }
     });
+});
+
+export const deliverPO = catchAsync(async (req, res) => {
+  const { poId } = req.params;
+  const files = req.files || [];
+  const po = await deliverPOService(req, poId, files);
+  res.status(httpStatus.OK).json({ status: 1, message: 'PO delivered', data: po });
 }); 

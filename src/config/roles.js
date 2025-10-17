@@ -151,6 +151,34 @@ const allRoles = {
     'getProjects',
   ],
 
+  'quality-inspector': [
+    'getProjects',
+    'getSiteworks',
+    'getSiteworkDocuments',
+    'manageSiteworkDocuments',
+    'procurement', // Required to access Purchase Orders
+    'getBoms', // May be needed for PO context
+    'manageProjects', // Required to access project sharing functionality
+  ],
+
+  'dispatch-team': [
+    'manageDispatch',
+    'getProjects',
+    'procurement',
+  ],
+
+  'supervisor': [
+    'manageTasks',
+    'getProjects',
+    'getSiteworks',
+    'getWorkers',
+    'manageWorkers',
+  ],
+
+  'accounts': [
+    'getProjects',
+  ],
+
   'scp-user': [
     'getProjects',
     'getBoms',

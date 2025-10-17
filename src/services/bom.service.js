@@ -64,7 +64,7 @@ export const createBOM = async (req, projectId, bomData, user) => {
             targetModel: 'BOM',
             targetId: bom._id,
             targetName: bom.title || `BOM v${bom.version}`,
-            description: `${user.role === 'admin' ? 'Admin' : 'User'} ${user.name} (${user.email}) created BOM  for project`,
+            description: `Planning Engineer created BOM for project`,
             changes: {
                 bomCreated: {
                     from: null,
@@ -361,7 +361,7 @@ export const updateBOM = async (req, projectId, bomId, updateBody, user) => {
             targetModel: 'BOM',
             targetId: bom._id,
             targetName: bom.title || `BOM v${bom.version}`,
-            description: `${user.role === 'admin' ? 'Admin' : 'User'} ${user.name} (${user.email}) updated  for project'}`,
+            description: `${user.name}  Updated  for project'}`,
             changes: {
                 title: updateBody.title ? {
                     from: originalBom.title,
@@ -551,7 +551,7 @@ export const updateBOMStatus = async (req, projectId, bomId, statusUpdate, user)
             targetModel: 'BOM',
             targetId: bom._id,
             targetName: bom.title || `BOM v${bom.version}`,
-            description: `${user.role === 'admin' ? 'Admin' : 'User'} ${user.name} (${user.email}) updated BOM status from ${originalStatus} to ${status} for project`,
+            description: `${user.name}  Updated BOM status from ${originalStatus} to ${status} for project`,
             changes: {
                 status: {
                     from: originalStatus,
@@ -715,7 +715,7 @@ export const deleteBOM = async (req, projectId, bomId, user) => {
             targetModel: 'BOM',
             targetId: bom._id,
             targetName: bom.title || `BOM v${bom.version}`,
-            description: `${user.role === 'admin' ? 'Admin' : 'User'} ${user.name} (${user.email}) deleted BOM of project`,
+            description: `${user.name} Deleted BOM of project`,
             changes: {
                 bomDeleted: {
                     from: bom._id,
@@ -878,10 +878,10 @@ export const submitBOM = async (req, projectId, bomId, user) => {
     try {
         await logActivity(req, {
             action: 'submit_bom',
-            targetModel: 'BOM',
+            targetModel: 'BOM', 
             targetId: bom._id,
             targetName: bom.title || `BOM v${bom.version}`,
-            description: `${user.role === 'admin' ? 'Admin' : 'User'} ${user.name} (${user.email}) submitted BOM  for review`,
+            description: `${user.name} Submitted BOM  for review`,
             changes: {
                 status: {
                     from: originalStatus,
@@ -1055,7 +1055,7 @@ export const reviewBOM = async (req, projectId, bomId, reviewData, user) => {
             targetModel: 'BOM',
             targetId: bom._id,
             targetName: bom.title || `BOM v${bom.version}`,
-            description: `${user.role === 'admin' ? 'Admin' : 'User'} ${user.name} (${user.email}) ${status} BOM `,
+            description: `Admin ${status} BOM `,
             changes: {
                 status: {
                     from: originalStatus,
@@ -1289,7 +1289,7 @@ export const assignBOMToSiteEngineer = async (req, projectId, bomId, assignmentD
             targetModel: 'BOM',
             targetId: bom._id,
             targetName: bom.title || `BOM v${bom.version}`,
-            description: `${user.role === 'admin' ? 'Admin' : 'User'} ${user.name} (${user.email}) assigned BOM site engineer ${siteEngineer.name} for project`,
+            description: `${user.name} Assigned BOM To Site Engineer`,
             changes: {
                 assignedToSiteEngineer: {
                     from: originalAssignedToSiteEngineer,
@@ -1584,7 +1584,7 @@ export const updateBOMBySiteEngineer = async (req, projectId, bomId, updateData,
             targetModel: 'BOM',
             targetId: bom._id,
             targetName: bom.title || `BOM v${bom.version}`,
-            description: `Site Engineer ${user.name} (${user.email}) updated BOM `,
+            description: `Site Engineer updated BOM `,
             changes: {
                 items: {
                     from: originalItems,
@@ -1755,7 +1755,7 @@ export const submitUpdatedBOMToPlanning = async (req, projectId, bomId, submitDa
             targetModel: 'BOM',
             targetId: newBOM._id,
             targetName: newBOM.title || `BOM v${newBOM.version}`,
-            description: `Site Engineer ${user.name} (${user.email}) submitted updated BOM to planning engineer `,
+            description: `Site Engineer submitted updated BOM to planning engineer `,
             changes: {
                 newBOMCreated: {
                     from: null,
@@ -2191,7 +2191,7 @@ export const createFinalizedBOM = async (req, projectId, originalBomId, finalize
             targetModel: 'BOM',
             targetId: updatedBOM._id,
             targetName: updatedBOM.title || `BOM v${updatedBOM.version}`,
-            description: `${user.role === 'admin' ? 'Admin' : 'Planning Engineer'} ${user.name} (${user.email}) Send BOM For Approval `,
+            description: `'Planning Engineer Send BOM To Admin For Approval`,
             changes: {
                 title: {
                     from: originalTitle,
@@ -2416,7 +2416,7 @@ export const makeBOMReusable = async (req, projectId, bomId, data, user) => {
             targetModel: 'BOM',
             targetId: bom._id,
             targetName: bom.title || `BOM v${bom.version}`,
-            description: `${user.role === 'admin' ? 'Admin' : 'User'} ${user.name} (${user.email}) marked BOM reusable `,
+            description: `Planning Engineer Marked BOM reusable `,
             changes: {
                 isReusable: {
                     from: originalIsReusable,

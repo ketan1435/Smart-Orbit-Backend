@@ -284,6 +284,7 @@ export const getProjectLogs = async (projectId, options = {}) => {
             isActive: true,
             $or: [
                 { targetModel: 'Project', targetId: projectObjectId },
+                { projectId: projectObjectId },
                 { 'metadata.projectId': projectObjectId }
             ]
         };
@@ -305,6 +306,7 @@ export const getProjectLogs = async (projectId, options = {}) => {
                 { targetModel: 'CustomerLead', 'metadata.projectId': projectObjectId },
                 { targetModel: 'ClientProposal', 'metadata.projectId': projectObjectId },
                 { targetModel: 'BOM', 'metadata.projectId': projectObjectId },
+                { targetModel: 'PoRequest', 'metadata.projectId': projectObjectId },
                 { targetModel: 'PO', 'metadata.projectId': projectObjectId },
                 { targetModel: 'Quote', 'metadata.projectId': projectObjectId },
                 { targetModel: 'Sitework', 'metadata.projectId': projectObjectId },
@@ -510,6 +512,10 @@ const categorizeProjectLogs = (logs) => {
                 break;
             case 'BOM':
                 categories.bom.push(log);
+                break;
+            case 'PoRequest':
+                // Treat PoRequest logs under PO category for UI grouping
+                categories.po.push(log);
                 break;
             case 'PO':
                 categories.po.push(log);

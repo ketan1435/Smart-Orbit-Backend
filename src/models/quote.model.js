@@ -196,7 +196,7 @@ const quoteSchema = new mongoose.Schema({
     // Quote Details
     quoteNumber: {
         type: String,
-        unique: true,
+        // unique index defined below; avoid duplicate index definitions
         required: false, // Will be generated in pre-save middleware
     },
     quoteTitle: {

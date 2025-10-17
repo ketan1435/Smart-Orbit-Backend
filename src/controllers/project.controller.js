@@ -239,3 +239,18 @@ export const getProjectChatGroups = catchAsync(async (req, res) => {
         data: result
     });
 });
+
+export const shareProject = catchAsync(async (req, res) => {
+    const { projectId } = req.params;
+    const { userIds } = req.body;
+
+    console.log('shareProject controller called with:', { projectId, userIds, type: typeof projectId });
+
+    const result = await projectService.shareProjectService(req, projectId, userIds);
+
+    res.status(httpStatus.OK).json({
+        status: 1,
+        message: 'Project shared successfully',
+        data: result
+    });
+});

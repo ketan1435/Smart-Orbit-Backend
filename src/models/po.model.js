@@ -63,6 +63,8 @@ const poItemSchema = new mongoose.Schema({
 
 const poSchema = new mongoose.Schema({
     documents: { type: [fileSchema], default: [] },
+    deliveryPhotos: { type: [fileSchema], default: [] },
+    deliveredAt: { type: Date, default: null },
     vendor: { type: mongoose.Schema.Types.ObjectId, ref: 'Vendor', required: true },
     vendorName: { type: String, required: true },
     vendorWhatsappNumber: { type: String, required: true },
@@ -75,6 +77,8 @@ const poSchema = new mongoose.Schema({
 
     isSent: { type: Boolean, default: false },
     sentAt: { type: Date, default: null },
+    isVerified: { type: Boolean, default: false },
+    verifiedAt: { type: Date, default: null },
     isActive: { type: Boolean, default: true },
 }, {
     timestamps: true,

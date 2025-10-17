@@ -38,11 +38,15 @@ const getActionType = (action) => {
  */
 export const logActivity = async (req, options = {}) => {
     try {
+        console.log('logActivity called with options:', options);
+        console.log('req.user:', req.user);
+        
         const {
             action,
             targetModel,
             targetId,
             targetName,
+            projectId,
             changes = {},
             previousValues = {},
             newValues = {},
@@ -66,6 +70,7 @@ export const logActivity = async (req, options = {}) => {
             targetModel,
             targetId,
             targetName,
+            projectId, // Add projectId to log data
             action,
             actionType: getActionType(action),
             changes,
@@ -82,7 +87,9 @@ export const logActivity = async (req, options = {}) => {
             }
         };
 
+        console.log('About to create activity log with data:', logData);
         await createActivityLog(logData);
+        console.log('Activity log created successfully');
     } catch (error) {
         console.error('Error in manual activity logging:', error);
     }

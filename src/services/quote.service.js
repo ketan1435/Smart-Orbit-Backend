@@ -1124,19 +1124,27 @@ const createQuoteService = async (req, session) => {
 
     // Log the quote creation activity
     try {
-        // Get populated data for logging
-        const populatedQuote = await Quote.findById(quote.body.data._id)
+        console.log('Starting quote creation activity logging...');
+        console.log('Quote ID:', quote.body.data._id);
+        console.log('Project ID:', quoteData.projectId);
+        
+        // Get populated data for logging - use the session to ensure we can read the data
+        const populatedQuote = await Quote.findById(quote.body.data._id, null, { session })
             .populate('vendorId', 'storeName name mobileNumber email address city state')
             .populate('siteEngineerId', 'name email')
             .populate('bomId', 'title status projectId')
             .populate('projectId', 'projectName projectCode customerName');
+
+        console.log('Populated quote data:', populatedQuote);
+        console.log('Calling logActivity...');
 
         await logActivity(req, {
             action: 'create_quote',
             targetModel: 'Quote',
             targetId: quote.body.data._id,
             targetName: quoteData.quoteTitle || 'Quote',
-            description: `${req.user?.role === 'admin' ? 'Admin' : req.user?.role === 'site-engineer' ? 'Site Engineer' : req.user?.role === 'planning-engineer' ? 'Planning Engineer' : 'User'} ${req.user?.name || 'Unknown'} (${req.user?.email || 'unknown@example.com'}) created quote "${quoteData.quoteTitle}" for vendor: ${populatedQuote?.vendorId?.storeName || 'Unknown Vendor'}`,
+            projectId: quoteData.projectId, // Add projectId to associate with project
+            description: `Site Engineer created quote And Send It To Planning Engineer`,
             changes: {
                 quoteCreated: true,
                 quoteTitle: quoteData.quoteTitle,
@@ -1259,8 +1267,11 @@ const createQuoteService = async (req, session) => {
                 }
             }
         });
+        
+        console.log('Quote creation activity logged successfully');
     } catch (error) {
         console.error('Error logging quote creation:', error);
+        console.error('Error stack:', error.stack);
     }
 
     return {

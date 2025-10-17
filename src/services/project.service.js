@@ -2092,7 +2092,7 @@ export const assignSiteEngineersService = async (req, projectId, siteEngineers) 
           targetModel: 'Project',
           targetId: project._id,
           targetName: project.projectName,
-          description: `Admin ${req.user.name} to assign site engineers to project - No new engineers added (all already assigned)`,
+          description: `Admin Assign site engineers to project - No new engineers added (all already assigned)`,
           changes: {
             assignedSiteEngineers: {
               from: originalEngineersCount,
@@ -2165,7 +2165,7 @@ export const assignSiteEngineersService = async (req, projectId, siteEngineers) 
         targetModel: 'Project',
         targetId: project._id,
         targetName: project.projectName,
-        description: `Admin ${req.user.name}  assigned ${newEngineers.length} site engineer(s) to project`,
+        description: `Admin Assigned ${newEngineers.length} site engineer(s) to project`,
         changes: {
           assignedSiteEngineers: {
             from: originalEngineersCount,
@@ -2351,7 +2351,7 @@ export const updateProjectStatusService = async (req, projectId, newStatus) => {
       targetModel: 'Project',
       targetId: project._id,
       targetName: project.projectName,
-      description: `${req.user.role === 'admin' ? 'Admin' : 'User'} ${req.user.name} (${req.user.email}) updated project status from '${originalStatus}' to '${newStatus}`,
+      description: `Admin Updated project status from '${originalStatus}' to '${newStatus}`,
       changes: {
         status: {
           from: originalStatus,
@@ -2444,7 +2444,7 @@ export const getProjectChatGroups = async (user, filter = {}, options = {}) => {
     const [projects, total] = await Promise.all([
       Project.find(projectFilter)
         .select('projectName projectCode status createdAt updatedAt')
-        .populate('lead', 'customerName')
+        .populate('lead', 'customerName mobileNumber')
         .populate('requirement', 'requirementType')
         .sort(sort)
         .skip(skip)
@@ -2457,6 +2457,7 @@ export const getProjectChatGroups = async (user, filter = {}, options = {}) => {
       projectName: project.projectName,
       projectCode: project.projectCode,
       status: project.status,
+      lead: project.lead,
       customerName: project.lead?.customerName || 'N/A',
       requirementType: project.requirement?.requirementType || 'N/A',
       createdAt: project.createdAt,
@@ -2509,7 +2510,7 @@ export const getProjectChatGroups = async (user, filter = {}, options = {}) => {
     const [projects, total] = await Promise.all([
       Project.find(projectFilter)
         .select('projectName projectCode status createdAt updatedAt')
-        .populate('lead', 'customerName')
+        .populate('lead', 'customerName mobileNumber')
         .populate({
           path: 'requirement',
           select: 'requirementType sharedWith',
@@ -2535,6 +2536,7 @@ export const getProjectChatGroups = async (user, filter = {}, options = {}) => {
         projectName: project.projectName,
         projectCode: project.projectCode,
         status: project.status,
+        lead: project.lead,
         customerName: project.lead?.customerName || 'N/A',
         requirementType: project.requirement?.requirementType || 'N/A',
         createdAt: project.createdAt,
@@ -2552,6 +2554,105 @@ export const getProjectChatGroups = async (user, filter = {}, options = {}) => {
       totalResults: total
     };
   }
+};
+
+/**
+ * Share a project with users
+ * @param {Object} req - Express request object
+ * @param {string} projectId - Project ID
+ * @param {Array} userIds - Array of user IDs to share with
+ * @returns {Promise<Object>}
+ */
+export const shareProjectService = async (req, projectId, userIds) => {
+  console.log('shareProjectService called with:', { projectId, userIds, type: typeof projectId });
+  
+  // Validate project exists
+  const project = await Project.findById(projectId);
+  if (!project) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Project not found');
+  }
+
+  // Validate users exist
+  const users = await User.find({ _id: { $in: userIds }, isActive: true });
+  const userIdToUser = new Map(users.map(u => [u._id.toString(), u]));
+  if (users.length !== userIds.length) {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'One or more users not found or inactive');
+  }
+
+  // Get project requirement
+  const requirement = await Requirement.findById(project.requirement);
+  if (!requirement) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Project requirement not found');
+  }
+
+  // Add users to sharedWith array if not already present
+  const existingUserIds = requirement.sharedWith.map(sw => sw.user.toString());
+  const newUsers = userIds.filter(userId => !existingUserIds.includes(userId));
+
+  if (newUsers.length > 0) {
+    const sharedWithEntries = newUsers.map(userId => ({
+      user: userId,
+      sharedBy: req.user._id,
+      sharedAt: new Date(),
+      isSeen: false
+    }));
+
+    requirement.sharedWith.push(...sharedWithEntries);
+    await requirement.save();
+
+    // Log activity for each user
+    for (const userId of newUsers) {
+      const sharedUser = userIdToUser.get(userId.toString());
+      const sharedUserName = sharedUser?.name || 'Unknown User';
+      const sharedUserRole = sharedUser?.role || 'user';
+      await logActivity(req, {
+        action: 'share_project',
+        targetModel: 'Project',
+        targetId: projectId,
+        targetName: project.projectName,
+        projectId: projectId,
+        description: `Project Shared Quality Inspector ${sharedUserName}`,
+        changes: { sharedWith: userId },
+        metadata: { 
+          projectId: projectId,
+          sharedUserId: userId,
+          sharedUserName,
+          sharedUserRole,
+          projectName: project.projectName
+        }
+      });
+    }
+  } else {
+    // No new users to add, but still record an audit log per attempted user so UI can reflect activity
+    for (const userId of userIds) {
+      const attemptedUser = userIdToUser.get(userId.toString());
+      const attemptedUserName = attemptedUser?.name || 'Unknown User';
+      const attemptedUserRole = attemptedUser?.role || 'user';
+      await logActivity(req, {
+        action: 'share_project',
+        targetModel: 'Project',
+        targetId: projectId,
+        targetName: project.projectName,
+        projectId: projectId,
+        description: `Project Share attempted to (${attemptedUserRole}) - already has access`,
+        changes: { sharedWith: null },
+        metadata: {
+          projectId: projectId,
+          sharedUserId: userId,
+          sharedUserName: attemptedUserName,
+          sharedUserRole: attemptedUserRole,
+          note: 'User already had access; logged for traceability'
+        }
+      });
+    }
+  }
+
+  return {
+    projectId: project._id,
+    projectName: project.projectName,
+    sharedWith: newUsers.length,
+    totalShared: requirement.sharedWith.length
+  };
 };
 
 

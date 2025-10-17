@@ -179,7 +179,8 @@ export const importCustomerLeadsController = catchAsync(async (req, res) => {
     throw new ApiError(400, 'Please upload a spreadsheet file.');
   }
 
-  const { importedCount, errors } = await importCustomerLeadsService(req.file.path, req);
+  // Pass the buffer instead of a path; upload to S3 is handled in service if needed
+  const { importedCount, errors } = await importCustomerLeadsService(req.file.buffer, req);
 
   const message = `${importedCount} leads imported successfully.`;
 

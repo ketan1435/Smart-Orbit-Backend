@@ -48,7 +48,13 @@ export class S3Storage extends StorageInterface {
     }
   }
 
-  async uploadFile(file, key) {
+  async uploadFile(file, folder) {
+    // Generate a unique key for the file
+    const timestamp = Date.now();
+    const randomString = Math.random().toString(36).substring(2, 15);
+    const fileExtension = file.originalname.split('.').pop();
+    const key = `${folder}/${timestamp}-${randomString}.${fileExtension}`;
+    
     const upload = new Upload({
       client: s3Client,
       params: {
@@ -62,7 +68,10 @@ export class S3Storage extends StorageInterface {
     try {
       const result = await upload.done();
       logger.info(`File uploaded successfully to S3: ${result.Location}`);
-      return result;
+      return {
+        ...result,
+        key: key, // Ensure we return the key
+      };
     } catch (error) {
       logger.error(`Error uploading file to S3: ${error.message}`);
       // The SDK will automatically abort the upload on error, so no manual cleanup is needed here.

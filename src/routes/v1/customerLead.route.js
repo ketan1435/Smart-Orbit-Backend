@@ -32,18 +32,8 @@ import { transactional } from '../../utils/transactional.js';
 import * as customerLeadValidation from '../../validations/customerLead.validation.js';
 import validate from '../../middlewares/validate.js';
 
-// Multer configuration for spreadsheet imports
-const importStorage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'uploads/imports/');
-  },
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    cb(null, `${Date.now()}-spreadsheet${ext}`);
-  },
-});
-
-const upload = multer({ storage: importStorage });
+// Multer memory storage for spreadsheet imports (avoid local disk)
+const upload = multer({ storage: multer.memoryStorage() });
 
 const router = express.Router();
 

@@ -14,6 +14,8 @@ import clientProposalRoute from './clientProposal.route.js';
 import vendorRoute from './vendor.route.js';
 import quoteRoute from './quote.route.js';
 import poRoute from './po.route.js';
+import poRequestRoute from './poRequest.route.js';
+import poVerificationRoute from './poVerification.route.js';
 import siteworkRoute from './sitework.route.js';
 import projectAssignmentPaymentRoute from './projectAssignmentPayment.route.js';
 import walletTransactionRoute from './walletTransaction.route.js';
@@ -24,6 +26,11 @@ import activityLogRoute from './activityLog.route.js';
 import remarkRoute from './remark.route.js';
 import attachmentRoute from './attachment.route.js';
 import serviceRoute from './service.route.js';
+import projectWaterfallRoute from './projectWaterfall.route.js';
+import adminReviewRoute from './adminReview.route.js';
+import projectReviewRoute from './projectReview.route.js';
+import scpDataSendRoute from './scpDataSend.route.js';
+import customerConfirmationRoute from './customerConfirmation.route.js';
 
 const router = express.Router();
 
@@ -81,6 +88,14 @@ const defaultRoutes = [
     route: poRoute,
   },
   {
+    path: '/po-requests',
+    route: poRequestRoute,
+  },
+  {
+    path: '/po-verifications',
+    route: poVerificationRoute,
+  },
+  {
     path: '/siteworks',
     route: siteworkRoute,
   },
@@ -119,6 +134,26 @@ const defaultRoutes = [
   {
     path: '/services',
     route: serviceRoute,
+  },
+  {
+    path: '/project-waterfall',
+    route: projectWaterfallRoute,
+  },
+  {
+    path: '/admin-review',
+    route: adminReviewRoute,
+  },
+  {
+    path: '/project-review',
+    route: projectReviewRoute,
+  },
+  {
+    path: '/scp-data-send',
+    route: scpDataSendRoute,
+  },
+  {
+    path: '/customer-confirmation',
+    route: customerConfirmationRoute,
   },
   // {
   //   path: '/income',
