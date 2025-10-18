@@ -124,8 +124,10 @@ export const updateDeliveryScheduleService = async (req, scheduleId, updateData)
         let description;
         if (updateData.status === 'delivered') {
             description = `Material delivered at site successfully`;
+        } else if (updateData.status === 'cross-checked') {
+            description = `PO delivery cross check successfully`;
         } else {
-            description = `Delivery status updated to ${updateData.status} for PO ${updatedSchedule.poId.name}`;
+            description = `Delivery status updated to ${updateData.status} `;
         }
         
         await createActivityLog({

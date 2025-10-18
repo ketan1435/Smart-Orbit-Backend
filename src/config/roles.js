@@ -132,6 +132,7 @@ const allRoles = {
     'manageVendors',
     'manageAttendance',
     'getAttendance',
+    'manageDispatch',
   ],
 
   worker: [
