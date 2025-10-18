@@ -44,6 +44,7 @@ const allRoles = {
     'getAttendance',
     'admin',
     'manageVendors',
+    'manageDispatch',
   ],
 
   'sales-admin': [

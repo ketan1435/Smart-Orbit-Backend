@@ -160,6 +160,16 @@ export const getPOsService = async (query) => {
     };
 };
 
+// Helper function to map MIME types to fileSchema enum values
+const mapMimeTypeToFileType = (mimeType) => {
+    if (mimeType.startsWith('image/')) return 'image';
+    if (mimeType.startsWith('video/')) return 'video';
+    if (mimeType.startsWith('audio/')) return 'audio';
+    if (mimeType === 'application/pdf') return 'pdf';
+    if (mimeType.includes('document') || mimeType.includes('text') || mimeType.includes('application/')) return 'document';
+    return 'document'; // Default fallback
+};
+
 export const deliverPOService = async (req, poId, files) => {
     const PO = (await import('../models/po.model.js')).default;
     const { logActivity } = await import('../middlewares/activityLog.middleware.js');
@@ -169,10 +179,10 @@ export const deliverPOService = async (req, poId, files) => {
 
     // Map uploaded files to fileSchema-like objects
     const uploaded = (files || []).map((f) => ({
-        fileName: f.originalname,
-        mimeType: f.mimetype,
+        originalName: f.originalname,
+        key: f.key || f.location || f.path || '',
+        fileType: mapMimeTypeToFileType(f.mimetype),
         size: f.size,
-        url: f.location || f.path || '',
         uploadedAt: new Date(),
     }));
 

@@ -16,6 +16,7 @@ import quoteRoute from './quote.route.js';
 import poRoute from './po.route.js';
 import poRequestRoute from './poRequest.route.js';
 import poVerificationRoute from './poVerification.route.js';
+import deliveryScheduleRoute from './deliverySchedule.route.js';
 import siteworkRoute from './sitework.route.js';
 import projectAssignmentPaymentRoute from './projectAssignmentPayment.route.js';
 import walletTransactionRoute from './walletTransaction.route.js';
@@ -94,6 +95,10 @@ const defaultRoutes = [
   {
     path: '/po-verifications',
     route: poVerificationRoute,
+  },
+  {
+    path: '/delivery-schedules',
+    route: deliveryScheduleRoute,
   },
   {
     path: '/siteworks',

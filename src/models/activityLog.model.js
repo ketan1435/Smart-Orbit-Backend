@@ -26,7 +26,7 @@ const activityLogSchema = new mongoose.Schema({
         type: String,
         required: true,
         enum: [
-            'User', 'Admin', 'Project', 'ClientProposal', 'BOM', 'PO', 'PoRequest', 'POVerification',
+            'User', 'Admin', 'Project', 'ClientProposal', 'BOM', 'PO', 'PoRequest', 'POVerification', 'DeliverySchedule',
             'Vendor', 'SiteVisit', 'Message', 'File', 'CustomerLead',
             'Quote', 'Sitework', 'ProjectAssignmentPayment', 'WalletTransaction',
             'Requirement'
@@ -122,7 +122,10 @@ const activityLogSchema = new mongoose.Schema({
             'share_project',
             'po_verification_created',
             'po_verification_reviewed',
-            'po_delivered'
+            'po_delivered',
+            'delivery_scheduled',
+            'delivery_status_updated',
+            'delivery_schedule_deleted'
         ],
     },
     actionType: {
