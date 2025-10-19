@@ -32,6 +32,7 @@ import adminReviewRoute from './adminReview.route.js';
 import projectReviewRoute from './projectReview.route.js';
 import scpDataSendRoute from './scpDataSend.route.js';
 import customerConfirmationRoute from './customerConfirmation.route.js';
+import projectReportRoute from './projectReport.route.js';
 
 const router = express.Router();
 
@@ -159,6 +160,10 @@ const defaultRoutes = [
   {
     path: '/customer-confirmation',
     route: customerConfirmationRoute,
+  },
+  {
+    path: '/project-reports',
+    route: projectReportRoute,
   },
   // {
   //   path: '/income',
