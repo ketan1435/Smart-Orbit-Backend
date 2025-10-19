@@ -2777,7 +2777,8 @@ export const importCustomerLeadsService = async (fileBufferOrPath, req) => {
     }
 
     // Unique identifier for grouping rows belonging to same customer
-    const customerId = email || mobileNumber || customerName || `customer_${index + 3}`;
+    // Use email + mobileNumber combination to ensure customers with same name but different contact info are treated separately
+    const customerId = `${email || 'no-email'}_${mobileNumber || 'no-mobile'}` || `customer_${index + 3}`;
 
     // Get and normalize field values
     const leadSource = getVal('leadSource');
@@ -2865,13 +2866,18 @@ export const importCustomerLeadsService = async (fileBufferOrPath, req) => {
       const { _sourceRows, ...leadPayload } = leadData;
       const rowIdentifier = `Row(s) ${_sourceRows.join(', ')}`;
 
-      try {
-        // Find existing lead by email or mobile
-        const existingLead = await CustomerLead.findOne({
-          $or: [{ email: leadPayload.email }, { mobileNumber: leadPayload.mobileNumber }],
-        }).session(session);
+      console.log(`Processing customer: ${leadPayload.customerName} (ID: ${customerId}) from ${rowIdentifier}`);
 
+      try {
+        // Find existing lead by BOTH email AND mobile number (both must match)
+        // This ensures customers with same name but different contact info are treated as separate
+        console.log(`Looking for existing customer with email: ${leadPayload.email}, mobile: ${leadPayload.mobileNumber}`);
+        const existingLead = await CustomerLead.findOne({
+          $and: [{ email: leadPayload.email }, { mobileNumber: leadPayload.mobileNumber }],
+        }).session(session);
+        
         if (existingLead) {
+          console.log(`Found existing customer: ${existingLead.customerName} (${existingLead.email}, ${existingLead.mobileNumber}) - adding requirements`);
           // If lead exists, add new requirements and create projects
           for (const requirementData of leadPayload.requirements) {
             const { project } = await processRequirementAndProject(req, existingLead, requirementData, session);
@@ -2917,6 +2923,7 @@ export const importCustomerLeadsService = async (fileBufferOrPath, req) => {
             console.error('Error logging customer import (existing lead):', error);
           }
         } else {
+          console.log(`No existing customer found - Creating new customer: ${leadPayload.customerName} (${leadPayload.email}, ${leadPayload.mobileNumber})`);
           // Create new lead with simplified functionality
           const { requirements, password, ...basicLeadInfo } = leadPayload;
 
@@ -2983,7 +2990,17 @@ export const importCustomerLeadsService = async (fileBufferOrPath, req) => {
           // Create user account if password is provided
           if (password) {
             try {
-              await createUser(req, {
+              // Ensure req object has user info for activity logging
+              const reqWithUser = req || {};
+              if (!reqWithUser.user) {
+                reqWithUser.user = {
+                  id: createdBy,
+                  name: 'System Import',
+                  email: 'system@import.com',
+                  role: 'Admin'
+                };
+              }
+              await createUser(reqWithUser, {
                 name: leadPayloadData.customerName,
                 email: leadPayloadData.email,
                 password: password,

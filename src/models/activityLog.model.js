@@ -28,7 +28,7 @@ const activityLogSchema = new mongoose.Schema({
         enum: [
             'User', 'Admin', 'Project', 'ClientProposal', 'BOM', 'PO', 'PoRequest', 'POVerification', 'DeliverySchedule',
             'Vendor', 'SiteVisit', 'Message', 'File', 'CustomerLead',
-            'Quote', 'Sitework', 'ProjectAssignmentPayment', 'WalletTransaction',
+            'Quote', 'Sitework', 'SiteworkDocument', 'ProjectAssignmentPayment', 'WalletTransaction',
             'Requirement'
         ],
     },
@@ -125,7 +125,8 @@ const activityLogSchema = new mongoose.Schema({
             'po_delivered',
             'delivery_scheduled',
             'delivery_status_updated',
-            'delivery_schedule_deleted'
+            'delivery_schedule_deleted',
+            'worker_upload_document'
         ],
     },
     actionType: {

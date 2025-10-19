@@ -31,7 +31,7 @@ export const getSiteworksByProject = catchAsync(async (req, res) => {
 });
 
 export const addSiteworkDocument = catchAsync(async (req, res) => {
-    const newDoc = await addSiteworkDocumentService(req.params.siteworkId, req.body, req.user);
+    const newDoc = await addSiteworkDocumentService(req, req.params.siteworkId, req.body, req.user);
     res.status(httpStatus.CREATED).json({
         status: 1,
         message: 'Sitework document added successfully',

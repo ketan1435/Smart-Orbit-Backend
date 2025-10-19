@@ -90,7 +90,7 @@ export const createSiteworkService = async (req, data, user) => {
             targetModel: 'Sitework',
             targetId: sitework._id,
             targetName: sitework.name || 'Sitework',
-            description: `${user.role === 'Admin' ? 'Admin' : 'User'} ${user.name} (${user.email}) created sitework "${sitework.name}" `,
+            description: `${user.name} created sitework "${sitework.name}" `,
             changes: {
                 siteworkCreated: {
                     from: null,
@@ -282,7 +282,7 @@ export const updateSiteworkService = async (req, id, data, user) => {
             targetModel: 'Sitework',
             targetId: sitework._id,
             targetName: sitework.name || 'Sitework',
-            description: `${user.role === 'Admin' ? 'Admin' : 'User'} ${user.name} (${user.email}) updated sitework "${sitework.name}"`,
+            description: `Sitework is ${sitework.status} for "${sitework.name}"`,
             changes: {
                 description: {
                     from: originalDescription,
@@ -453,7 +453,13 @@ export const getSiteworksByProjectService = async (projectId, user) => {
     return siteworks;
 };
 
-export const addSiteworkDocumentService = async (siteworkId, data, user) => {
+export const addSiteworkDocumentService = async (req, siteworkId, data, user) => {
+    console.log('=== addSiteworkDocumentService called ===');
+    console.log('req:', req ? 'present' : 'missing');
+    console.log('siteworkId:', siteworkId);
+    console.log('data:', data);
+    console.log('user:', user);
+    
     const sitework = await Sitework.findById(siteworkId);
     if (!sitework) throw new ApiError(httpStatus.NOT_FOUND, 'Sitework not found');
 
@@ -493,7 +499,45 @@ export const addSiteworkDocumentService = async (siteworkId, data, user) => {
     // Delete tmp files
     await Promise.all(files.map(f => storage.deleteFile(f.key)));
 
+    // Create activity log for document upload
+    try {
+        console.log('=== Creating activity log for document upload ===');
+        console.log('User object:', JSON.stringify(user, null, 2));
+        console.log('Sitework ID:', siteworkId);
+        console.log('Sitework name:', sitework.name);
+        console.log('Project ID:', sitework.project);
+        console.log('Files count:', files.length);
+        console.log('User note:', userNote);
+        
+        const activityLogData = {
+            action: 'worker_upload_document',
+            targetModel: 'Sitework',
+            targetId: siteworkId,
+            targetName: sitework.name,
+            description: `${user.name || user.adminName || 'Worker'} uploaded document for sitework "${sitework.name}"`,
+            projectId: sitework.project,
+            metadata: {
+                siteworkId: sitework._id,
+                documentCount: files.length,
+                uploadedBy: user.id,
+                uploadedByModel: user.role === 'Admin' ? 'Admin' : 'User',
+                userNote: userNote || ''
+            }
+        };
+        
+        console.log('Activity log data:', JSON.stringify(activityLogData, null, 2));
+        
+        await logActivity(req, activityLogData);
+        console.log('✅ Activity log created successfully for document upload');
+    } catch (error) {
+        console.error('❌ Error creating activity log for document upload:', error);
+        console.error('Error details:', error.message);
+        console.error('Error stack:', error.stack);
+        // Don't throw error to avoid breaking the document upload process
+    }
+
     // Return the newly added document (last in array)
+    console.log('=== addSiteworkDocumentService completed successfully ===');
     return sitework.siteworkDocuments[sitework.siteworkDocuments.length - 1];
 };
 
@@ -545,7 +589,7 @@ export const approveOrRejectSiteworkDocumentService = async (req, siteworkId, do
             targetModel: 'SiteworkDocument',
             targetId: doc._id,
             targetName: `Document in ${sitework.name || 'Sitework'}`,
-            description: `${user.role === 'Admin' ? 'Admin' : user.role === 'sales-admin' ? 'Sales Admin' : user.role === 'site-engineer' ? 'Site Engineer' : 'Customer'} ${user.name} (${user.email}) ${status.toLowerCase()}ed sitework document in "${sitework.name}" `,
+            description: `${user.name} ${status.toLowerCase()}ed Sitework document in "${sitework.name}" `,
             changes: {
                 adminStatus: {
                     from: originalAdminStatus,
@@ -964,7 +1008,7 @@ export const customerReviewSiteworkDocumentService = async (req, projectId, site
             targetModel: 'SiteworkDocument',
             targetId: doc._id,
             targetName: `Document in ${sitework.name || 'Sitework'}`,
-            description: `Customer ${user.name} (${user.email}) ${status.toLowerCase()}ed sitework document in "${sitework.name}" `,
+            description: `Customer ${user.name} ${status.toLowerCase()}ed sitework document in "${sitework.name}" `,
             changes: {
                 customerStatus: {
                     from: originalCustomerStatus,
@@ -1141,10 +1185,8 @@ export const sendSiteworkDocumentToCustomerService = async (req, projectId, site
         throw new ApiError(httpStatus.NOT_FOUND, 'Document not found');
     }
 
-    // Verify the document has been approved by both site engineer and admin
-    if (doc.siteengineerStatus !== 'Approved' || doc.adminStatus !== 'Approved') {
-        throw new ApiError(httpStatus.FORBIDDEN, 'Document must be approved by site engineer and admin before sending to customer');
-    }
+    // Note: Removed validation that required both site engineer and admin approval
+    // Documents can now be sent to customer without requiring both approvals
 
     // Check if document is already sent to customer
     if (doc.customerStatus !== 'Pending') {
@@ -1216,7 +1258,7 @@ export const sendSiteworkDocumentToCustomerService = async (req, projectId, site
             targetModel: 'SiteworkDocument',
             targetId: doc._id,
             targetName: `Document in ${sitework.name || 'Sitework'}`,
-            description: `${user.role === 'Admin' ? 'Admin' : 'Sales Admin'} ${user.name} (${user.email}) sent sitework document in "${sitework.name}" to customer `,
+            description: `${user.name} Sent Sitework Document in "${sitework.name}" to customer `,
             changes: {
                 customerStatus: {
                     from: originalCustomerStatus,

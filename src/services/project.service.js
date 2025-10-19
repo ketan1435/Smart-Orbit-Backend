@@ -2351,7 +2351,7 @@ export const updateProjectStatusService = async (req, projectId, newStatus) => {
       targetModel: 'Project',
       targetId: project._id,
       targetName: project.projectName,
-      description: `Admin Updated project status from '${originalStatus}' to '${newStatus}`,
+      description: `Admin Updated project status to '${newStatus}`,
       changes: {
         status: {
           from: originalStatus,
@@ -2611,7 +2611,7 @@ export const shareProjectService = async (req, projectId, userIds) => {
         targetId: projectId,
         targetName: project.projectName,
         projectId: projectId,
-        description: `Project Shared Quality Inspector ${sharedUserName}`,
+        description: `Project Shared to ${sharedUserRole === 'planning-engineer' ? 'Planning Engineer' : sharedUserRole === 'quality-inspector' ? 'Quality Inspector' : sharedUserRole === 'site-engineer' ? 'Site Engineer' : sharedUserRole === 'architect' ? 'Architect' : sharedUserRole === 'scp' ? 'SCP' : sharedUserRole.charAt(0).toUpperCase() + sharedUserRole.slice(1)} ${sharedUserName}`,
         changes: { sharedWith: userId },
         metadata: { 
           projectId: projectId,
@@ -2634,7 +2634,7 @@ export const shareProjectService = async (req, projectId, userIds) => {
         targetId: projectId,
         targetName: project.projectName,
         projectId: projectId,
-        description: `Project Share attempted to (${attemptedUserRole}) - already has access`,
+        description: `Project Share attempted to (${attemptedUserRole === 'planning-engineer' ? 'Planning Engineer' : attemptedUserRole === 'quality-inspector' ? 'Quality Inspector' : attemptedUserRole === 'site-engineer' ? 'Site Engineer' : attemptedUserRole === 'architect' ? 'Architect' : attemptedUserRole === 'scp' ? 'SCP' : attemptedUserRole.charAt(0).toUpperCase() + attemptedUserRole.slice(1)}) - already has access`,
         changes: { sharedWith: null },
         metadata: {
           projectId: projectId,
