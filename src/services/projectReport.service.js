@@ -7,6 +7,7 @@ import PO from '../models/po.model.js';
 import ActivityLog from '../models/activityLog.model.js';
 import ClientProposal from '../models/clientProposal.model.js';
 import Quote from '../models/quote.model.js';
+import ReceivedReport from '../models/receivedReport.model.js';
 import { createActivityLog } from './activityLog.service.js';
 import ApiError from '../utils/ApiError.js';
 import httpStatus from 'http-status';
@@ -563,11 +564,6 @@ const generatePDFReport = async (projectId, user) => {
     try {
         const reportData = await generateProjectReport(projectId);
         
-        // Debug user object
-        console.log('generatePDFReport - User object:', user);
-        console.log('generatePDFReport - User name:', user?.name);
-        console.log('generatePDFReport - User email:', user?.email);
-        
         // Log the PDF generation activity
         await createActivityLog({
             user: user._id,
@@ -579,7 +575,8 @@ const generatePDFReport = async (projectId, user) => {
             targetName: reportData.project.projectName,
             action: 'custom_action',
             actionType: 'System',
-            description: `${user.name || user.firstName || user.username || 'Unknown User'} generated PDF report for project "${reportData.project.projectName}"`,
+            description: `${user.name} generated PDF report for project "${reportData.project.projectName}"`,
+            projectId: projectId,
             metadata: {
                 reportType: 'PDF',
                 generatedAt: new Date().toISOString()
@@ -619,8 +616,9 @@ const shareReport = async (projectId, user) => {
             targetId: projectId,
             targetName: 'Project Report',
             action: 'share',
-            actionType: 'System',
-            description: `${user.name || user.firstName || user.username || 'Unknown User'} shared report for project`,
+            actionType: 'Communication',
+            description: `${user.name} shared report for project`,
+            projectId: projectId,
             metadata: {
                 shareToken,
                 shareUrl,
@@ -639,61 +637,35 @@ const shareReport = async (projectId, user) => {
     }
 };
 
-/**
- * Send project report to customer
- */
+// Send report to customer
 const sendReportToCustomer = async (projectId, customerId, message, user) => {
     try {
-        console.log('sendReportToCustomer - projectId:', projectId);
-        console.log('sendReportToCustomer - customerId:', customerId);
-        console.log('sendReportToCustomer - message:', message);
-        console.log('sendReportToCustomer - user:', user);
-
-        // Get project to verify it exists and get customer info
-        const project = await Project.findById(projectId)
-            .populate('lead')
-            .lean();
-
+        const project = await Project.findById(projectId).populate('lead', 'name email');
         if (!project) {
             throw new ApiError(httpStatus.NOT_FOUND, 'Project not found');
         }
 
-        // Generate the complete report data
+        // Get all project data for the report
         const reportData = await generateProjectReport(projectId);
-        
-        console.log('sendReportToCustomer - Generated report data:', {
-            hasOverview: !!reportData.project,
-            hasDocuments: !!reportData.documents,
-            hasPhotos: !!reportData.photos,
-            hasClientProposals: !!reportData.clientProposals,
-            hasTimeline: !!reportData.timeline,
-            documentsCount: reportData.documents?.length || 0,
-            photosCount: reportData.photos?.length || 0,
-            proposalsCount: reportData.clientProposals?.length || 0
-        });
-        
+
         // Create received report record
-        const ReceivedReport = (await import('../models/receivedReport.model.js')).default;
-        
-        const receivedReport = await ReceivedReport.create({
+        const receivedReport = new ReceivedReport({
             project: projectId,
             sentBy: user._id,
             sentTo: customerId,
-            reportData,
+            reportData: reportData,
             message: message || `Project report for ${project.projectName} has been sent to you.`,
+            status: 'sent',
             metadata: {
                 projectName: project.projectName,
-                projectCode: project.projectCode,
-                customerName: project.lead.customerName,
-                customerEmail: project.lead.email,
-                sentBy: user.name || user.firstName || user.username || 'Unknown User',
-                sentAt: new Date().toISOString()
+                customerName: project.lead?.name,
+                customerEmail: project.lead?.email
             }
         });
 
-        console.log('sendReportToCustomer - Created received report:', receivedReport);
-        
-        // Log the sending activity
+        const savedReport = await receivedReport.save();
+
+        // Log activity
         await createActivityLog({
             user: user._id,
             userModel: 'User',
@@ -701,102 +673,71 @@ const sendReportToCustomer = async (projectId, customerId, message, user) => {
             userEmail: user.email || user.emailAddress || 'unknown@example.com',
             targetModel: 'Project',
             targetId: projectId,
-            targetName: 'Project Report',
-            action: 'send',
-            actionType: 'System',
-            description: `${user.name || user.firstName || user.username || 'Unknown User'} sent report for project "${project.projectName}" to customer`,
+            targetName: project.projectName,
+            action: 'send_to_customer',
+            actionType: 'Communication',
+            description: `Sent project report to customer`,
+            projectId: projectId,
             metadata: {
-                receivedReportId: receivedReport._id,
                 customerId: customerId,
-                sentAt: new Date().toISOString()
+                reportId: receivedReport._id
             }
         });
 
         return {
             success: true,
-            receivedReportId: receivedReport._id,
-            projectName: project.projectName,
-            customerName: project.lead.customerName,
-            sentAt: receivedReport.createdAt
+            message: 'Report sent to customer successfully',
+            reportId: receivedReport._id
         };
     } catch (error) {
         console.error('Error sending report to customer:', error);
-        throw error;
+        throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to send report to customer');
     }
 };
 
-/**
- * Get received reports for customer
- */
+// Get received reports for customer
 const getReceivedReportsForCustomer = async (customerId) => {
     try {
-        console.log('getReceivedReportsForCustomer - customerId:', customerId);
-        console.log('getReceivedReportsForCustomer - customerId type:', typeof customerId);
-        
-        const ReceivedReport = (await import('../models/receivedReport.model.js')).default;
-        
-        const receivedReports = await ReceivedReport.find({
-            sentTo: customerId
-        })
-        .populate('project', 'projectName projectCode status')
-        .populate('sentBy', 'name email')
-        .sort({ createdAt: -1 })
-        .lean();
+        const reports = await ReceivedReport.find({ sentTo: customerId })
+            .populate('project', 'projectName projectType status')
+            .populate('sentBy', 'name email')
+            .sort({ createdAt: -1 });
 
-        console.log('getReceivedReportsForCustomer - found reports:', receivedReports.length);
-        console.log('getReceivedReportsForCustomer - reports:', receivedReports);
-
-        return receivedReports.map(report => ({
-            _id: report._id,
-            project: report.project,
-            sentBy: report.sentBy,
-            reportData: report.reportData,
-            message: report.message,
-            createdAt: report.createdAt,
-            metadata: report.metadata
-        }));
+        return {
+            success: true,
+            data: reports
+        };
     } catch (error) {
-        console.error('Error getting received reports for customer:', error);
-        throw error;
+        console.error('❌ Error getting received reports:', error);
+        throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to get received reports');
     }
 };
 
-/**
- * Get received report by ID for customer
- */
-const getReceivedReportById = async (reportId, customerId) => {
+// Get received report by ID
+const getReceivedReportById = async (reportId) => {
     try {
-        console.log('getReceivedReportById - reportId:', reportId);
-        console.log('getReceivedReportById - customerId:', customerId);
-        
-        const ReceivedReport = (await import('../models/receivedReport.model.js')).default;
-        
-        const receivedReport = await ReceivedReport.findOne({
-            _id: reportId,
-            sentTo: customerId
-        })
-        .populate('project', 'projectName projectCode status')
-        .populate('sentBy', 'name email')
-        .lean();
+        const report = await ReceivedReport.findById(reportId)
+            .populate('project', 'projectName projectType status lead')
+            .populate('sentBy', 'name email');
 
-        if (!receivedReport) {
-            throw new ApiError(httpStatus.NOT_FOUND, 'Report not found or access denied');
+        if (!report) {
+            throw new ApiError(httpStatus.NOT_FOUND, 'Report not found');
         }
 
-        console.log('getReceivedReportById - found report:', !!receivedReport);
+        // Update viewed status
+        if (report.status === 'sent') {
+            report.status = 'viewed';
+            report.viewedAt = new Date();
+            await report.save();
+        }
 
         return {
-            _id: receivedReport._id,
-            project: receivedReport.project,
-            sentBy: receivedReport.sentBy,
-            reportData: receivedReport.reportData,
-            message: receivedReport.message,
-            createdAt: receivedReport.createdAt,
-            metadata: receivedReport.metadata
+            success: true,
+            data: report
         };
     } catch (error) {
-        console.error('Error getting received report by ID:', error);
-        throw error;
+        console.error('Error getting received report:', error);
+        throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, 'Failed to get received report');
     }
 };
 

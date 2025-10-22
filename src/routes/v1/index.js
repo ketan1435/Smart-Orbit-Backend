@@ -4,7 +4,7 @@ import config from '../../config/config.js';
 
 import customerLeadRoute from './customerLead.route.js';
 import adminRoute from './admin.route.js';
-import fileRoute from './file.route.js';
+import fileRoute from '../file.routes.js';
 import userRoute from './user.route.js';
 import authRoute from './auth.route.js';
 import siteVisitRoute from './siteVisit.route.js';
@@ -33,6 +33,11 @@ import projectReviewRoute from './projectReview.route.js';
 import scpDataSendRoute from './scpDataSend.route.js';
 import customerConfirmationRoute from './customerConfirmation.route.js';
 import projectReportRoute from './projectReport.route.js';
+import invoiceRoute from './invoice.route.js';
+import paymentRoute from './payment.route.js';
+import certificateRoute from './certificate.route.js';
+import postPhotoRoute from './postPhoto.route.js';
+import maintenanceRoute from './maintenance.route.js';
 
 const router = express.Router();
 
@@ -52,10 +57,6 @@ const defaultRoutes = [
   {
     path: '/admin/',
     route: adminRoute,
-  },
-  {
-    path: '/files',
-    route: fileRoute,
   },
   {
     path: '/users',
@@ -164,6 +165,30 @@ const defaultRoutes = [
   {
     path: '/project-reports',
     route: projectReportRoute,
+  },
+  {
+    path: '/invoices',
+    route: invoiceRoute,
+  },
+  {
+    path: '/payments',
+    route: paymentRoute,
+  },
+  {
+    path: '/certificates',
+    route: certificateRoute,
+  },
+  {
+    path: '/post-photos',
+    route: postPhotoRoute,
+  },
+  {
+    path: '/maintenance',
+    route: maintenanceRoute,
+  },
+  {
+    path: '/files',
+    route: fileRoute,
   },
   // {
   //   path: '/income',

@@ -53,3 +53,4 @@ receivedReportSchema.index({ status: 1 });
 const ReceivedReport = mongoose.model('ReceivedReport', receivedReportSchema);
 
 export default ReceivedReport;
+
