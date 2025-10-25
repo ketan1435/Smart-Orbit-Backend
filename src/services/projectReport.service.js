@@ -565,21 +565,26 @@ const generatePDFReport = async (projectId, user) => {
         const reportData = await generateProjectReport(projectId);
         
         // Log the PDF generation activity
+        const userName = user.name || user.firstName || user.username || 'Unknown User';
+        const projectName = reportData.project.projectName || 'Unknown Project';
+        
         await createActivityLog({
             user: user._id,
             userModel: 'User',
-            userName: user.name || user.firstName || user.username || 'Unknown User',
+            userName: userName,
             userEmail: user.email || user.emailAddress || 'unknown@example.com',
             targetModel: 'Project',
             targetId: projectId,
-            targetName: reportData.project.projectName,
+            targetName: projectName,
             action: 'custom_action',
             actionType: 'System',
-            description: `${user.name} generated PDF report for project "${reportData.project.projectName}"`,
+            description: `${userName} generated PDF report for project "${projectName}"`,
             projectId: projectId,
             metadata: {
                 reportType: 'PDF',
-                generatedAt: new Date().toISOString()
+                generatedAt: new Date().toISOString(),
+                generatedBy: userName,
+                projectName: projectName
             }
         });
 

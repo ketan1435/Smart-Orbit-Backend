@@ -4,7 +4,7 @@ import config from '../../config/config.js';
 
 import customerLeadRoute from './customerLead.route.js';
 import adminRoute from './admin.route.js';
-import fileRoute from '../file.routes.js';
+import fileRoute from './file.route.js';
 import userRoute from './user.route.js';
 import authRoute from './auth.route.js';
 import siteVisitRoute from './siteVisit.route.js';
@@ -38,6 +38,10 @@ import paymentRoute from './payment.route.js';
 import certificateRoute from './certificate.route.js';
 import postPhotoRoute from './postPhoto.route.js';
 import maintenanceRoute from './maintenance.route.js';
+import customerDocumentRoute from './customerDocument.route.js';
+import feedbackRoute from './feedback.route.js';
+import performanceRatingRoute from './performanceRating.route.js';
+import searchRoute from './search.route.js';
 
 const router = express.Router();
 
@@ -187,8 +191,24 @@ const defaultRoutes = [
     route: maintenanceRoute,
   },
   {
+    path: '/customer-documents',
+    route: customerDocumentRoute,
+  },
+  {
     path: '/files',
     route: fileRoute,
+  },
+  {
+    path: '/feedback',
+    route: feedbackRoute,
+  },
+  {
+    path: '/performance-ratings',
+    route: performanceRatingRoute,
+  },
+  {
+    path: '/search',
+    route: searchRoute,
   },
   // {
   //   path: '/income',

@@ -29,7 +29,7 @@ const activityLogSchema = new mongoose.Schema({
             'User', 'Admin', 'Project', 'ClientProposal', 'BOM', 'PO', 'PoRequest', 'POVerification', 'DeliverySchedule',
             'Vendor', 'SiteVisit', 'Message', 'File', 'CustomerLead',
             'Quote', 'Sitework', 'SiteworkDocument', 'ProjectAssignmentPayment', 'WalletTransaction',
-            'Requirement'
+            'Requirement', 'Feedback', 'PerformanceRating'
         ],
     },
     targetId: {
@@ -126,13 +126,22 @@ const activityLogSchema = new mongoose.Schema({
             'delivery_scheduled',
             'delivery_status_updated',
             'delivery_schedule_deleted',
-            'worker_upload_document'
+            'worker_upload_document',
+            // --- Feedback actions ---
+            'feedback_submitted',
+            'feedback_updated',
+            'feedback_reviewed',
+            'feedback_resolved',
+            // --- Performance Rating actions ---
+            'performance_rating_added',
+            'performance_rating_updated',
+            'performance_rating_deleted'
         ],
     },
     actionType: {
         type: String,
         required: true,
-        enum: ['CRUD', 'Status Change', 'Workflow', 'Communication', 'File Operation', 'System'],
+        enum: ['CRUD', 'Status Change', 'Workflow', 'Communication', 'File Operation', 'System', 'Rating'],
     },
 
     // Changes made

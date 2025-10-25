@@ -1062,6 +1062,8 @@ export const shareRequirementWithUsersService = async (req, leadId, requirementI
   // Check if any of the users are procurement team members
   const users = await User.find({ _id: { $in: userIds } }).select('_id role name email');
   console.log('🔍 shareRequirementWithUsersService - Found users:', users);
+  console.log('🔍 shareRequirementWithUsersService - userIds sent:', userIds);
+  console.log('🔍 shareRequirementWithUsersService - Users found count:', users.length);
   
   const procurementUsers = users.filter(user => user.role === 'planning-engineer');
   const otherUsers = users.filter(user => user.role !== 'planning-engineer');
@@ -1073,8 +1075,11 @@ export const shareRequirementWithUsersService = async (req, leadId, requirementI
   const project = await Project.findOne({ requirement: requirementId });
 
   // Handle regular users (non-procurement)
+  console.log('🔍 shareRequirementWithUsersService - Processing otherUsers:', otherUsers.length);
   otherUsers.forEach(user => {
+    console.log('🔍 shareRequirementWithUsersService - Processing user:', user._id, user.name, user.role);
     const alreadyShared = requirement.sharedWith.some(share => share.user.toString() === user._id.toString());
+    console.log('🔍 shareRequirementWithUsersService - Already shared:', alreadyShared);
     if (!alreadyShared) {
       requirement.sharedWith.push({
         user: user._id,
@@ -1088,6 +1093,7 @@ export const shareRequirementWithUsersService = async (req, leadId, requirementI
         userEmail: user.email,
         role: user.role
       });
+      console.log('🔍 shareRequirementWithUsersService - Added user to sharedUsers:', user.name);
 
       // If user is a site engineer, automatically assign them to the project
       if (user.role === 'site-engineer' && project) {
@@ -1125,7 +1131,7 @@ export const shareRequirementWithUsersService = async (req, leadId, requirementI
       // Always share requirement with procurement team (planning engineers)
       // They need access to see the project even without approved documents
       procurementUsers.forEach(user => {
-        console.log('🔍 shareRequirementWithUsersService - Processing user:', user._id, user.name, user.role);
+        console.log('🔍 shareRequirementWithUsersService - Processing procurement user:', user._id, user.name, user.role);
         const alreadyShared = requirement.sharedWith.some(share => share.user.toString() === user._id.toString());
         console.log('🔍 shareRequirementWithUsersService - Already shared:', alreadyShared);
         if (!alreadyShared) {
@@ -1141,7 +1147,7 @@ export const shareRequirementWithUsersService = async (req, leadId, requirementI
             userEmail: user.email,
             role: user.role
           });
-          console.log('🔍 shareRequirementWithUsersService - Added user to sharedWith');
+          console.log('🔍 shareRequirementWithUsersService - Added procurement user to sharedUsers:', user.name);
         } else {
           skippedUsers.push({
             userId: user._id,
@@ -1150,7 +1156,7 @@ export const shareRequirementWithUsersService = async (req, leadId, requirementI
             role: user.role,
             reason: 'Already shared'
           });
-          console.log('🔍 shareRequirementWithUsersService - User already shared');
+          console.log('🔍 shareRequirementWithUsersService - Procurement user already shared');
         }
       });
     } else {
@@ -1213,13 +1219,28 @@ export const shareRequirementWithUsersService = async (req, leadId, requirementI
   }
 
   // Log the requirement sharing activity
+  console.log('🔍 shareRequirementWithUsersService - About to log activity:');
+  console.log('🔍 shareRequirementWithUsersService - sharedUsers.length:', sharedUsers.length);
+  console.log('🔍 shareRequirementWithUsersService - sharedUsers:', sharedUsers);
+  console.log('🔍 shareRequirementWithUsersService - skippedUsers.length:', skippedUsers.length);
+  console.log('🔍 shareRequirementWithUsersService - skippedUsers:', skippedUsers);
+  
+  // Calculate total users involved (newly shared + already shared)
+  const totalUsersInvolved = sharedUsers.length + skippedUsers.length;
+  const description = totalUsersInvolved > 0 
+    ? `Shared requirement with ${totalUsersInvolved} users (${sharedUsers.length} newly shared, ${skippedUsers.length} already shared)`
+    : `Shared requirement with 0 users`;
+  
+  console.log('🔍 shareRequirementWithUsersService - Total users involved:', totalUsersInvolved);
+  console.log('🔍 shareRequirementWithUsersService - Description:', description);
+  
   try {
     await logActivity(req, {
       action: 'share',
       targetModel: 'Requirement',
       targetId: requirementId,
       targetName: requirement.projectName,
-      description: `Shared requirement with ${sharedUsers.length} users `,
+      description: description,
       metadata: {
         requirementData: {
           projectName: requirement.projectName,
