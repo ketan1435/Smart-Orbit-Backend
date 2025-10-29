@@ -19,6 +19,7 @@ import { STATUS_ENUM, STATUS_VALUES } from '../config/enums/status.enum.js';
 import { updateCustomerStatusWithCascade } from './statusCascade.service.js';
 import { logActivity } from '../middlewares/activityLog.middleware.js';
 import { createActivityLog } from './activityLog.service.js';
+import { updateWaterfallStep } from '../utils/waterfallHelper.js';
 
 
 export const createCustomerLeadService = async (req, session) => {
@@ -95,6 +96,15 @@ export const createCustomerLeadService = async (req, session) => {
     await Requirement.findByIdAndUpdate(requirementId, {
       project: project._id,
     }, { session });
+
+    // Update waterfall: Step 2 - Project Created by Admin
+    const createdByName = req.user?.name || req.user?.email || req.user?.adminName || 'Admin';
+    await updateWaterfallStep(
+      project._id.toString(),
+      2, // Step 2: Project Created by Admin
+      createdByName,
+      'Project created in system'
+    );
 
     // Log requirement creation
     try {
@@ -1064,10 +1074,10 @@ export const shareRequirementWithUsersService = async (req, leadId, requirementI
   console.log('🔍 shareRequirementWithUsersService - Found users:', users);
   console.log('🔍 shareRequirementWithUsersService - userIds sent:', userIds);
   console.log('🔍 shareRequirementWithUsersService - Users found count:', users.length);
-  
+
   const procurementUsers = users.filter(user => user.role === 'planning-engineer');
   const otherUsers = users.filter(user => user.role !== 'planning-engineer');
-  
+
   console.log('🔍 shareRequirementWithUsersService - Procurement users:', procurementUsers);
   console.log('🔍 shareRequirementWithUsersService - Other users:', otherUsers);
 
@@ -1224,16 +1234,16 @@ export const shareRequirementWithUsersService = async (req, leadId, requirementI
   console.log('🔍 shareRequirementWithUsersService - sharedUsers:', sharedUsers);
   console.log('🔍 shareRequirementWithUsersService - skippedUsers.length:', skippedUsers.length);
   console.log('🔍 shareRequirementWithUsersService - skippedUsers:', skippedUsers);
-  
+
   // Calculate total users involved (newly shared + already shared)
   const totalUsersInvolved = sharedUsers.length + skippedUsers.length;
-  const description = totalUsersInvolved > 0 
+  const description = totalUsersInvolved > 0
     ? `Shared requirement with ${totalUsersInvolved} users (${sharedUsers.length} newly shared, ${skippedUsers.length} already shared)`
     : `Shared requirement with 0 users`;
-  
+
   console.log('🔍 shareRequirementWithUsersService - Total users involved:', totalUsersInvolved);
   console.log('🔍 shareRequirementWithUsersService - Description:', description);
-  
+
   try {
     await logActivity(req, {
       action: 'share',
@@ -1394,6 +1404,17 @@ export const shareRequirementWithScpUsersService = async (req, leadId, requireme
 
   if (updated) {
     await requirement.save();
+
+    // Update waterfall: Step 3 - Project Sent to SCP
+    if (requirement.project && sharedScpUsers.length > 0) {
+      const adminName = req.user?.name || req.user?.email || 'Admin';
+      await updateWaterfallStep(
+        requirement.project.toString(),
+        3, // Step 3: Project Sent to SCP
+        adminName,
+        `Project shared with ${sharedScpUsers.length} SCP user(s)`
+      );
+    }
   }
 
   // Log the SCP requirement sharing activity
@@ -1609,6 +1630,17 @@ export const updateScpDataByScpUserService = async (req, leadId, requirementId, 
   }
 
   await requirement.save();
+
+  // Update waterfall: Step 4 - SCP Updates Project Data
+  if (requirement.project) {
+    const scpUserName = scpUser?.name || scpUser?.email || 'SCP User';
+    await updateWaterfallStep(
+      requirement.project.toString(),
+      4, // Step 4: SCP Updates Project Data
+      scpUserName,
+      'SCP data updated'
+    );
+  }
 
   // Clean up temporary files
   for (const tempKey of tempFileKeysToDelete) {
@@ -1856,6 +1888,17 @@ export const updateScpDataByAdminService = async (req, leadId, requirementId, ad
   // }
 
   await requirement.save();
+
+  // Update waterfall: Step 4 - SCP Updates Project Data (by Admin)
+  if (requirement.project) {
+    const adminName = admin?.name || admin?.email || 'Admin';
+    await updateWaterfallStep(
+      requirement.project.toString(),
+      4, // Step 4: SCP Updates Project Data
+      adminName,
+      'SCP data updated by admin'
+    );
+  }
 
   // // Clean up temporary files
   // for (const tempKey of tempFileKeysToDelete) {
@@ -2896,7 +2939,7 @@ export const importCustomerLeadsService = async (fileBufferOrPath, req) => {
         const existingLead = await CustomerLead.findOne({
           $and: [{ email: leadPayload.email }, { mobileNumber: leadPayload.mobileNumber }],
         }).session(session);
-        
+
         if (existingLead) {
           console.log(`Found existing customer: ${existingLead.customerName} (${existingLead.email}, ${existingLead.mobileNumber}) - adding requirements`);
           // If lead exists, add new requirements and create projects

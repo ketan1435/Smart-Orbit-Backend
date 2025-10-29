@@ -12,3 +12,5 @@ yarn-error.log
 # Code coverage
 coverage
 node_modules.zip
+
+./history

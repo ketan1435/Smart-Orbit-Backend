@@ -9,6 +9,45 @@ import xlsx from 'xlsx';
 import { SiteVisit, CustomerLead } from '../models/index.js';
 import { logActivity } from '../middlewares/activityLog.middleware.js';
 
+// Helper: append " SCP" suffix to name for SCP users in responses (non-persistent)
+const appendScpSuffixIfNeeded = (userObj) => {
+  if (!userObj) return userObj;
+  const role = userObj.role || userObj?.toObject?.().role;
+  const name = userObj.name || userObj?.toObject?.().name;
+  if (!name) return userObj;
+  // Treat both 'scp' and 'scp-user' as SCP roles defensively
+  const isScp = String(role).toLowerCase() === 'scp-user' || String(role).toLowerCase() === 'scp';
+  if (!isScp) return userObj;
+  const alreadyHasSuffix = /\bscp\b$/i.test(name.trim());
+  const displayName = alreadyHasSuffix ? name : `${name} SCP`;
+  // Ensure we don't mutate mongoose docs unintentionally
+  const plain = typeof userObj.toObject === 'function' ? userObj.toObject() : { ...userObj };
+  plain.name = displayName;
+  return plain;
+};
+
+// Helper: normalize persisted name based on role
+// - Ensures exactly one " SCP" suffix for scp roles
+// - Removes any trailing "scp" (any case, extra spaces) for non-scp roles
+// - Collapses internal extra spaces around the suffix
+const normalizeNameForRole = (name, role) => {
+  if (name === undefined || name === null) return name;
+  const raw = String(name);
+  const isScpRole = String(role || '').toLowerCase() === 'scp-user' || String(role || '').toLowerCase() === 'scp';
+  // Trim and collapse multiple spaces
+  const collapsed = raw.replace(/\s+/g, ' ').trim();
+  // Strip any existing trailing SCP suffix variants
+  const base = collapsed.replace(/\s*scp\s*$/i, '').trim();
+  if (!isScpRole) {
+    return base; // ensure no suffix for non-SCP roles
+  }
+  if (base.length === 0) {
+    // Avoid ending up with just "SCP"; keep original trimmed name
+    return collapsed.length ? `${collapsed.replace(/\s*scp\s*$/i, '').trim()} SCP` : raw;
+  }
+  return `${base} SCP`;
+};
+
 /**
  * Create a user
  * @param {Object} userBody
@@ -20,6 +59,12 @@ export const createUser = async (req, userBody) => {
   }
 
   const { profilePictureKey, ...restOfBody } = userBody;
+
+  // Ensure name is normalized according to role on create
+  if (restOfBody.name) {
+    restOfBody.name = normalizeNameForRole(restOfBody.name, restOfBody.role);
+  }
+
   const user = await User.create(restOfBody);
 
   // Handle profile picture upload, similar to the old architect service
@@ -224,6 +269,11 @@ export const updateUserById = async (req, userId, updateBody) => {
 
   const { profilePictureKey, ...restOfBody } = updateBody;
   Object.assign(user, restOfBody);
+
+  // Normalize name according to effective role on update
+  const effectiveRole = restOfBody.role !== undefined ? restOfBody.role : user.role;
+  const effectiveName = user.name; // already assigned from restOfBody if provided
+  user.name = normalizeNameForRole(effectiveName, effectiveRole);
 
   // Handle new profile picture upload
   if (profilePictureKey) {

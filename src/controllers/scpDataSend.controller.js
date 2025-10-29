@@ -71,7 +71,7 @@ export const sendScpDataToCustomer = catchAsync(async (req, res) => {
 
     // Check if step 4.5 has already been completed
     let step4_5 = projectWaterfall.steps.find(step => step.stepNo === 4.5);
-    
+
     // If step 4.5 doesn't exist, add it to the waterfall
     if (!step4_5) {
         console.log('Step 4.5 not found, adding it to waterfall');
@@ -88,7 +88,7 @@ export const sendScpDataToCustomer = catchAsync(async (req, res) => {
         // Sort steps by stepNo to maintain order
         projectWaterfall.steps.sort((a, b) => a.stepNo - b.stepNo);
     }
-    
+
     if (step4_5 && (step4_5.status === 'completed' || step4_5.status === 'skipped')) {
         throw new ApiError(httpStatus.BAD_REQUEST, 'SCP data has already been sent to customer for this project.');
     }
@@ -176,8 +176,8 @@ export const sendScpDataToCustomer = catchAsync(async (req, res) => {
     res.status(httpStatus.OK).json({
         success: true,
         message: 'SCP data sent to customer successfully',
-        data: { 
-            project, 
+        data: {
+            project,
             projectWaterfall,
             currentStep: projectWaterfall.currentStepNumber,
             nextStep: 'Admin Review'
@@ -190,8 +190,21 @@ export const getScpDataSendStatus = catchAsync(async (req, res) => {
     const { projectId } = req.params;
 
     const projectWaterfall = await ProjectWaterfall.findOne({ projectId });
+
+    // If waterfall doesn't exist, return default values instead of throwing error
+    // This prevents frontend from needing to fetch waterfall (which auto-creates at step 1)
     if (!projectWaterfall) {
-        throw new ApiError(httpStatus.NOT_FOUND, 'Project waterfall not found');
+        return res.status(httpStatus.OK).json({
+            success: true,
+            data: {
+                hasSent: false,
+                canSend: false,
+                currentStep: null,
+                step4_5Status: 'pending',
+                performedBy: null,
+                completedAt: null
+            }
+        });
     }
 
     const step4_5 = projectWaterfall.steps.find(step => step.stepNo === 4.5);

@@ -40,10 +40,11 @@ app.use(compression());
 // enable CORS with credentials for known frontend origins
 const allowedOrigins = [
   'http://localhost:8080',
+  'http://localhost:8081',
   'http://127.0.0.1:8080',
   'https://smartorbiter.netlify.app',
   'https://smartorbiter.com',
-   'https://flyvendo.com'
+  'https://flyvendo.com'
 ];
 app.use(
   cors({

@@ -16,6 +16,7 @@ import { updateProjectStatusWithReflection } from './statusCascade.service.js';
 import Attachment from '../models/attachment.model.js';
 import ArchitectDocument from '../models/architectDocument.model.js';
 import { logActivity } from '../middlewares/activityLog.middleware.js';
+import { updateWaterfallStep } from '../utils/waterfallHelper.js';
 
 /**
  * Generates a unique project code.
@@ -212,7 +213,7 @@ export const addArchitectProposal = async (req, projectId, architect, proposalBo
       projectName: project.projectName,
       description: 'Vendor Send Proposal to Admin'
     });
-    
+
     await logActivity(req, {
       action: 'submit_proposal',
       targetModel: 'Project',
@@ -259,7 +260,7 @@ export const addArchitectProposal = async (req, projectId, architect, proposalBo
         submittedAt: new Date()
       }
     });
-    
+
     console.log('Activity log created successfully for architect proposal submission');
   } catch (error) {
     console.error('Error logging architect proposal submission:', error);
@@ -335,7 +336,7 @@ export const acceptArchitectProposal = async (req, projectId, proposalId, adminU
       projectName: project.projectName,
       description: 'Vendor Proposal is Approve From Admin'
     });
-    
+
     await logActivity(req, {
       action: 'accept_proposal',
       targetModel: 'Project',
@@ -390,7 +391,7 @@ export const acceptArchitectProposal = async (req, projectId, proposalId, adminU
         acceptedAt: new Date()
       }
     });
-    
+
     console.log('Activity log created successfully for vendor proposal approval');
   } catch (error) {
     console.error('Error logging architect proposal acceptance:', error);
@@ -1941,7 +1942,7 @@ export const getProjectDocumentsForProcurement = async (projectId, user) => {
   const documentsWithAttachments = await Promise.all(
     allDocuments.map(async (doc) => {
       console.log('🔍 getProjectDocumentsForProcurement - Processing document:', doc._id, 'Admin status:', doc.adminStatus, 'Customer status:', doc.customerStatus);
-      
+
       // Get all attachments for this document (not just approved ones)
       const attachments = await Attachment.find({
         documentId: doc._id,
@@ -2270,7 +2271,7 @@ export const getProjectsForUserAssignedInSiteworkService = async (userId, query)
   const siteworks = await Sitework.find({ "assignedUsers.user": userId })
     .select('project name attachment')
     .sort({ createdAt: -1 });
-  
+
   const projectIds = [...new Set(siteworks.map(sw => sw.project.toString()))];
   if (projectIds.length === 0) {
     return { data: [], page: 1, limit: 10, total: 0, totalPages: 0 };
@@ -2565,7 +2566,7 @@ export const getProjectChatGroups = async (user, filter = {}, options = {}) => {
  */
 export const shareProjectService = async (req, projectId, userIds) => {
   console.log('shareProjectService called with:', { projectId, userIds, type: typeof projectId });
-  
+
   // Validate project exists
   const project = await Project.findById(projectId);
   if (!project) {
@@ -2613,7 +2614,7 @@ export const shareProjectService = async (req, projectId, userIds) => {
         projectId: projectId,
         description: `Project Shared to ${sharedUserRole === 'planning-engineer' ? 'Planning Engineer' : sharedUserRole === 'quality-inspector' ? 'Quality Inspector' : sharedUserRole === 'site-engineer' ? 'Site Engineer' : sharedUserRole === 'architect' ? 'Architect' : sharedUserRole === 'scp' ? 'SCP' : sharedUserRole.charAt(0).toUpperCase() + sharedUserRole.slice(1)} ${sharedUserName}`,
         changes: { sharedWith: userId },
-        metadata: { 
+        metadata: {
           projectId: projectId,
           sharedUserId: userId,
           sharedUserName,

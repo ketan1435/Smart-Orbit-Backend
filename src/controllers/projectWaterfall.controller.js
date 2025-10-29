@@ -7,25 +7,17 @@ import catchAsync from '../utils/catchAsync.js';
 // Get project waterfall progress
 export const getProjectWaterfall = catchAsync(async (req, res) => {
     const { projectId } = req.params;
-    
-    let waterfall = await ProjectWaterfall.findOne({ projectId }).populate('projectId');
-    
+
+    const waterfall = await ProjectWaterfall.findOne({ projectId }).populate('projectId');
+
+    // Don't auto-create waterfall - it should be created at the appropriate workflow step
+    // Auto-creation at step 1 causes issues with admin review flow
     if (!waterfall) {
-        // Create new waterfall if doesn't exist
-        const project = await Project.findById(projectId);
-        if (!project) {
-            throw new ApiError(httpStatus.NOT_FOUND, 'Project not found');
-        }
-        
-        waterfall = new ProjectWaterfall({
-            projectId,
-            projectName: project.projectName || 'Untitled Project'
-        });
-        await waterfall.save();
+        throw new ApiError(httpStatus.NOT_FOUND, 'Project waterfall not found. Waterfall will be created when project workflow begins.');
     }
-    
+
     const progressStats = waterfall.getProgressStats();
-    
+
     res.status(httpStatus.OK).json({
         success: true,
         data: {
@@ -39,12 +31,12 @@ export const getProjectWaterfall = catchAsync(async (req, res) => {
 export const moveToNextStep = catchAsync(async (req, res) => {
     const { projectId } = req.params;
     const { performedBy, remarks, targetStep } = req.body;
-    
+
     const waterfall = await ProjectWaterfall.findOne({ projectId });
     if (!waterfall) {
         throw new ApiError(httpStatus.NOT_FOUND, 'Project waterfall not found');
     }
-    
+
     // If targetStep is provided, jump to that step
     if (targetStep && targetStep > waterfall.currentStepNumber) {
         // Mark all steps between current and target as skipped
@@ -60,7 +52,7 @@ export const moveToNextStep = catchAsync(async (req, res) => {
                 });
             }
         }
-        
+
         // Mark target step as active
         const targetStepObj = waterfall.steps.find(s => s.stepNo === targetStep);
         if (targetStepObj) {
@@ -72,17 +64,17 @@ export const moveToNextStep = catchAsync(async (req, res) => {
                 remarks: `Jumped to step ${targetStep}`
             });
         }
-        
+
         waterfall.currentStepNumber = targetStep;
     } else {
         // Move to next sequential step
         await waterfall.moveToNextStep(performedBy, remarks);
     }
-    
+
     await waterfall.save();
-    
+
     const progressStats = waterfall.getProgressStats();
-    
+
     res.status(httpStatus.OK).json({
         success: true,
         message: `Moved to step ${waterfall.currentStepNumber}`,
@@ -96,12 +88,12 @@ export const moveToNextStep = catchAsync(async (req, res) => {
 // Get project history
 export const getProjectHistory = catchAsync(async (req, res) => {
     const { projectId } = req.params;
-    
+
     const waterfall = await ProjectWaterfall.findOne({ projectId });
     if (!waterfall) {
         throw new ApiError(httpStatus.NOT_FOUND, 'Project waterfall not found');
     }
-    
+
     // Collect all history from all steps
     const allHistory = [];
     waterfall.steps.forEach(step => {
@@ -113,10 +105,10 @@ export const getProjectHistory = catchAsync(async (req, res) => {
             });
         });
     });
-    
+
     // Sort by timestamp
     allHistory.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-    
+
     res.status(httpStatus.OK).json({
         success: true,
         data: {
@@ -130,17 +122,17 @@ export const getProjectHistory = catchAsync(async (req, res) => {
 export const updateStepStatus = catchAsync(async (req, res) => {
     const { projectId } = req.params;
     const { stepNo, status, performedBy, remarks } = req.body;
-    
+
     const waterfall = await ProjectWaterfall.findOne({ projectId });
     if (!waterfall) {
         throw new ApiError(httpStatus.NOT_FOUND, 'Project waterfall not found');
     }
-    
+
     const step = waterfall.steps.find(s => s.stepNo === stepNo);
     if (!step) {
         throw new ApiError(httpStatus.NOT_FOUND, 'Step not found');
     }
-    
+
     step.status = status;
     step.history.push({
         timestamp: new Date(),
@@ -148,14 +140,14 @@ export const updateStepStatus = catchAsync(async (req, res) => {
         action: status,
         remarks
     });
-    
+
     if (status === 'completed') {
         step.completedAt = new Date();
         step.completedBy = performedBy;
     }
-    
+
     await waterfall.save();
-    
+
     res.status(httpStatus.OK).json({
         success: true,
         message: `Step ${stepNo} updated to ${status}`,
@@ -166,20 +158,20 @@ export const updateStepStatus = catchAsync(async (req, res) => {
 // Get all project waterfalls
 export const getAllProjectWaterfalls = catchAsync(async (req, res) => {
     const { page = 1, limit = 10, status } = req.query;
-    
+
     const filter = {};
     if (status) {
         filter['steps.status'] = status;
     }
-    
+
     const waterfalls = await ProjectWaterfall.find(filter)
         .populate('projectId', 'projectName status')
         .sort({ updatedAt: -1 })
         .limit(limit * 1)
         .skip((page - 1) * limit);
-    
+
     const total = await ProjectWaterfall.countDocuments(filter);
-    
+
     res.status(httpStatus.OK).json({
         success: true,
         data: {
@@ -196,12 +188,12 @@ export const getAllProjectWaterfalls = catchAsync(async (req, res) => {
 // Reset project waterfall
 export const resetProjectWaterfall = catchAsync(async (req, res) => {
     const { projectId } = req.params;
-    
+
     const waterfall = await ProjectWaterfall.findOne({ projectId });
     if (!waterfall) {
         throw new ApiError(httpStatus.NOT_FOUND, 'Project waterfall not found');
     }
-    
+
     // Reset all steps to pending except step 1
     waterfall.steps.forEach(step => {
         if (step.stepNo === 1) {
@@ -213,10 +205,10 @@ export const resetProjectWaterfall = catchAsync(async (req, res) => {
         step.completedBy = null;
         step.history = [];
     });
-    
+
     waterfall.currentStepNumber = 1;
     await waterfall.save();
-    
+
     res.status(httpStatus.OK).json({
         success: true,
         message: 'Project waterfall reset successfully',
